@@ -164,7 +164,10 @@ This double meaning should be remembered in future product/branding work.
 ## 5.1 Recommended stack direction
 The working plan assumes:
 - Node.js / TypeScript for the CLI
-- Interactive CLI implemented with a library such as Ink for richer shell UI and Clack for prompts where appropriate
+- Inquirer (`@inquirer/prompts`) for all interactive prompts and wizard flows
+- Commander for CLI command parsing and routing
+  - Inquirer and Commander are complementary: Commander parses invocations like `hydraz run --cloud "fix this"` into commands, flags, and arguments and routes to the right handler; Inquirer drives interactive prompts within those handlers
+  - Commander is the most popular Node CLI parsing library (~50M weekly downloads), has zero dependencies, and has strong TypeScript support
 - Existing repo Dockerfiles reused wherever possible
 - Dev container metadata layered on top of those Dockerfiles
 - DevPod or equivalent workspace launcher abstraction for local/cloud execution
@@ -644,11 +647,23 @@ Hydraz still needs:
 ## 11.4 How autonomy is implemented
 Hydraz should achieve autonomy by:
 - assembling the right prompt/context/persona inputs
-- launching/supervising Claude Code sessions/processes
-- coordinating the three-agent workflow contract
+- launching a single Claude Code process per session
+- coordinating the three-persona workflow through phase-based persona application within that single process
 - handling workspace/session/branch lifecycle around Claude Code execution
 
-This is not a “three humans in a chat room” simulation. It is a managed operator loop around Claude Code execution.
+### Single-process model
+Hydraz v1 uses one Claude Code process per session, not three separate processes.
+
+The three personas are applied through the prompt architecture: the master system prompt defines the coordination contract, and persona prompts instruct Claude Code to adopt each persona's role at the appropriate phase (e.g. Architect during planning, Implementer during coding, Verifier during verification).
+
+This is a deliberate v1 choice that optimizes for:
+- lower cost (one process, not three)
+- simpler coordination (no IPC, no context-sharing protocol)
+- the master prompt already defines the workflow contract and phase transitions
+
+Running separate processes per persona may be explored in a future version if the single-process model proves insufficient, but it is not the v1 design.
+
+This is not a “three humans in a chat room” simulation. It is a managed operator loop around a single Claude Code execution with structured phase-based persona switching.
 
 ---
 
@@ -1063,10 +1078,15 @@ This is a suggested starting point, not a final locked contract.
 ```
 
 ### Notes
-- JSONL for events is a strong candidate because it streams and appends well
+- JSONL for events (confirmed as the v1 format) because it streams and appends well
 - Markdown artifacts are friendly to humans and agents
 - The repo-local `.hydraz/` directory is a good place for durable session state
 - Sensitive auth secrets should **not** be stored in repo-local state
+
+### Gitignore strategy
+- `.hydraz/sessions/` should be gitignored — session metadata, events, and artifacts are local working state
+- `.hydraz/repo.json` should **not** be gitignored — it is repo-level config (recommended MCPs, branch conventions) that may be committed and shared with the team
+- Hydraz should offer to add the appropriate `.gitignore` entries during `hydraz config` or first session creation
 
 ---
 
@@ -1221,12 +1241,12 @@ This section is written for an implementation agent.
 
 ## Phase 0: Foundation decisions
 1. Create repo for Hydraz CLI
-2. Settle initial tech stack:
-   - Node.js
-   - TypeScript
-   - package manager choice
-   - command parsing library
-   - interactive UI library/libraries
+2. Initial tech stack (resolved):
+   - Node.js / TypeScript
+   - npm as package manager
+   - Inquirer (`@inquirer/prompts`) for interactive prompts and wizard flows
+   - Commander for CLI command parsing and routing
+   - Vitest as test runner
 3. Define code organization
 4. Establish release/build path with future Homebrew packaging in mind
 5. Decide config storage utilities and cross-platform path handling
@@ -1234,7 +1254,7 @@ This section is written for an implementation agent.
 ### Deliverables
 - repo initialized
 - TypeScript build pipeline
-- lint/test setup
+- lint/test setup (Vitest as the test runner)
 - packaging skeleton
 - initial README with product intent
 
@@ -1572,33 +1592,80 @@ These should be enforced early.
 
 ---
 
-## 26. Open Design Questions for the Implementation Agent
+## 26. Testing Strategy
 
-These do not block the spec, but the implementation agent should resolve them intentionally.
+### Test runner
+Vitest is the test runner for all Hydraz tests.
 
-1. Which interactive CLI library combination is best for the full UX?
-   - full Ink
-   - Ink + Clack
-   - another equivalent stack
+### API-design-driven TDD
+Hydraz should follow strict API-design-driven test-driven development whenever possible.
 
-2. What exact Claude Code invocation strategy is best for v1?
-   - direct process supervision
-   - wrapper script approach
-   - config-file-driven execution
-   - other
+The workflow is:
+1. Define the module's public API (types, function signatures, return types) before writing implementation
+2. Write tests against that API surface
+3. Implement until the tests pass
+4. Refactor with confidence
 
-3. What is the first cloud provider target for v1?
-   - only one needs to be blessed initially
+This applies to all core domain modules: config, personas, sessions, events, prompt assembly, branch naming, validation, and the Claude executor adapter. The goal is that the API contract is settled first, tests codify the contract, and implementation follows.
 
-4. What is the best session event persistence format?
-   - JSONL is likely strong, but confirm
+When a module's behavior is ambiguous, writing the tests first is the mechanism for resolving that ambiguity — the test becomes the specification.
 
-5. Should `.hydraz/` be gitignored by default?
-   - likely yes, but verify intended collaboration semantics
+### What to test
 
-6. What should the built-in six persona prompts actually be, verbatim?
+#### Unit tests (high priority from Phase 0)
+- Config loading, saving, schema validation, and defaults
+- Persona selection and validation rules (exactly-3 constraint, built-in vs custom)
+- Session state machine transitions
+- Branch naming generation and collision detection
+- Prompt assembly (layer composition: master + persona + task)
+- Event creation and serialization
+- Artifact path resolution
 
-7. What exact artifact set is minimally necessary for v1?
+#### Integration tests (from Phase 7 onward)
+- Claude Code executor adapter: process launch, auth resolution, output capture
+- Session lifecycle: create, attach, resume, stop
+- Config + session + prompt assembly end-to-end
+
+#### What not to test in automated tests
+- Actual Claude Code execution (mock the executor boundary)
+- Interactive CLI prompts (test the logic they drive, not the prompts themselves)
+
+### Test organization
+Tests should live alongside source files or in a parallel `__tests__/` structure, following Vitest conventions. The choice should be made during Phase 0 scaffold.
+
+---
+
+## 27. Open Design Questions for the Implementation Agent
+
+### Resolved
+
+1. **Interactive CLI library:** Inquirer (`@inquirer/prompts`) for all interactive prompts and wizard flows. This is a permanent choice, not just v1.
+
+2. **Claude Code invocation strategy:** Direct process supervision via `claude` CLI behind an executor adapter boundary. The adapter isolates Claude-specific invocation details so the rest of Hydraz speaks in session/orchestration concepts.
+
+3. **Cloud provider for v1:** Local execution is the fully functional v1 path. Cloud execution should be a well-defined provider interface with a stub/placeholder implementation. This avoids doubling the integration surface before the core loop is proven.
+
+4. **Session event persistence format:** JSONL. Confirmed. Append-only, streamable, easy to tail and parse.
+
+5. **`.hydraz/` gitignore strategy:** `.hydraz/sessions/` is gitignored (session metadata, events, artifacts are local working state). `.hydraz/repo.json` is optionally committed (repo-level config shared with the team).
+
+6. **Swarm process model:** Single Claude Code process per session with phase-based persona switching. See Section 11.4 for details.
+
+7. **Testing strategy:** Vitest as the test runner. API-design-driven TDD whenever possible. Unit tests on core domain logic from Phase 0. Integration tests on the Claude executor adapter from Phase 7. See Section 26 for details.
+
+8. **Package manager:** npm. Chosen for maximum familiarity and vanilla toolchain.
+
+9. **Command parsing library:** Commander. Most popular Node CLI parsing library (~50M weekly downloads), zero dependencies, strong TypeScript support. Required alongside Inquirer because they solve different problems: Commander parses CLI invocations into commands/flags/arguments; Inquirer drives interactive prompts within command handlers.
+
+### Still open (must be resolved before or during the indicated phase)
+
+Each question below is annotated with the phase where it becomes blocking. It must be discussed and resolved no later than the start of that phase.
+
+1. **What should the built-in six persona prompts actually be, verbatim?**
+   Blocking for: Phase 3 (Persona management)
+
+2. **What exact artifact set is minimally necessary for v1?**
+   Blocking for: Phase 4 (Session model — artifact directory structure must be defined)
    - intake
    - summary
    - verification
@@ -1606,17 +1673,21 @@ These do not block the spec, but the implementation agent should resolve them in
    - maybe plan
    - maybe command history
 
-8. What should stop vs pause vs blocked semantics be in v1?
+3. **What should stop vs pause vs blocked semantics be in v1?**
+   Blocking for: Phase 4 (Session model — state machine must be finalized)
 
-9. How should session/workspace cleanup be handled after completion?
+4. **How should session/workspace cleanup be handled after completion?**
+   Blocking for: Phase 5 (Workspace/provider abstraction)
 
-10. What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?
+5. **What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**
+   Blocking for: Phase 7 (Claude Code executor integration — auth resolution must be implemented)
 
-11. How should Hydraz detect and report auth precedence conflicts cleanly?
+6. **How should Hydraz detect and report auth precedence conflicts cleanly?**
+   Blocking for: Phase 7 (Claude Code executor integration)
 
 ---
 
-## 27. Summary of the Intended Experience
+## 28. Summary of the Intended Experience
 
 Hydraz should feel like this:
 
@@ -1644,7 +1715,7 @@ And crucially, the design should preserve the branding idea that **Hydraz** evok
 
 ---
 
-## 28. Immediate Next Build Step
+## 29. Immediate Next Build Step
 
 The best next execution step for a coding agent is:
 
