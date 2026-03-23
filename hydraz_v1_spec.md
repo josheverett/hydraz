@@ -1673,11 +1673,11 @@ Each question below is annotated with the phase where it becomes blocking. It mu
 4. ~~**How should session/workspace cleanup be handled after completion?**~~
    **Resolved:** v1 never auto-deletes workspaces. Completed/stopped/failed sessions keep their worktree on disk for review. Session metadata and events always persist. A future `hydraz clean` command can be added for explicit cleanup.
 
-5. **What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**
-   Blocking for: Phase 7 (Claude Code executor integration — auth resolution must be implemented)
+5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
+   **Resolved:** v1 does not implement its own token store. For local execution, Claude Code manages its own auth state (user logs in once via `claude`). For future container/cloud, env var injection (`CLAUDE_ACCESS_TOKEN`) is the planned path but not implemented in v1's stub cloud provider.
 
-6. **How should Hydraz detect and report auth precedence conflicts cleanly?**
-   Blocking for: Phase 7 (Claude Code executor integration)
+6. ~~**How should Hydraz detect and report auth precedence conflicts cleanly?**~~
+   **Resolved:** v1 reports the configured auth mode and validates prerequisites (e.g. `ANTHROPIC_API_KEY` is set for api-key mode). Claude Code handles its own auth precedence. Hydraz surfaces the active mode in status and review outputs.
 
 ---
 
