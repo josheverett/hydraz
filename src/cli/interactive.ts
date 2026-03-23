@@ -11,6 +11,7 @@ import {
 } from '../core/sessions/index.js';
 import { createEvent, appendEvent } from '../core/events/index.js';
 import { suggestBranchName, isValidSessionName, isValidBranchName } from '../core/branches/index.js';
+import { startSession } from '../core/orchestration/index.js';
 
 export async function runInteractive(): Promise<void> {
   const repo = detectRepo();
@@ -144,8 +145,13 @@ async function newSessionFlow(repoRoot: string, repoName: string): Promise<void>
     }),
   );
 
-  console.log(`\nSession "${sessionName}" created (${session.id}).`);
-  console.log('Orchestration will begin once the executor integration is complete.\n');
+  console.log(`\nSession "${sessionName}" created. Launching...\n`);
+
+  await startSession(session.id, repoRoot, {
+    onOutput: (data) => process.stdout.write(data),
+    onError: (data) => process.stderr.write(data),
+    onEvent: (type, message) => console.log(`  [${type}] ${message}`),
+  });
 }
 
 async function selectPersonas(
