@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import type {
   WorkspaceProvider,
@@ -21,12 +21,12 @@ export class LocalProvider implements WorkspaceProvider {
 
     try {
       if (branchExists) {
-        execSync(`git worktree add "${workDir}" "${session.branchName}"`, {
+        execFileSync('git', ['worktree', 'add', workDir, session.branchName], {
           cwd: session.repoRoot,
           stdio: 'pipe',
         });
       } else {
-        execSync(`git worktree add -b "${session.branchName}" "${workDir}"`, {
+        execFileSync('git', ['worktree', 'add', '-b', session.branchName, workDir], {
           cwd: session.repoRoot,
           stdio: 'pipe',
         });
@@ -49,7 +49,7 @@ export class LocalProvider implements WorkspaceProvider {
   destroyWorkspace(repoRoot: string, workspace: WorkspaceInfo): void {
     if (existsSync(workspace.directory)) {
       try {
-        execSync(`git worktree remove "${workspace.directory}" --force`, {
+        execFileSync('git', ['worktree', 'remove', workspace.directory, '--force'], {
           cwd: repoRoot,
           stdio: 'pipe',
         });
@@ -61,7 +61,7 @@ export class LocalProvider implements WorkspaceProvider {
 
   checkAvailability(): ProviderCheckResult {
     try {
-      execSync('git --version', { stdio: 'pipe' });
+      execFileSync('git', ['--version'], { stdio: 'pipe' });
       return { available: true };
     } catch {
       return { available: false, error: 'git is not available on PATH' };
@@ -70,7 +70,7 @@ export class LocalProvider implements WorkspaceProvider {
 
   private branchExists(repoRoot: string, branch: string): boolean {
     try {
-      execSync(`git rev-parse --verify "${branch}"`, {
+      execFileSync('git', ['rev-parse', '--verify', branch], {
         cwd: repoRoot,
         stdio: 'pipe',
       });

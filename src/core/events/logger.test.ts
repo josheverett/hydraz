@@ -1,9 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { createEvent, appendEvent, readEvents, formatEvent } from './logger.js';
-import { initRepoState, createNewSession } from '../sessions/manager.js';
+import { initRepoState, createNewSession, getSessionDir } from '../sessions/manager.js';
 
 let repoRoot: string;
 let sessionId: string;
@@ -72,6 +72,16 @@ describe('appendEvent + readEvents', () => {
 
     const [loaded] = readEvents(repoRoot, sessionId);
     expect(loaded.metadata).toEqual({ file: 'plan.md' });
+  });
+});
+
+describe('readEvents resilience', () => {
+  it('skips corrupt JSONL lines without crashing', () => {
+    const eventsFile = join(getSessionDir(repoRoot, sessionId), 'events.jsonl');
+    writeFileSync(eventsFile, '{"type":"good"}\nNOT_JSON\n{"type":"also_good"}\n');
+
+    const events = readEvents(repoRoot, sessionId);
+    expect(events).toHaveLength(2);
   });
 });
 

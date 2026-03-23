@@ -62,9 +62,15 @@ export function readEvents(repoRoot: string, sessionId: string): HydrazEvent[] {
     return [];
   }
 
-  return content
-    .split('\n')
-    .map((line) => JSON.parse(line) as HydrazEvent);
+  const events: HydrazEvent[] = [];
+  for (const line of content.split('\n')) {
+    try {
+      events.push(JSON.parse(line) as HydrazEvent);
+    } catch {
+      // skip corrupt lines
+    }
+  }
+  return events;
 }
 
 export function formatEvent(event: HydrazEvent): string {
