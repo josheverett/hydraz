@@ -8,6 +8,11 @@
   "bin": {
     "hydraz": "dist/cli/index.js"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
@@ -22,10 +27,18 @@
     "coding",
     "swarm",
     "autonomous",
-    "claude"
+    "claude",
+    "claude-code",
+    "agent",
+    "persona"
   ],
   "author": "Josh Everett",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/josheverett/hydraz.git"
+  },
+  "homepage": "https://github.com/josheverett/hydraz#readme",
   "engines": {
     "node": ">=20.0.0"
   },
