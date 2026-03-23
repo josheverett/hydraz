@@ -26,3 +26,9 @@ export {
   getActiveSessions,
   getArtifactPath,
 } from './manager.js';
+export {
+  type ArtifactSummary,
+  loadArtifact,
+  summarizeArtifacts,
+  getArtifactStatus,
+} from './artifacts.js';
