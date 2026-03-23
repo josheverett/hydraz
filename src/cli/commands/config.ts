@@ -35,7 +35,7 @@ export function registerConfigCommand(program: Command): void {
     });
 }
 
-async function configMenu(): Promise<void> {
+export async function configMenu(): Promise<void> {
   const action = await select({
     message: 'Hydraz Config',
     choices: [
