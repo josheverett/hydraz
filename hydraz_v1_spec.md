@@ -1661,8 +1661,8 @@ Tests should live alongside source files or in a parallel `__tests__/` structure
 
 Each question below is annotated with the phase where it becomes blocking. It must be discussed and resolved no later than the start of that phase.
 
-1. **What should the built-in six persona prompts actually be, verbatim?**
-   Blocking for: Phase 3 (Persona management)
+1. ~~**What should the built-in six persona prompts actually be, verbatim?**~~
+   **Resolved:** v1 baseline persona prompts are implemented in `src/core/config/init.ts`. Each persona prompt defines the role's perspective and responsibilities. The master system prompt handles the coordination contract; persona prompts add role-specific focus. Content will iterate based on real usage.
 
 2. **What exact artifact set is minimally necessary for v1?**
    Blocking for: Phase 4 (Session model — artifact directory structure must be defined)

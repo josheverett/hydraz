@@ -11,6 +11,7 @@ import {
   type ExecutionTarget,
   type AuthMode,
 } from '../../core/config/index.js';
+import { changeDefaultSwarm } from './personas.js';
 
 export function registerConfigCommand(program: Command): void {
   program
@@ -56,7 +57,7 @@ async function configMenu(): Promise<void> {
       await setExecutionTarget();
       break;
     case 'personas':
-      console.log('\nPersona management is not yet implemented. Use "hydraz personas" (coming in Phase 3).\n');
+      await changeDefaultSwarm();
       break;
     case 'master-prompt':
       await masterPromptMenu();
