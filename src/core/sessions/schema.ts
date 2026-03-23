@@ -59,6 +59,7 @@ export interface SessionMetadata {
   state: SessionState;
   createdAt: string;
   updatedAt: string;
+  workspaceDir?: string;
   blockerMessage?: string;
   failureMessage?: string;
 }

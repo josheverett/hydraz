@@ -6,6 +6,7 @@ import {
   initRepoState,
   createNewSession,
   loadSession,
+  saveSession,
   transitionState,
   listSessions,
   findSessionByName,
@@ -140,7 +141,10 @@ describe('listSessions', () => {
   it('sorts by most recently updated first', () => {
     const a = makeSession('session-a');
     makeSession('session-b');
-    transitionState(repoRoot, a.id, 'starting');
+
+    const session = loadSession(repoRoot, a.id);
+    session.updatedAt = new Date(Date.now() + 10_000).toISOString();
+    saveSession(repoRoot, session);
 
     const sessions = listSessions(repoRoot);
     expect(sessions[0].name).toBe('session-a');

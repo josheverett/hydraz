@@ -1670,8 +1670,8 @@ Each question below is annotated with the phase where it becomes blocking. It mu
 3. ~~**What should stop vs pause vs blocked semantics be in v1?**~~
    **Resolved:** v1 state machine: `created` → `starting` → `planning` → `implementing` → `verifying` → `completed`. Terminal exit states: `stopped` (user action), `blocked` (agent self-reported), `failed` (crash/error). No distinct `paused` state in v1 — interrupted sessions stay in their last active state and `hydraz resume` detects and picks up. The `queued` state from the original list is dropped for v1 (no queue system yet).
 
-4. **How should session/workspace cleanup be handled after completion?**
-   Blocking for: Phase 5 (Workspace/provider abstraction)
+4. ~~**How should session/workspace cleanup be handled after completion?**~~
+   **Resolved:** v1 never auto-deletes workspaces. Completed/stopped/failed sessions keep their worktree on disk for review. Session metadata and events always persist. A future `hydraz clean` command can be added for explicit cleanup.
 
 5. **What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**
    Blocking for: Phase 7 (Claude Code executor integration — auth resolution must be implemented)
