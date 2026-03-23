@@ -1,0 +1,41 @@
+{
+  "name": "hydraz",
+  "version": "0.1.0",
+  "description": "An opinionated CLI for autonomous, persona-driven coding swarms",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "hydraz": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "coding",
+    "swarm",
+    "autonomous",
+    "claude"
+  ],
+  "author": "Josh Everett",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.3.2",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.0"
+  }
+}
