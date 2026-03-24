@@ -6,6 +6,7 @@ import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { LocalProvider } from './local.js';
 import { createSession } from '../sessions/schema.js';
 import { createDefaultConfig } from '../config/schema.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 
 let testRepo: string;
 let provider: LocalProvider;
@@ -22,6 +23,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(testRepo, { recursive: true, force: true });
+  rmSync(resolveRepoDataPaths(testRepo).repoDataDir, { recursive: true, force: true });
 });
 
 function makeSession(name: string = 'test-session') {
