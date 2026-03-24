@@ -13,3 +13,4 @@ export {
   describeAuthMode,
   validateAuthAvailability,
 } from './auth.js';
+export { parseWorktreeInclude, copyWorktreeIncludes } from './worktree-include.js';
