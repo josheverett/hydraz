@@ -118,7 +118,7 @@ async function newSessionFlow(repoRoot: string, repoName: string): Promise<void>
   const personas = await selectPersonas(config.defaultPersonas);
 
   const task = await input({
-    message: 'Task (issue URL or description)',
+    message: 'Task',
     validate: (val) => val.trim().length > 0 || 'Task cannot be empty.',
   });
 
