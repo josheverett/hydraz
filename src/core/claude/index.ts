@@ -12,3 +12,12 @@ export {
   resolveAuth,
   formatAuthResolution,
 } from './resolver.js';
+export {
+  type StreamEvent,
+  type ParsedClaudeEvent,
+  parseStreamLine,
+} from './stream-parser.js';
+export {
+  type DisplayVerbosity,
+  formatStreamEvent,
+} from './stream-display.js';

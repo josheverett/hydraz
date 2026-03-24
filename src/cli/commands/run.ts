@@ -69,9 +69,8 @@ export function registerRunCommand(program: Command): void {
       console.log(`Task: ${task}\n`);
 
       await startSession(session.id, repo.root, {
-        onOutput: (data) => process.stdout.write(data),
-        onError: (data) => process.stderr.write(data),
-        onEvent: (type, message) => console.log(`  [${type}] ${message}`),
+        onStreamLine: (line) => console.log(line),
+        onError: (msg) => console.error(msg),
       });
     });
 }

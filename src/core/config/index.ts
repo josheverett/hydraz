@@ -6,6 +6,7 @@ export {
   type BranchNamingConfig,
   type ClaudeAuthConfig,
   type RetentionConfig,
+  type DisplayVerbosity,
   BUILT_IN_PERSONAS,
   type BuiltInPersona,
   DEFAULT_SWARM,

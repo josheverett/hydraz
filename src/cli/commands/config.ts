@@ -84,6 +84,7 @@ function viewConfig(): void {
   console.log(`  Auth mode:         ${config.claudeAuth.mode}`);
   console.log(`  Keep transcripts:  ${config.retention.keepTranscripts}`);
   console.log(`  Keep test logs:    ${config.retention.keepTestLogs}`);
+  console.log(`  Display verbosity: ${config.displayVerbosity}`);
   console.log();
 }
 

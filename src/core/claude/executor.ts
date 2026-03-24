@@ -2,13 +2,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import type { AssembledPrompt } from '../prompts/builder.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { prepareClaudeEnv } from '../providers/auth.js';
+import { parseStreamLine, type ParsedClaudeEvent } from './stream-parser.js';
 
 export interface ExecutorOptions {
   workingDirectory: string;
   prompt: AssembledPrompt;
   config: HydrazConfig;
-  onOutput?: (data: string) => void;
-  onError?: (data: string) => void;
+  onStreamEvent?: (event: ParsedClaudeEvent) => void;
   onExit?: (code: number | null) => void;
 }
 
@@ -23,12 +23,17 @@ export interface ExecutorResult {
   exitCode: number | null;
   signal: string | null;
   success: boolean;
+  cost?: number;
+  durationMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  turns?: number;
 }
 
 export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
   return [
     '--print',
-    '--output-format', 'text',
+    '--output-format', 'stream-json',
     '--verbose',
     prompt.fullText,
   ];
@@ -57,25 +62,55 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
+  let lastResult: ParsedClaudeEvent | null = null;
+  let buffer = '';
+
   if (child.stdout) {
     child.stdout.on('data', (data: Buffer) => {
-      options.onOutput?.(data.toString());
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const event = parseStreamLine(line);
+        if (event) {
+          if (event.kind === 'complete' || event.kind === 'error') {
+            lastResult = event;
+          }
+          options.onStreamEvent?.(event);
+        }
+      }
     });
   }
 
   if (child.stderr) {
-    child.stderr.on('data', (data: Buffer) => {
-      options.onError?.(data.toString());
+    child.stderr.on('data', () => {
+      // stderr is ignored for stream-json — all structured data is on stdout
     });
   }
 
   const waitForExit = (): Promise<ExecutorResult> => {
     return new Promise((resolve) => {
       child.on('close', (code, signal) => {
+        if (buffer.trim().length > 0) {
+          const event = parseStreamLine(buffer);
+          if (event) {
+            if (event.kind === 'complete' || event.kind === 'error') {
+              lastResult = event;
+            }
+            options.onStreamEvent?.(event);
+          }
+        }
+
         const result: ExecutorResult = {
           exitCode: code,
           signal: signal?.toString() ?? null,
           success: code === 0,
+          cost: lastResult?.cost,
+          durationMs: lastResult?.durationMs,
+          inputTokens: lastResult?.inputTokens,
+          outputTokens: lastResult?.outputTokens,
+          turns: lastResult?.turns,
         };
         options.onExit?.(code);
         resolve(result);

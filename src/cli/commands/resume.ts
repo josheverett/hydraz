@@ -25,9 +25,8 @@ export function registerResumeCommand(program: Command): void {
 
         console.log(`\nResuming session "${sessionName}"...\n`);
         await resumeSession(session.id, repo.root, {
-          onOutput: (data) => process.stdout.write(data),
-          onError: (data) => process.stderr.write(data),
-          onEvent: (type, message) => console.log(`  [${type}] ${message}`),
+          onStreamLine: (line) => console.log(line),
+          onError: (msg) => console.error(msg),
         });
         return;
       }
@@ -52,9 +51,8 @@ export function registerResumeCommand(program: Command): void {
       const session = resumable.find((s) => s.id === chosen)!;
       console.log(`\nResuming session "${session.name}"...\n`);
       await resumeSession(chosen, repo.root, {
-        onOutput: (data) => process.stdout.write(data),
-        onError: (data) => process.stderr.write(data),
-        onEvent: (type, message) => console.log(`  [${type}] ${message}`),
+        onStreamLine: (line) => console.log(line),
+        onError: (msg) => console.error(msg),
       });
     });
 }

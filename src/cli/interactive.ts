@@ -154,9 +154,8 @@ async function newSessionFlow(repoRoot: string, repoName: string): Promise<void>
   console.log(`\nSession "${sessionName}" created. Launching...\n`);
 
   await startSession(session.id, repoRoot, {
-    onOutput: (data) => process.stdout.write(data),
-    onError: (data) => process.stderr.write(data),
-    onEvent: (type, message) => console.log(`  [${type}] ${message}`),
+    onStreamLine: (line) => console.log(line),
+    onError: (msg) => console.error(msg),
   });
 }
 

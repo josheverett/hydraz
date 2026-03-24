@@ -1,5 +1,6 @@
 export type ExecutionTarget = 'local' | 'cloud';
 export type AuthMode = 'claude-ai-oauth' | 'api-key';
+export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
 
 export interface BranchNamingConfig {
   prefix: string;
@@ -21,6 +22,7 @@ export interface HydrazConfig {
   branchNaming: BranchNamingConfig;
   claudeAuth: ClaudeAuthConfig;
   retention: RetentionConfig;
+  displayVerbosity: DisplayVerbosity;
 }
 
 export const BUILT_IN_PERSONAS = [
@@ -55,6 +57,7 @@ export function createDefaultConfig(): HydrazConfig {
       keepTranscripts: false,
       keepTestLogs: false,
     },
+    displayVerbosity: 'compact',
   };
 }
 
@@ -103,7 +106,14 @@ export function validateConfig(data: unknown): HydrazConfig {
     ),
   }));
 
-  return { version, executionTarget, defaultPersonas, branchNaming, claudeAuth, retention };
+  const displayVerbosity = expectEnum(
+    obj,
+    'displayVerbosity',
+    ['compact', 'tool-results', 'full'] as const,
+    defaults.displayVerbosity,
+  );
+
+  return { version, executionTarget, defaultPersonas, branchNaming, claudeAuth, retention, displayVerbosity };
 }
 
 export class ConfigValidationError extends Error {

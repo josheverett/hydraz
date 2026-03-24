@@ -38,11 +38,11 @@ describe('buildClaudeArgs', () => {
     expect(args).toContain('--print');
   });
 
-  it('includes --output-format text', () => {
+  it('uses stream-json output format', () => {
     const args = buildClaudeArgs(makePrompt());
     const fmtIdx = args.indexOf('--output-format');
     expect(fmtIdx).toBeGreaterThan(-1);
-    expect(args[fmtIdx + 1]).toBe('text');
+    expect(args[fmtIdx + 1]).toBe('stream-json');
   });
 
   it('includes the full prompt text as the last argument', () => {

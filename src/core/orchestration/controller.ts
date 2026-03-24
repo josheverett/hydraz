@@ -3,6 +3,9 @@ import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
 import { launchClaude, mapExitToSessionState, type ExecutorHandle } from '../claude/executor.js';
 import { assemblePrompt } from '../prompts/builder.js';
 import { createEvent, appendEvent } from '../events/index.js';
+import { formatStreamEvent } from '../claude/stream-display.js';
+import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
+import type { DisplayVerbosity } from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -15,9 +18,9 @@ import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js'
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
-  onOutput?: (data: string) => void;
-  onError?: (data: string) => void;
+  onStreamLine?: (formatted: string) => void;
   onEvent?: (type: string, message: string) => void;
+  onError?: (message: string) => void;
 }
 
 export interface RunningSession {
@@ -32,6 +35,10 @@ export function getProvider(target: 'local' | 'cloud'): WorkspaceProvider {
   return target === 'local' ? new LocalProvider() : new CloudProvider();
 }
 
+function formatTs(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 export async function startSession(
   sessionId: string,
   repoRoot: string,
@@ -39,19 +46,21 @@ export async function startSession(
 ): Promise<void> {
   const config = loadConfig();
   const session = loadSession(repoRoot, sessionId);
+  const verbosity: DisplayVerbosity = config.displayVerbosity ?? 'compact';
 
   const emitEvent = (type: Parameters<typeof createEvent>[1], message: string, extra?: Parameters<typeof createEvent>[3]) => {
     const event = createEvent(sessionId, type, message, extra);
     appendEvent(repoRoot, event);
     callbacks.onEvent?.(type, message);
+    callbacks.onStreamLine?.(`${formatTs()}  ${type.padEnd(24)} ${message}`);
   };
 
   transitionState(repoRoot, sessionId, 'starting');
   callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
-  emitEvent('session.state_changed', 'Session starting', { state: 'starting' });
+  emitEvent('session.state_changed', 'Session starting');
 
   const auth = resolveAuth();
-  emitEvent('claude.auth_resolved', `Auth mode: ${auth.modeDescription}`);
+  emitEvent('claude.auth_resolved', `Auth: ${auth.modeDescription}`);
 
   if (!auth.resolved) {
     const errorMsg = auth.errors.join('; ');
@@ -79,12 +88,8 @@ export async function startSession(
     const updated = loadSession(repoRoot, sessionId);
     updated.workspaceDir = workspace.directory;
     saveSession(repoRoot, updated);
-    emitEvent('workspace.created', `Workspace at ${workspace.directory}`, {
-      metadata: { directory: workspace.directory },
-    });
-    emitEvent('branch.created', `Branch: ${session.branchName}`, {
-      metadata: { branch: session.branchName },
-    });
+    emitEvent('workspace.created', `Workspace: ${workspace.directory}`);
+    emitEvent('branch.created', `Branch: ${session.branchName}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     transitionState(repoRoot, sessionId, 'failed', msg);
@@ -97,7 +102,7 @@ export async function startSession(
   transitionState(repoRoot, sessionId, 'planning');
   callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
   emitEvent('swarm.started', 'Swarm initialized');
-  emitEvent('swarm.phase_changed', 'Planning phase', { state: 'planning' });
+  emitEvent('swarm.phase_changed', 'Planning phase');
 
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
@@ -106,8 +111,18 @@ export async function startSession(
     workingDirectory: workspace.directory,
     prompt,
     config,
-    onOutput: callbacks.onOutput,
-    onError: callbacks.onError,
+    onStreamEvent: (event: ParsedClaudeEvent) => {
+      const formatted = formatStreamEvent(event, verbosity);
+      if (formatted) {
+        callbacks.onStreamLine?.(formatted);
+      }
+
+      if (event.kind === 'tool_call') {
+        appendEvent(repoRoot, createEvent(sessionId, 'swarm.phase_changed',
+          `${event.toolName}: ${event.toolInput ?? ''}`,
+        ));
+      }
+    },
   });
 
   activeSessions.set(sessionId, { session, workspace, executor });
