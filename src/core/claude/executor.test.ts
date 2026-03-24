@@ -51,7 +51,7 @@ describe('buildClaudeArgs', () => {
     expect(args[args.length - 1]).toBe(prompt.fullText);
   });
 
-  it('includes --verbose flag', () => {
+  it('includes --verbose (required by stream-json)', () => {
     const args = buildClaudeArgs(makePrompt());
     expect(args).toContain('--verbose');
   });

@@ -62,8 +62,21 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
+  child.stdin?.end();
+
   let lastResult: ParsedClaudeEvent | null = null;
   let buffer = '';
+  let spawnError: Error | null = null;
+
+  child.on('error', (err) => {
+    spawnError = err;
+    options.onStreamEvent?.({
+      kind: 'error',
+      timestamp: new Date().toISOString(),
+      error: `Failed to spawn claude: ${err.message}`,
+      raw: { type: 'result' },
+    });
+  });
 
   if (child.stdout) {
     child.stdout.on('data', (data: Buffer) => {
@@ -76,16 +89,13 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
         if (event) {
           if (event.kind === 'complete' || event.kind === 'error') {
             lastResult = event;
+            setTimeout(() => {
+              if (!child.killed) child.kill('SIGTERM');
+            }, 1000);
           }
           options.onStreamEvent?.(event);
         }
       }
-    });
-  }
-
-  if (child.stderr) {
-    child.stderr.on('data', () => {
-      // stderr is ignored for stream-json — all structured data is on stdout
     });
   }
 
