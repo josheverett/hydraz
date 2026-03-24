@@ -1,0 +1,9 @@
+src/
+*.test.ts
+*.test.js
+vitest.config.ts
+tsconfig.json
+hydraz_v1_spec.md
+.hydraz/
+.git/
+.gitignore
