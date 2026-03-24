@@ -1531,32 +1531,56 @@ The Hydraz container is a **general-purpose developer workstation** container, n
 Repo-specific application containers (e.g. from `docker-compose.yml`) are the agent's responsibility, not Hydraz's. Just as a developer would run `docker compose up` locally when needed, the agent starts whatever services the task requires inside the Hydraz container. Hydraz does not attempt to detect, parse, or manage repo Dockerfiles.
 
 This means:
-- One Hydraz container definition, configured globally
 - Docker-in-Docker or Docker socket mounting so the agent can run containers inside the Hydraz container
 - The worktree is mounted into the Hydraz container
 - The agent operates on the filesystem inside the container, same as a developer on their laptop
 - Repo Dockerfiles and compose files are the agent's tools, not Hydraz's concern
 
+### devcontainer.json
+The container definition uses the open [Dev Container specification](https://containers.dev/) via `.devcontainer/devcontainer.json` checked into each repo. This is an open standard supported by VS Code, GitHub Codespaces, DevPod, JetBrains, and others. Using the standard means the dev environment works with any compatible tool, not just Hydraz.
+
+### DevPod as workspace abstraction
+DevPod is the workspace launcher abstraction for both local and cloud execution:
+- **Local:** DevPod with Docker provider (container runs on your machine)
+- **Cloud:** DevPod with a cloud provider such as GCP (same container, remote host)
+- **Same `devcontainer.json`** for both — one definition, any provider
+
+DevPod is free and open source (MPL-2.0). You only pay for cloud compute. Hydraz talks to DevPod, DevPod talks to the infrastructure. One integration, any provider.
+
 ### Needs
-- define and maintain the standard Hydraz dev container image
+- `.devcontainer/devcontainer.json` support per the open standard
+- DevPod integration for local and cloud container lifecycle
 - Docker-in-Docker or Docker socket access inside the container
 - mount worktree into the container
 - ensure Claude Code CLI is available and authenticated inside the container
 - handle port isolation between concurrent sessions
 - inject auth/env as needed for headless Claude Code execution
-- global Hydraz container configuration (image, resource limits, mounts)
 
 ### Important
 The full local pipeline must work end-to-end before cloud is attempted. Cloud is just "same thing, different host." Local containers prove the container model works; cloud adds remote orchestration on top.
 
 ### Deliverables
-- Hydraz dev container image definition
-- container-aware local provider (Docker-based)
+- `.devcontainer/devcontainer.json` definition for the Hydraz dev workstation
+- DevPod integration in the local provider
 - Docker-in-Docker or socket mounting
 - Claude Code availability and auth inside containers
 - port isolation between sessions
 - env/secret injection into containers
-- global container configuration in `~/.hydraz/`
+
+## Phase 14: Multi-executor backend support
+Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in.
+
+### Needs
+- define an `ExecutorBackend` interface with `launch()`, `stop()`, `parseStream()` methods
+- implement `ClaudeCodeBackend` as the default
+- the orchestration controller talks to the interface, never to Claude-specific details
+- executor backend selection via config
+
+### Deliverables
+- `ExecutorBackend` interface
+- `ClaudeCodeBackend` implementation (refactor of existing executor)
+- config option to select backend
+- documentation for implementing new backends
 
 ---
 
