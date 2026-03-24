@@ -1582,6 +1582,28 @@ Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts 
 - config option to select backend
 - documentation for implementing new backends
 
+## Phase 15: CI and PR checks
+Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`.
+
+This should be implemented before Phase 13. The codebase has 272+ tests but no automation enforcing they pass before merge. This is a gap.
+
+### Needs
+- GitHub Actions workflow for PR checks
+- run `npm test` (Vitest)
+- run `npm run typecheck` (tsc --noEmit)
+- run on push to `main` and `dev`, and on all PRs
+- fail the PR if tests or type-check fail
+- Node version matrix (at minimum: Node 20 LTS)
+- badge in README (optional but nice)
+
+### Deliverables
+- `.github/workflows/ci.yml`
+- PR check enforcement
+- this section to be fleshed out further during implementation
+
+### Note
+This phase is intentionally minimal. Linting, coverage thresholds, and release automation can be added incrementally later.
+
 ---
 
 ## 24. Suggested Directory Structure for the Hydraz Codebase
