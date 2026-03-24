@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { buildClaudeArgs, buildClaudeEnv, mapExitToSessionState } from './executor.js';
 import { createDefaultConfig } from '../config/schema.js';
 import { createSession } from '../sessions/schema.js';

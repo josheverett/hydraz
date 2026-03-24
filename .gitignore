@@ -137,3 +137,8 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Hydraz session data (local working state)
+.hydraz/sessions/
+.hydraz/workspaces/
+.hydraz/mcp.json
