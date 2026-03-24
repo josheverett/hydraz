@@ -1506,6 +1506,45 @@ Make the CLI installable and ready for public packaging.
 - draft Homebrew formula strategy
 - install instructions
 
+## Phase 12: Move session/workspace data out of target repos
+Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of the target repo's `.hydraz/` directory and into `~/.hydraz/`, keyed by repo path. This eliminates the need for `.gitignore` entries in target repos and avoids polluting the working tree.
+
+### Needs
+- relocate session storage from `<repo>/.hydraz/sessions/` to `~/.hydraz/repos/<repo-hash>/sessions/`
+- relocate worktrees from `<repo>/.hydraz/workspaces/` to `~/.hydraz/repos/<repo-hash>/workspaces/`
+- repo config (`.hydraz/repo.json`) may remain in-repo if committable, or move to global config keyed by repo path
+- update all path resolution logic
+- migrate or ignore existing `.hydraz/` data
+
+### Deliverables
+- updated path resolution
+- session/worktree relocation
+- no `.hydraz/` pollution in target repos
+- backward compatibility or clean migration
+
+## Phase 13: Local container execution
+Add container support to local mode so agents operate in isolated Docker environments. This is required before cloud execution because the full pipeline (worktree + container + Claude Code + env isolation) must be proven locally first. Cloud is the same model with a different host.
+
+### Needs
+- reuse existing repo Dockerfiles as the application base
+- layer devcontainer metadata for developer/agent workspace setup
+- mount worktree into the container
+- ensure Claude Code CLI is available inside the container
+- copy `.worktreeinclude` files into the container context
+- handle port isolation between concurrent sessions
+- inject auth/env as needed for headless Claude Code execution
+
+### Important
+The full local pipeline must work end-to-end before cloud is attempted. Cloud is just "same thing, different host." Local containers prove the container model works; cloud adds remote orchestration on top.
+
+### Deliverables
+- container-aware local provider (Docker-based)
+- Dockerfile detection and reuse
+- devcontainer metadata layering
+- Claude Code availability inside containers
+- port isolation between sessions
+- env/secret injection into containers
+
 ---
 
 ## 24. Suggested Directory Structure for the Hydraz Codebase
@@ -1663,7 +1702,7 @@ Tests should live alongside source files or in a parallel `__tests__/` structure
 
 2. **Claude Code invocation strategy:** Direct process supervision via `claude` CLI behind an executor adapter boundary. The adapter isolates Claude-specific invocation details so the rest of Hydraz speaks in session/orchestration concepts.
 
-3. **Cloud provider for v1:** Local execution is the fully functional v1 path. Cloud execution should be a well-defined provider interface with a stub/placeholder implementation. This avoids doubling the integration surface before the core loop is proven.
+3. **Cloud provider for v1:** Local execution is the fully functional v1 path, including local container support (Phase 13). The full pipeline (worktree + container + Claude Code + env isolation) must be proven locally before cloud is attempted. Cloud is the same container model on a remote host. Cloud execution remains a well-defined provider interface with a stub implementation until local containers are proven.
 
 4. **Session event persistence format:** JSONL. Confirmed. Append-only, streamable, easy to tail and parse.
 
