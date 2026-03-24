@@ -1610,6 +1610,26 @@ This applies to all core domain modules: config, personas, sessions, events, pro
 
 When a module's behavior is ambiguous, writing the tests first is the mechanism for resolving that ambiguity — the test becomes the specification.
 
+### Prove-it-first methodology
+
+No assumption or hypothesis may be acted on until it is verified with evidence. This is a universal engineering discipline, not specific to any tool or domain.
+
+The rules:
+- **Never assume behavior — verify it.** Documentation, web searches, blog posts, and memory are hints, not facts. They may be outdated, wrong, or describe a different version/context. The only source of truth is running the thing and observing what happens.
+- **Isolate before diagnosing.** When something doesn't work, strip away layers until the problem is reproducible in the simplest possible form. Fix what is actually broken, not what you think might be broken.
+- **Hypothesize, then prove or disprove.** Form a testable hypothesis, design a minimal experiment that would confirm or falsify it, run the experiment, then act on the result. Do not skip straight from hypothesis to fix.
+- **Prove the fix, not just the theory.** After fixing, verify the fix works end-to-end, not just that the theory sounds right.
+
+#### Illustrative example from v1 development
+
+A web search stated that `--verbose` conflicted with `--output-format stream-json` in Claude Code CLI. Based on this, `--verbose` was removed from the executor. The actual behavior of the installed version was the exact opposite: `stream-json` **requires** `--verbose`. This caused a silent spawn failure — no output, no error — and wasted significant debugging time across multiple hypotheses and attempted fixes.
+
+The entire issue would have been caught in 5 seconds by running the proposed command in isolation before writing any code:
+```
+echo 'hello' | claude --print --output-format stream-json
+# → Error: stream-json requires --verbose
+```
+
 ### What to test
 
 #### Unit tests (high priority from Phase 0)
