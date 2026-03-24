@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { resolveConfigPaths } from '../config/paths.js';
-import { getHydrazDir } from '../sessions/manager.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 import { createDefaultMcpConfig, type McpConfig } from './schema.js';
 
 export function loadGlobalMcpConfig(configDir?: string): McpConfig {
@@ -19,17 +19,17 @@ export function saveGlobalMcpConfig(config: McpConfig, configDir?: string): void
 }
 
 export function loadRepoMcpConfig(repoRoot: string): McpConfig {
-  const repoMcpFile = join(getHydrazDir(repoRoot), 'mcp.json');
-  if (!existsSync(repoMcpFile)) {
+  const paths = resolveRepoDataPaths(repoRoot);
+  if (!existsSync(paths.repoMcpFile)) {
     return createDefaultMcpConfig();
   }
-  return JSON.parse(readFileSync(repoMcpFile, 'utf-8')) as McpConfig;
+  return JSON.parse(readFileSync(paths.repoMcpFile, 'utf-8')) as McpConfig;
 }
 
 export function saveRepoMcpConfig(repoRoot: string, config: McpConfig): void {
-  const hydrazDir = getHydrazDir(repoRoot);
-  mkdirSync(hydrazDir, { recursive: true });
-  writeFileSync(join(hydrazDir, 'mcp.json'), JSON.stringify(config, null, 2) + '\n');
+  const paths = resolveRepoDataPaths(repoRoot);
+  mkdirSync(dirname(paths.repoMcpFile), { recursive: true });
+  writeFileSync(paths.repoMcpFile, JSON.stringify(config, null, 2) + '\n');
 }
 
 export function mergeScopes(global: McpConfig, repo: McpConfig): McpConfig {

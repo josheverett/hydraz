@@ -1,6 +1,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  resolveRepoDataPaths,
+  getSessionDir as resolveSessionDir,
+} from '../repo/paths.js';
+import {
   type SessionMetadata,
   type SessionState,
   createSession,
@@ -11,25 +15,21 @@ import {
 } from './schema.js';
 
 export function getHydrazDir(repoRoot: string): string {
-  return join(repoRoot, '.hydraz');
+  return resolveRepoDataPaths(repoRoot).repoDataDir;
 }
 
 export function getSessionsDir(repoRoot: string): string {
-  return join(getHydrazDir(repoRoot), 'sessions');
+  return resolveRepoDataPaths(repoRoot).sessionsDir;
 }
 
 export function getSessionDir(repoRoot: string, sessionId: string): string {
-  return join(getSessionsDir(repoRoot), sessionId);
+  return resolveSessionDir(repoRoot, sessionId);
 }
 
 export function initRepoState(repoRoot: string): void {
-  const hydrazDir = getHydrazDir(repoRoot);
-  mkdirSync(join(hydrazDir, 'sessions'), { recursive: true });
-
-  const repoConfigPath = join(hydrazDir, 'repo.json');
-  if (!existsSync(repoConfigPath)) {
-    writeFileSync(repoConfigPath, JSON.stringify({ version: '1' }, null, 2) + '\n');
-  }
+  const paths = resolveRepoDataPaths(repoRoot);
+  mkdirSync(paths.sessionsDir, { recursive: true });
+  mkdirSync(paths.workspacesDir, { recursive: true });
 }
 
 export function createNewSession(params: {

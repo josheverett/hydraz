@@ -13,8 +13,10 @@ import {
   getActiveSessions,
   getSessionDir,
   getArtifactPath,
+  getSessionsDir,
 } from './manager.js';
 import { SessionError } from './schema.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 
 let repoRoot: string;
 
@@ -25,6 +27,8 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(repoRoot, { recursive: true, force: true });
+  const paths = resolveRepoDataPaths(repoRoot);
+  rmSync(paths.repoDataDir, { recursive: true, force: true });
 });
 
 function makeSession(name: string = 'test-session') {
@@ -39,12 +43,18 @@ function makeSession(name: string = 'test-session') {
 }
 
 describe('initRepoState', () => {
-  it('creates .hydraz/sessions/ directory', () => {
-    expect(existsSync(join(repoRoot, '.hydraz', 'sessions'))).toBe(true);
+  it('creates sessions directory under ~/.hydraz', () => {
+    const paths = resolveRepoDataPaths(repoRoot);
+    expect(existsSync(paths.sessionsDir)).toBe(true);
   });
 
-  it('creates .hydraz/repo.json', () => {
-    expect(existsSync(join(repoRoot, '.hydraz', 'repo.json'))).toBe(true);
+  it('creates workspaces directory under ~/.hydraz', () => {
+    const paths = resolveRepoDataPaths(repoRoot);
+    expect(existsSync(paths.workspacesDir)).toBe(true);
+  });
+
+  it('does not create .hydraz/ in the target repo', () => {
+    expect(existsSync(join(repoRoot, '.hydraz'))).toBe(false);
   });
 });
 
