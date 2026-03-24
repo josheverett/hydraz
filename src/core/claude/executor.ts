@@ -35,6 +35,7 @@ export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
     '--print',
     '--output-format', 'stream-json',
     '--verbose',
+    '--dangerously-skip-permissions',
     prompt.fullText,
   ];
 }

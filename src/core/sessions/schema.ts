@@ -29,8 +29,8 @@ export const TERMINAL_STATES: readonly SessionState[] = [
 export const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = {
   created: ['starting', 'stopped'],
   starting: ['planning', 'blocked', 'stopped', 'failed'],
-  planning: ['implementing', 'blocked', 'stopped', 'failed'],
-  implementing: ['verifying', 'blocked', 'stopped', 'failed'],
+  planning: ['implementing', 'completed', 'blocked', 'stopped', 'failed'],
+  implementing: ['verifying', 'completed', 'blocked', 'stopped', 'failed'],
   verifying: ['completed', 'implementing', 'blocked', 'stopped', 'failed'],
   completed: [],
   blocked: [],

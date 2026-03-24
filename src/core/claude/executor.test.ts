@@ -55,6 +55,11 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs(makePrompt());
     expect(args).toContain('--verbose');
   });
+
+  it('includes --dangerously-skip-permissions for autonomous operation', () => {
+    const args = buildClaudeArgs(makePrompt());
+    expect(args).toContain('--dangerously-skip-permissions');
+  });
 });
 
 describe('buildClaudeEnv', () => {

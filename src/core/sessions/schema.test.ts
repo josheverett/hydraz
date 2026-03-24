@@ -89,6 +89,14 @@ describe('isValidTransition', () => {
     }
   });
 
+  it('allows planning → completed (simple tasks)', () => {
+    expect(isValidTransition('planning', 'completed')).toBe(true);
+  });
+
+  it('allows implementing → completed (skipping verification)', () => {
+    expect(isValidTransition('implementing', 'completed')).toBe(true);
+  });
+
   it('allows verifying → implementing (retry)', () => {
     expect(isValidTransition('verifying', 'implementing')).toBe(true);
   });
