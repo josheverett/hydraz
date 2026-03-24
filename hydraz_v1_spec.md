@@ -1525,25 +1525,38 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 ## Phase 13: Local container execution
 Add container support to local mode so agents operate in isolated Docker environments. This is required before cloud execution because the full pipeline (worktree + container + Claude Code + env isolation) must be proven locally first. Cloud is the same model with a different host.
 
+### Container model
+The Hydraz container is a **general-purpose developer workstation** container, not an application container. It mirrors the developer's local machine: Node, git, Claude Code CLI, Docker, and common tools are pre-installed. The container is the same for all repos.
+
+Repo-specific application containers (e.g. from `docker-compose.yml`) are the agent's responsibility, not Hydraz's. Just as a developer would run `docker compose up` locally when needed, the agent starts whatever services the task requires inside the Hydraz container. Hydraz does not attempt to detect, parse, or manage repo Dockerfiles.
+
+This means:
+- One Hydraz container definition, configured globally
+- Docker-in-Docker or Docker socket mounting so the agent can run containers inside the Hydraz container
+- The worktree is mounted into the Hydraz container
+- The agent operates on the filesystem inside the container, same as a developer on their laptop
+- Repo Dockerfiles and compose files are the agent's tools, not Hydraz's concern
+
 ### Needs
-- reuse existing repo Dockerfiles as the application base
-- layer devcontainer metadata for developer/agent workspace setup
+- define and maintain the standard Hydraz dev container image
+- Docker-in-Docker or Docker socket access inside the container
 - mount worktree into the container
-- ensure Claude Code CLI is available inside the container
-- copy `.worktreeinclude` files into the container context
+- ensure Claude Code CLI is available and authenticated inside the container
 - handle port isolation between concurrent sessions
 - inject auth/env as needed for headless Claude Code execution
+- global Hydraz container configuration (image, resource limits, mounts)
 
 ### Important
 The full local pipeline must work end-to-end before cloud is attempted. Cloud is just "same thing, different host." Local containers prove the container model works; cloud adds remote orchestration on top.
 
 ### Deliverables
+- Hydraz dev container image definition
 - container-aware local provider (Docker-based)
-- Dockerfile detection and reuse
-- devcontainer metadata layering
-- Claude Code availability inside containers
+- Docker-in-Docker or socket mounting
+- Claude Code availability and auth inside containers
 - port isolation between sessions
 - env/secret injection into containers
+- global container configuration in `~/.hydraz/`
 
 ---
 
