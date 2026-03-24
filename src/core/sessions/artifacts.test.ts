@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { loadArtifact, summarizeArtifacts, getArtifactStatus } from './artifacts.js';
 import { initRepoState, createNewSession, getArtifactPath } from './manager.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 
 let repoRoot: string;
 let sessionId: string;
@@ -24,6 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(repoRoot, { recursive: true, force: true });
+  rmSync(resolveRepoDataPaths(repoRoot).repoDataDir, { recursive: true, force: true });
 });
 
 describe('loadArtifact', () => {

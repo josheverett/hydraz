@@ -1,5 +1,6 @@
 import type { SessionMetadata } from '../sessions/schema.js';
 import type { HydrazConfig } from '../config/schema.js';
+import { getWorkspaceDir as resolveWorkspaceDir } from '../repo/paths.js';
 
 export interface WorkspaceInfo {
   id: string;
@@ -27,5 +28,5 @@ export interface WorkspaceProvider {
 }
 
 export function getWorkspaceDir(repoRoot: string, sessionId: string): string {
-  return `${repoRoot}/.hydraz/workspaces/${sessionId}`;
+  return resolveWorkspaceDir(repoRoot, sessionId);
 }

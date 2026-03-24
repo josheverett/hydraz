@@ -31,8 +31,8 @@ This opens the interactive console where you can start new sessions, attach to e
 
 ```bash
 hydraz run "fix the auth timeout regression"
-hydraz run "https://linear.app/acme/issue/ENG-482/fix-auth-timeout"
-hydraz run --session fix-auth --branch hydraz/fix-auth --cloud "fix this"
+hydraz run "refactor the database connection pool to use async/await"
+hydraz run --session fix-auth --branch hydraz/fix-auth "fix the auth timeout"
 ```
 
 ### Session management
@@ -57,7 +57,7 @@ hydraz mcp             # manage MCP server configuration
 
 ## How it works
 
-1. You submit a task (issue URL or freeform description)
+1. You submit a task
 2. Hydraz creates an isolated workspace (git worktree) on a session branch
 3. A 3-persona swarm runs autonomously using Claude Code CLI:
    - **Planning** — the Architect decomposes the task
@@ -67,23 +67,18 @@ hydraz mcp             # manage MCP server configuration
 
 ## Config
 
-Global config lives at `~/.config/hydraz/`:
+Global config and session data live at `~/.hydraz/`:
 
 ```
-~/.config/hydraz/
+~/.hydraz/
   config.json          # defaults, auth mode, branch naming
   master-prompt.md     # swarm coordination prompt
   personas/            # built-in + custom persona prompts
   mcp/servers.json     # global MCP server config
+  repos/               # per-repo session and workspace data
 ```
 
-Repo-local state lives at `<repo>/.hydraz/`:
-
-```
-.hydraz/
-  repo.json            # repo-level config (committable)
-  sessions/            # session data (gitignored)
-```
+No files are created in the target repository.
 
 ## Personas
 
@@ -97,7 +92,7 @@ Add custom personas with `hydraz personas` — they're markdown files you can ed
 
 ```bash
 npm install
-npm test               # run 217 tests
+npm test               # run tests
 npm run test:watch     # watch mode
 npm run build          # compile TypeScript
 npm run typecheck      # type-check without emitting

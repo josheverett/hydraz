@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { copyWorktreeIncludes } from './worktree-include.js';
 import type {
   WorkspaceProvider,
   WorkspaceInfo,
@@ -36,6 +37,8 @@ export class LocalProvider implements WorkspaceProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to create worktree: ${message}`);
     }
+
+    copyWorktreeIncludes(session.repoRoot, workDir);
 
     return {
       id: session.id,

@@ -1506,6 +1506,82 @@ Make the CLI installable and ready for public packaging.
 - draft Homebrew formula strategy
 - install instructions
 
+## Phase 12: Move session/workspace data out of target repos
+Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of the target repo's `.hydraz/` directory and into `~/.hydraz/`, keyed by repo path. This eliminates the need for `.gitignore` entries in target repos and avoids polluting the working tree.
+
+### Needs
+- relocate session storage from `<repo>/.hydraz/sessions/` to `~/.hydraz/repos/<repo-hash>/sessions/`
+- relocate worktrees from `<repo>/.hydraz/workspaces/` to `~/.hydraz/repos/<repo-hash>/workspaces/`
+- repo config (`.hydraz/repo.json`) may remain in-repo if committable, or move to global config keyed by repo path
+- update all path resolution logic
+- migrate or ignore existing `.hydraz/` data
+
+### Deliverables
+- updated path resolution
+- session/worktree relocation
+- no `.hydraz/` pollution in target repos
+- backward compatibility or clean migration
+
+## Phase 13: Local container execution
+Add container support to local mode so agents operate in isolated Docker environments. This is required before cloud execution because the full pipeline (worktree + container + Claude Code + env isolation) must be proven locally first. Cloud is the same model with a different host.
+
+### Container model
+The Hydraz container is a **general-purpose developer workstation** container, not an application container. It mirrors the developer's local machine: Node, git, Claude Code CLI, Docker, and common tools are pre-installed. The container is the same for all repos.
+
+Repo-specific application containers (e.g. from `docker-compose.yml`) are the agent's responsibility, not Hydraz's. Just as a developer would run `docker compose up` locally when needed, the agent starts whatever services the task requires inside the Hydraz container. Hydraz does not attempt to detect, parse, or manage repo Dockerfiles.
+
+This means:
+- Docker-in-Docker or Docker socket mounting so the agent can run containers inside the Hydraz container
+- The worktree is mounted into the Hydraz container
+- The agent operates on the filesystem inside the container, same as a developer on their laptop
+- Repo Dockerfiles and compose files are the agent's tools, not Hydraz's concern
+
+### devcontainer.json
+The container definition uses the open [Dev Container specification](https://containers.dev/) via `.devcontainer/devcontainer.json` checked into each repo. This is an open standard supported by VS Code, GitHub Codespaces, DevPod, JetBrains, and others. Using the standard means the dev environment works with any compatible tool, not just Hydraz.
+
+### DevPod as workspace abstraction
+DevPod is the workspace launcher abstraction for both local and cloud execution:
+- **Local:** DevPod with Docker provider (container runs on your machine)
+- **Cloud:** DevPod with a cloud provider such as GCP (same container, remote host)
+- **Same `devcontainer.json`** for both — one definition, any provider
+
+DevPod is free and open source (MPL-2.0). You only pay for cloud compute. Hydraz talks to DevPod, DevPod talks to the infrastructure. One integration, any provider.
+
+### Needs
+- `.devcontainer/devcontainer.json` support per the open standard
+- DevPod integration for local and cloud container lifecycle
+- Docker-in-Docker or Docker socket access inside the container
+- mount worktree into the container
+- ensure Claude Code CLI is available and authenticated inside the container
+- handle port isolation between concurrent sessions
+- inject auth/env as needed for headless Claude Code execution
+
+### Important
+The full local pipeline must work end-to-end before cloud is attempted. Cloud is just "same thing, different host." Local containers prove the container model works; cloud adds remote orchestration on top.
+
+### Deliverables
+- `.devcontainer/devcontainer.json` definition for the Hydraz dev workstation
+- DevPod integration in the local provider
+- Docker-in-Docker or socket mounting
+- Claude Code availability and auth inside containers
+- port isolation between sessions
+- env/secret injection into containers
+
+## Phase 14: Multi-executor backend support
+Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in.
+
+### Needs
+- define an `ExecutorBackend` interface with `launch()`, `stop()`, `parseStream()` methods
+- implement `ClaudeCodeBackend` as the default
+- the orchestration controller talks to the interface, never to Claude-specific details
+- executor backend selection via config
+
+### Deliverables
+- `ExecutorBackend` interface
+- `ClaudeCodeBackend` implementation (refactor of existing executor)
+- config option to select backend
+- documentation for implementing new backends
+
 ---
 
 ## 24. Suggested Directory Structure for the Hydraz Codebase
@@ -1663,7 +1739,7 @@ Tests should live alongside source files or in a parallel `__tests__/` structure
 
 2. **Claude Code invocation strategy:** Direct process supervision via `claude` CLI behind an executor adapter boundary. The adapter isolates Claude-specific invocation details so the rest of Hydraz speaks in session/orchestration concepts.
 
-3. **Cloud provider for v1:** Local execution is the fully functional v1 path. Cloud execution should be a well-defined provider interface with a stub/placeholder implementation. This avoids doubling the integration surface before the core loop is proven.
+3. **Cloud provider for v1:** Local execution is the fully functional v1 path, including local container support (Phase 13). The full pipeline (worktree + container + Claude Code + env isolation) must be proven locally before cloud is attempted. Cloud is the same container model on a remote host. Cloud execution remains a well-defined provider interface with a stub implementation until local containers are proven.
 
 4. **Session event persistence format:** JSONL. Confirmed. Append-only, streamable, easy to tail and parse.
 

@@ -13,6 +13,7 @@ import {
 import { addServer, createDefaultMcpConfig, type McpConfig } from './schema.js';
 import { initializeConfigDir } from '../config/init.js';
 import { initRepoState } from '../sessions/manager.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 
 let configDir: string;
 let repoRoot: string;
@@ -27,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(configDir, { recursive: true, force: true });
   rmSync(repoRoot, { recursive: true, force: true });
+  rmSync(resolveRepoDataPaths(repoRoot).repoDataDir, { recursive: true, force: true });
 });
 
 describe('global MCP config', () => {

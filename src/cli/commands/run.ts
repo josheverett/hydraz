@@ -14,7 +14,7 @@ export function registerRunCommand(program: Command): void {
   program
     .command('run')
     .description('Launch a task directly (non-interactive)')
-    .argument('<task>', 'Task description or issue URL')
+    .argument('<task>', 'Task description')
     .option('--session <name>', 'Session name')
     .option('--branch <name>', 'Branch name')
     .option('--local', 'Run locally')
