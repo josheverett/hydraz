@@ -1789,7 +1789,11 @@ Each `src/core/<module>/` directory should have an `index.ts` that re-exports th
 All assumptions about external tool behavior (CLI interfaces, APIs, env vars, file formats) must be verified with evidence before acting on them. Never trust documentation or web search results over actually running the tool. When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec.
 
 ### API-design-driven TDD
-Define interfaces and types first, write tests against them, then implement until green. Tests should test behavior, not implementation details.
+The implementation order is strict: define interfaces/types → write tests that use them (tests fail) → implement until tests pass. This is not optional or aspirational — it is the required workflow.
+
+Tests should test behavior, not implementation details. Every atomic commit must include test additions or modifications unless the commit is purely non-functional (e.g. docs-only, spec updates, config changes). The human will run `npm test` before every commit; if tests don't pass, the commit doesn't land.
+
+When refactoring, existing tests must continue to pass. New tests should cover the new or changed API surface.
 
 ---
 
