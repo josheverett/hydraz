@@ -8,8 +8,8 @@ The near-term goal is not to build a generic "agent platform." The goal is to sh
 
 Hydraz is intended to become:
 - an internal engineering standard first
-- a public installable CLI later
-- eventually packaged for Homebrew distribution on macOS
+- a public installable CLI later, via npm (`npm install -g hydraz`) as the primary distribution channel
+- eventually also packaged for Homebrew distribution on macOS
 
 The design should therefore optimize for:
 - fast onboarding
@@ -1469,20 +1469,23 @@ Implement MCP configuration management.
 - merge logic for global + repo scope
 
 ## Phase 11: Packaging and install path
-Make the CLI installable and ready for public packaging.
+Make the CLI installable and ready for public distribution.
+
+npm is the primary distribution channel (`npm install -g hydraz`). Node is already a prerequisite, every target user has npm, and the `package.json` is already configured with `bin`, `files`, and `main` fields. Homebrew is a future secondary channel for macOS-native feel.
 
 ### Needs
 - package metadata
 - versioning
 - build/release artifacts
 - install docs
-- Homebrew-forward-compatible packaging layout
+- npm publish pipeline
+- Homebrew-forward-compatible packaging layout (future)
 
 ### Deliverables
-- npm-ready release flow
-- tarball/binary strategy as needed
-- draft Homebrew formula strategy
-- install instructions
+- npm publish flow (primary)
+- install instructions for npm
+- draft Homebrew formula strategy (future)
+- versioning and release automation
 
 ## Phase 12: Move session/workspace data out of target repos
 Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of the target repo's `.hydraz/` directory and into `~/.hydraz/`, keyed by repo path. This eliminates the need for `.gitignore` entries in target repos and avoids polluting the working tree.
