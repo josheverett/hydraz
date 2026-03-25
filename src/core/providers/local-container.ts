@@ -12,6 +12,7 @@ import {
   hasDevcontainerJson,
   devpodUp,
   devpodDelete,
+  verifyClaudeInContainer,
 } from './devpod.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
@@ -54,6 +55,13 @@ export class LocalContainerProvider implements WorkspaceProvider {
       destroyWorktree(session.repoRoot, worktree.directory);
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
+    }
+
+    const claudeCheck = verifyClaudeInContainer(workspaceName);
+    if (!claudeCheck.available) {
+      devpodDelete(workspaceName);
+      destroyWorktree(session.repoRoot, worktree.directory);
+      throw new Error(claudeCheck.error ?? 'Claude Code CLI is not available inside the container');
     }
 
     return {

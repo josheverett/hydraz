@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { select, confirm } from '@inquirer/prompts';
+import { select, confirm, password, input } from '@inquirer/prompts';
 import {
   loadConfig,
   saveConfig,
@@ -82,6 +82,8 @@ function viewConfig(): void {
   console.log(`  Default personas:  ${config.defaultPersonas.join(', ')}`);
   console.log(`  Branch prefix:     ${config.branchNaming.prefix}`);
   console.log(`  Auth mode:         ${config.claudeAuth.mode}`);
+  console.log(`  OAuth token:       ${config.claudeAuth.oauthToken ? 'configured' : 'not set'}`);
+  console.log(`  API key:           ${config.claudeAuth.apiKey ? 'configured' : 'not set'}`);
   console.log(`  Keep transcripts:  ${config.retention.keepTranscripts}`);
   console.log(`  Keep test logs:    ${config.retention.keepTestLogs}`);
   console.log(`  Display verbosity: ${config.displayVerbosity}`);
@@ -141,18 +143,72 @@ async function masterPromptMenu(): Promise<void> {
 
 async function setAuthMode(): Promise<void> {
   const config = loadConfig();
-  const mode = await select({
-    message: 'Claude Code auth mode',
+  const action = await select({
+    message: 'Claude Code auth',
     choices: [
-      { name: 'Claude.ai subscription (OAuth)', value: 'claude-ai-oauth' as AuthMode },
-      { name: 'API key', value: 'api-key' as AuthMode },
+      { name: 'Set auth mode', value: 'mode' as const },
+      { name: `Set OAuth token ${config.claudeAuth.oauthToken ? '(configured)' : '(not set)'}`, value: 'oauth-token' as const },
+      { name: `Set API key ${config.claudeAuth.apiKey ? '(configured)' : '(not set)'}`, value: 'api-key' as const },
+      { name: 'Clear stored credentials', value: 'clear' as const },
+      { name: 'Back', value: 'back' as const },
     ],
-    default: config.claudeAuth.mode,
   });
 
-  config.claudeAuth.mode = mode;
-  saveConfig(config);
-  console.log(`\nAuth mode set to: ${mode}\n`);
+  switch (action) {
+    case 'mode': {
+      const mode = await select({
+        message: 'Claude Code auth mode',
+        choices: [
+          { name: 'Claude.ai subscription (OAuth)', value: 'claude-ai-oauth' as AuthMode },
+          { name: 'API key', value: 'api-key' as AuthMode },
+        ],
+        default: config.claudeAuth.mode,
+      });
+      config.claudeAuth.mode = mode;
+      saveConfig(config);
+      console.log(`\nAuth mode set to: ${mode}\n`);
+      break;
+    }
+    case 'oauth-token': {
+      console.log('\nGenerate a token with: claude setup-token');
+      const token = await password({
+        message: 'Paste OAuth token',
+        mask: '*',
+      });
+      if (token.trim()) {
+        config.claudeAuth.oauthToken = token.trim();
+        saveConfig(config);
+        console.log('\nOAuth token saved.\n');
+      }
+      break;
+    }
+    case 'api-key': {
+      const key = await input({
+        message: 'Enter API key',
+      });
+      if (key.trim()) {
+        config.claudeAuth.apiKey = key.trim();
+        saveConfig(config);
+        console.log('\nAPI key saved.\n');
+      }
+      break;
+    }
+    case 'clear': {
+      const shouldClear = await confirm({
+        message: 'Clear all stored auth credentials?',
+        default: false,
+      });
+      if (shouldClear) {
+        delete config.claudeAuth.oauthToken;
+        delete config.claudeAuth.apiKey;
+        saveConfig(config);
+        console.log('\nCredentials cleared.\n');
+      }
+      break;
+    }
+    case 'back':
+      return;
+  }
 }
 
 function claudeCheck(): void {

@@ -17,6 +17,7 @@ vi.mock('./devpod.js', () => ({
   hasDevcontainerJson: vi.fn(() => true),
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
+  verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
 }));
 
 import { createWorktree, destroyWorktree } from './worktree.js';
@@ -26,6 +27,7 @@ import {
   hasDevcontainerJson,
   devpodUp,
   devpodDelete,
+  verifyClaudeInContainer,
 } from './devpod.js';
 
 const mockCreateWorktree = vi.mocked(createWorktree);
@@ -35,6 +37,7 @@ const mockCheckDocker = vi.mocked(checkDockerAvailability);
 const mockHasDevcontainer = vi.mocked(hasDevcontainerJson);
 const mockDevpodUp = vi.mocked(devpodUp);
 const mockDevpodDelete = vi.mocked(devpodDelete);
+const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
 
 function makeSession(name: string = 'test-session') {
   return createSession({
@@ -48,7 +51,7 @@ function makeSession(name: string = 'test-session') {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mockCreateWorktree.mockReturnValue({
     directory: '/fake/worktree/dir',
     branchName: 'hydraz/test-session',
@@ -56,6 +59,7 @@ beforeEach(() => {
   mockCheckDevPod.mockReturnValue({ available: true, version: 'v0.6.15' });
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
+  mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
 });
 
 describe('LocalContainerProvider', () => {
@@ -137,6 +141,17 @@ describe('LocalContainerProvider', () => {
       const config = createDefaultConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('devcontainer');
+    });
+
+    it('tears down workspace if Claude Code is not found in the container', () => {
+      mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow('Claude Code');
+      expect(mockDevpodDelete).toHaveBeenCalled();
+      expect(mockDestroyWorktree).toHaveBeenCalled();
     });
   });
 
