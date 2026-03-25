@@ -93,6 +93,8 @@ export function validateConfig(data: unknown): HydrazConfig {
       ['claude-ai-oauth', 'api-key'] as const,
       defaults.claudeAuth.mode,
     ),
+    oauthToken: expectOptionalString(val as Record<string, unknown>, 'oauthToken'),
+    apiKey: expectOptionalString(val as Record<string, unknown>, 'apiKey'),
   }));
 
   const retention = expectObject(obj, 'retention', defaults.retention, (val) => ({
@@ -131,6 +133,17 @@ function expectString(
   fallback: string,
 ): string {
   if (!(key in obj)) return fallback;
+  if (typeof obj[key] !== 'string') {
+    throw new ConfigValidationError(`"${key}" must be a string`);
+  }
+  return obj[key] as string;
+}
+
+function expectOptionalString(
+  obj: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  if (!(key in obj)) return undefined;
   if (typeof obj[key] !== 'string') {
     throw new ConfigValidationError(`"${key}" must be a string`);
   }

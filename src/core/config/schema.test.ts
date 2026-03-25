@@ -65,6 +65,27 @@ describe('validateConfig', () => {
     expect(result.claudeAuth.mode).toBe('api-key');
   });
 
+  it('preserves oauthToken in claudeAuth', () => {
+    const result = validateConfig({
+      claudeAuth: { mode: 'claude-ai-oauth', oauthToken: 'sk-ant-oat01-test' },
+    });
+    expect(result.claudeAuth.oauthToken).toBe('sk-ant-oat01-test');
+  });
+
+  it('preserves apiKey in claudeAuth', () => {
+    const result = validateConfig({
+      claudeAuth: { mode: 'api-key', apiKey: 'sk-ant-api-test' },
+    });
+    expect(result.claudeAuth.apiKey).toBe('sk-ant-api-test');
+  });
+
+  it('leaves oauthToken undefined when not provided', () => {
+    const result = validateConfig({
+      claudeAuth: { mode: 'claude-ai-oauth' },
+    });
+    expect(result.claudeAuth.oauthToken).toBeUndefined();
+  });
+
   it('rejects non-object input', () => {
     expect(() => validateConfig('bad')).toThrow(ConfigValidationError);
     expect(() => validateConfig(null)).toThrow(ConfigValidationError);
