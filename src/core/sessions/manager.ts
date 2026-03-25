@@ -4,6 +4,7 @@ import {
   resolveRepoDataPaths,
   getSessionDir as resolveSessionDir,
 } from '../repo/paths.js';
+import type { ExecutionTarget } from '../config/schema.js';
 import {
   type SessionMetadata,
   type SessionState,
@@ -37,7 +38,7 @@ export function createNewSession(params: {
   repoRoot: string;
   branchName: string;
   personas: [string, string, string];
-  executionTarget: 'local' | 'cloud';
+  executionTarget: ExecutionTarget;
   task: string;
 }): SessionMetadata {
   const existing = listSessions(params.repoRoot);

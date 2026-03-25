@@ -94,6 +94,7 @@ async function setExecutionTarget(): Promise<void> {
     message: 'Default execution target',
     choices: [
       { name: 'Local', value: 'local' as ExecutionTarget },
+      { name: 'Local (container)', value: 'local-container' as ExecutionTarget },
       { name: 'Cloud', value: 'cloud' as ExecutionTarget },
     ],
     default: config.executionTarget,

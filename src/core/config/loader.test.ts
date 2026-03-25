@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -64,5 +64,12 @@ describe('saveConfig', () => {
     const loaded = loadConfig(testDir);
     expect(loaded.claudeAuth.mode).toBe('api-key');
     expect(loaded.retention.keepTranscripts).toBe(true);
+  });
+
+  it('sets config file permissions to 0600 (owner-only)', () => {
+    saveConfig(createDefaultConfig(), testDir);
+    const stats = statSync(join(testDir, 'config.json'));
+    const mode = (stats.mode & 0o777).toString(8);
+    expect(mode).toBe('600');
   });
 });

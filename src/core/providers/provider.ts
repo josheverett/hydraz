@@ -1,10 +1,10 @@
 import type { SessionMetadata } from '../sessions/schema.js';
-import type { HydrazConfig } from '../config/schema.js';
+import type { HydrazConfig, ExecutionTarget } from '../config/schema.js';
 import { getWorkspaceDir as resolveWorkspaceDir } from '../repo/paths.js';
 
 export interface WorkspaceInfo {
   id: string;
-  type: 'local' | 'cloud';
+  type: ExecutionTarget;
   directory: string;
   branchName: string;
   sessionId: string;
@@ -21,7 +21,7 @@ export interface ProviderCheckResult {
 }
 
 export interface WorkspaceProvider {
-  readonly type: 'local' | 'cloud';
+  readonly type: ExecutionTarget;
   createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo;
   destroyWorkspace(repoRoot: string, workspace: WorkspaceInfo): void;
   checkAvailability(): ProviderCheckResult;

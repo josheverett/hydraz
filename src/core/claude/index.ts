@@ -1,4 +1,5 @@
 export {
+  type ContainerContext,
   type ExecutorOptions,
   type ExecutorHandle,
   type ExecutorResult,
@@ -7,6 +8,10 @@ export {
   launchClaude,
   mapExitToSessionState,
 } from './executor.js';
+export {
+  shellEscape,
+  buildSshClaudeArgs,
+} from './ssh.js';
 export {
   type AuthResolution,
   resolveAuth,
@@ -17,7 +22,5 @@ export {
   type ParsedClaudeEvent,
   parseStreamLine,
 } from './stream-parser.js';
-export {
-  type DisplayVerbosity,
-  formatStreamEvent,
-} from './stream-display.js';
+export { formatStreamEvent } from './stream-display.js';
+export type { DisplayVerbosity } from '../config/schema.js';

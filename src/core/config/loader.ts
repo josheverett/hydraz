@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { resolveConfigPaths } from './paths.js';
 import { createDefaultConfig, validateConfig, type HydrazConfig } from './schema.js';
 
@@ -23,4 +23,5 @@ export function saveConfig(config: HydrazConfig, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
   mkdirSync(paths.configDir, { recursive: true });
   writeFileSync(paths.configFile, JSON.stringify(config, null, 2) + '\n');
+  chmodSync(paths.configFile, 0o600);
 }

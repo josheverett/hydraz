@@ -5,7 +5,7 @@ import { assemblePrompt } from '../prompts/builder.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import { formatStreamEvent } from '../claude/stream-display.js';
 import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
-import type { DisplayVerbosity } from '../config/schema.js';
+import type { DisplayVerbosity, ExecutionTarget } from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -13,7 +13,10 @@ import {
   type SessionMetadata,
 } from '../sessions/index.js';
 import { LocalProvider } from '../providers/local.js';
+import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
+import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
+import { writeAuthFile, cleanupAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -31,8 +34,15 @@ export interface RunningSession {
 
 const activeSessions = new Map<string, RunningSession>();
 
-export function getProvider(target: 'local' | 'cloud'): WorkspaceProvider {
-  return target === 'local' ? new LocalProvider() : new CloudProvider();
+export function getProvider(target: ExecutionTarget): WorkspaceProvider {
+  switch (target) {
+    case 'local':
+      return new LocalProvider();
+    case 'local-container':
+      return new LocalContainerProvider();
+    case 'cloud':
+      return new CloudProvider();
+  }
 }
 
 function formatTs(): string {
@@ -71,6 +81,18 @@ export async function startSession(
     return;
   }
 
+  if (session.executionTarget === 'local-container') {
+    const containerAuth = validateContainerAuth(config);
+    if (!containerAuth.valid) {
+      const msg = containerAuth.error ?? 'Container auth not configured';
+      transitionState(repoRoot, sessionId, 'blocked', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.blocked', msg);
+      callbacks.onError?.(msg);
+      return;
+    }
+  }
+
   const provider = getProvider(session.executionTarget);
   const providerCheck = provider.checkAvailability();
   if (!providerCheck.available) {
@@ -107,10 +129,25 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
+  let containerContext: { workspaceName: string; authFilePath?: string } | undefined;
+  if (session.executionTarget === 'local-container') {
+    const workspaceName = `hydraz-${session.id}`;
+    const authEnv = prepareContainerAuthEnv(config);
+    if (Object.keys(authEnv).length > 0) {
+      writeAuthFile(workspace.directory, authEnv);
+    }
+    const containerWorkspacePath = `/workspaces/${workspaceName}`;
+    const authFilePath = Object.keys(authEnv).length > 0
+      ? `${containerWorkspacePath}/${AUTH_FILE_NAME}`
+      : undefined;
+    containerContext = { workspaceName, authFilePath };
+  }
+
   const executor = launchClaude({
     workingDirectory: workspace.directory,
     prompt,
     config,
+    containerContext,
     onStreamEvent: (event: ParsedClaudeEvent) => {
       const formatted = formatStreamEvent(event, verbosity);
       if (formatted) {
@@ -129,6 +166,10 @@ export async function startSession(
 
   const result = await executor.waitForExit();
   activeSessions.delete(sessionId);
+
+  if (session.executionTarget === 'local-container') {
+    cleanupAuthFile(workspace.directory);
+  }
 
   const stateMapping = mapExitToSessionState(result);
   transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatStreamEvent, type DisplayVerbosity } from './stream-display.js';
+import { formatStreamEvent } from './stream-display.js';
+import type { DisplayVerbosity } from '../config/schema.js';
 import type { ParsedClaudeEvent } from './stream-parser.js';
 
 function makeEvent(overrides: Partial<ParsedClaudeEvent>): ParsedClaudeEvent {

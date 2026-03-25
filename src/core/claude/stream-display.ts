@@ -1,6 +1,5 @@
 import type { ParsedClaudeEvent } from './stream-parser.js';
-
-export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
+import type { DisplayVerbosity } from '../config/schema.js';
 
 export function formatStreamEvent(
   event: ParsedClaudeEvent,

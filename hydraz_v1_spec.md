@@ -1523,18 +1523,25 @@ This phase is intentionally minimal. Linting, coverage thresholds, and release a
 Add container support to local mode so agents operate in isolated Docker environments. This is required before cloud execution because the full pipeline (worktree + container + Claude Code + env isolation) must be proven locally first. Cloud is the same model with a different host.
 
 ### Container model
-The Hydraz container is a **general-purpose developer workstation** container, not an application container. It mirrors the developer's local machine: Node, git, Claude Code CLI, Docker, and common tools are pre-installed. The container is the same for all repos.
+The container is **not** a Hydraz-provided image. Each target repo owns its own `.devcontainer/devcontainer.json` per the open [Dev Container specification](https://containers.dev/). Hydraz does not provide a default container definition — it uses whatever the repo defines.
 
-Repo-specific application containers (e.g. from `docker-compose.yml`) are the agent's responsibility, not Hydraz's. Just as a developer would run `docker compose up` locally when needed, the agent starts whatever services the task requires inside the Hydraz container. Hydraz does not attempt to detect, parse, or manage repo Dockerfiles.
+If a repo does not have a `.devcontainer/devcontainer.json`, container mode is unavailable for that repo. Hydraz should fail with a clear error: "Container mode requires a `.devcontainer/devcontainer.json` in the target repo."
 
-This means:
-- Docker-in-Docker or Docker socket mounting so the agent can run containers inside the Hydraz container
-- The worktree is mounted into the Hydraz container
-- The agent operates on the filesystem inside the container, same as a developer on their laptop
-- Repo Dockerfiles and compose files are the agent's tools, not Hydraz's concern
+Repo-specific application containers (e.g. from `docker-compose.yml`) are the agent's responsibility, not Hydraz's. Just as a developer would run `docker compose up` locally when needed, the agent starts whatever services the task requires inside the container. Hydraz does not attempt to detect, parse, or manage repo Dockerfiles.
 
-### devcontainer.json
-The container definition uses the open [Dev Container specification](https://containers.dev/) via `.devcontainer/devcontainer.json` checked into each repo. This is an open standard supported by VS Code, GitHub Codespaces, DevPod, JetBrains, and others. Using the standard means the dev environment works with any compatible tool, not just Hydraz.
+The only hard requirement Hydraz places on the devcontainer is that Claude Code CLI must be callable inside it. Hydraz validates this post-launch and fails with a clear error if `claude` is not found.
+
+### `.worktreeinclude` and environment files
+Hydraz supports the `.worktreeinclude` convention — a community standard used by Claude Code (desktop and CLI), Roo Code, and the standalone `git-worktreeinclude` CLI. A `.worktreeinclude` file at the repo root lists gitignored files (like `.env`) that should be copied into new worktrees.
+
+Hydraz implements this independently because Hydraz creates worktrees itself (via `git worktree add`), so Claude Code's native `.worktreeinclude` handling never fires. Hydraz's `copyWorktreeIncludes` runs during worktree creation and copies listed files from the main checkout into the new worktree.
+
+This is critical for container mode: the worktree is mounted into the DevPod container, so files copied by `.worktreeinclude` (e.g. `.env` files) are available inside the container at `/workspaces/<name>/`. Without this, the agent would have no access to repo env files inside the container.
+
+### Docker access inside containers
+For local container mode, the host Docker socket is mounted into the container (socket mount, not Docker-in-Docker). This is the devcontainer ecosystem default for local dev — simple, performant, and well-supported.
+
+For future cloud mode, true Docker-in-Docker would be used instead (no host socket to share). The agent code doesn't care which mechanism is in play — it just runs `docker` commands either way.
 
 ### DevPod as workspace abstraction
 DevPod is the workspace launcher abstraction for both local and cloud execution:
@@ -1542,27 +1549,72 @@ DevPod is the workspace launcher abstraction for both local and cloud execution:
 - **Cloud:** DevPod with a cloud provider such as GCP (same container, remote host)
 - **Same `devcontainer.json`** for both — one definition, any provider
 
-DevPod is free and open source (MPL-2.0). You only pay for cloud compute. Hydraz talks to DevPod, DevPod talks to the infrastructure. One integration, any provider.
+DevPod is free and open source (MPL-2.0, no license conflict with Hydraz's MIT). You only pay for cloud compute. Hydraz talks to DevPod, DevPod talks to the infrastructure. One integration, any provider.
+
+### Proven DevPod mechanics (verified)
+The following were verified manually against DevPod v0.6.15 with Docker provider (OrbStack):
+
+- **`devpod up <local-dir> --ide none`** — creates and starts a workspace from a local directory's devcontainer.json. First run ~30s (image build + feature install). Subsequent runs faster (cached image).
+- **Repo files mounted at `/workspaces/<workspace-name>/`** — DevPod copies/mounts the repo contents into the container at this path automatically.
+- **devcontainer features** — standard features (e.g. `ghcr.io/devcontainers/features/node`, `ghcr.io/devcontainers/features/git`) install correctly during image build.
+- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. This is the auth injection path for Claude Code OAuth tokens.
+- **`ssh <workspace>.devpod "command"`** — executes a command inside the container via SSH. Clean exit, proper stdout. This is the programmatic exec interface Hydraz will use.
+- **`devpod ssh --command`** — also works but produces a spurious "Error tunneling to container" message on exit. Use raw SSH instead.
+- **`devpod delete <workspace>`** — clean teardown, removes container.
+
+### Execution target model
+The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local-container' | 'cloud'`:
+- **`local`** — bare metal, current behavior (worktree + spawn `claude` on host)
+- **`local-container`** — Docker on your machine via DevPod (worktree + container + exec `claude` inside container via SSH)
+- **`cloud`** — same container model, remote host via DevPod with cloud provider (future, out of scope for Phase 14)
+
+### Architecture: where container lifecycle sits
+A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface:
+1. Creates the git worktree on the host (reuses existing worktree logic from `LocalProvider`)
+2. Starts a DevPod workspace with the worktree directory as the source (`devpod up <worktree-dir> --ide none`)
+3. Returns a `WorkspaceInfo` tracking both the host path and the DevPod workspace identity
+4. `destroyWorkspace` calls `devpod delete` to tear down the container
+
+### Architecture: how Claude executes inside the container
+The executor spawns Claude Code CLI inside the container via SSH rather than on the host:
+- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod "claude <args>"` (or equivalent spawn with SSH)
+- The controller passes an execution context to the executor indicating whether to run locally or via SSH
+- Streaming output works the same way — stdout from the SSH process is the stream-json output from Claude
+
+### Auth inside containers (verified)
+Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable for headless authentication. The full flow:
+
+1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
+2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
+3. **Container launch:** Hydraz injects `CLAUDE_CODE_OAUTH_TOKEN` via `containerEnv` in the devcontainer.json (or DevPod's env mechanisms) before launching the container
+4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
+
+Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
+
+### Prerequisites for container mode
+- Docker (or OrbStack) running on the host
+- DevPod CLI installed (`devpod version` to verify)
+- Target repo has a `.devcontainer/devcontainer.json`
+- Claude Code CLI available inside the container (repo's devcontainer responsibility)
 
 ### Needs
-- `.devcontainer/devcontainer.json` support per the open standard
-- DevPod integration for local and cloud container lifecycle
-- Docker-in-Docker or Docker socket access inside the container
-- mount worktree into the container
-- ensure Claude Code CLI is available and authenticated inside the container
-- handle port isolation between concurrent sessions
-- inject auth/env as needed for headless Claude Code execution
+- `LocalContainerProvider` implementing `WorkspaceProvider`
+- DevPod lifecycle integration (`devpod up`, `devpod delete`)
+- SSH-based command execution for running Claude inside containers
+- Auth token injection via container environment variables
+- Validation: devcontainer.json exists, Claude Code callable post-launch
+- Execution target expansion to include `local-container`
 
 ### Important
 The full local pipeline must work end-to-end before cloud is attempted. Cloud is just "same thing, different host." Local containers prove the container model works; cloud adds remote orchestration on top.
 
 ### Deliverables
-- `.devcontainer/devcontainer.json` definition for the Hydraz dev workstation
-- DevPod integration in the local provider
-- Docker-in-Docker or socket mounting
-- Claude Code availability and auth inside containers
-- port isolation between sessions
-- env/secret injection into containers
+- `LocalContainerProvider` with DevPod integration
+- SSH-based executor path for container mode
+- Container env var auth injection
+- Pre-flight validation (devcontainer.json exists, Docker running, DevPod available)
+- Post-launch validation (Claude Code callable inside container)
+- Execution target type expansion (`local-container`)
 
 ## Phase 15: Multi-executor backend support
 Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in.
@@ -1725,6 +1777,30 @@ echo 'hello' | claude --print --output-format stream-json
 
 ### Test organization
 Tests should live alongside source files or in a parallel `__tests__/` structure, following Vitest conventions. The choice should be made during Phase 0 scaffold.
+
+---
+
+## 26b. Coding Standards
+
+These standards apply to all code in the Hydraz codebase. They must be followed by any agent or contributor working on the project.
+
+### Single source of truth for types and constants
+Every type, interface, constant, and enum must be defined in exactly one place. Other files must import from the canonical definition — never duplicate it. If a type is used across module boundaries, it should live in the appropriate domain module (e.g. `config/schema.ts` for config types, `sessions/schema.ts` for session types) and be re-exported through barrel files as needed.
+
+Duplicating a type definition, even if the values are identical, is a bug. When the canonical definition changes, duplicates silently drift.
+
+### Barrel files for public module APIs
+Each `src/core/<module>/` directory should have an `index.ts` that re-exports the module's public API. Consumers import from the barrel, not from internal files. Internal files may import from each other directly within the same module.
+
+### Prove-it-first methodology
+All assumptions about external tool behavior (CLI interfaces, APIs, env vars, file formats) must be verified with evidence before acting on them. Never trust documentation or web search results over actually running the tool. When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec.
+
+### API-design-driven TDD
+The implementation order is strict: define interfaces/types → write tests that use them (tests fail) → implement until tests pass. This is not optional or aspirational — it is the required workflow.
+
+Tests should test behavior, not implementation details. Every atomic commit must include test additions or modifications unless the commit is purely non-functional (e.g. docs-only, spec updates, config changes). The human will run `npm test` before every commit; if tests don't pass, the commit doesn't land.
+
+When refactoring, existing tests must continue to pass. New tests should cover the new or changed API surface.
 
 ---
 
