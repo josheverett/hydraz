@@ -5,7 +5,7 @@ import { assemblePrompt } from '../prompts/builder.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import { formatStreamEvent } from '../claude/stream-display.js';
 import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
-import type { DisplayVerbosity } from '../config/schema.js';
+import type { DisplayVerbosity, ExecutionTarget } from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -31,8 +31,15 @@ export interface RunningSession {
 
 const activeSessions = new Map<string, RunningSession>();
 
-export function getProvider(target: 'local' | 'cloud'): WorkspaceProvider {
-  return target === 'local' ? new LocalProvider() : new CloudProvider();
+export function getProvider(target: ExecutionTarget): WorkspaceProvider {
+  switch (target) {
+    case 'local':
+      return new LocalProvider();
+    case 'local-container':
+      throw new Error('local-container provider not yet implemented');
+    case 'cloud':
+      return new CloudProvider();
+  }
 }
 
 function formatTs(): string {

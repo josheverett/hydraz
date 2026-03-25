@@ -17,7 +17,5 @@ export {
   type ParsedClaudeEvent,
   parseStreamLine,
 } from './stream-parser.js';
-export {
-  type DisplayVerbosity,
-  formatStreamEvent,
-} from './stream-display.js';
+export { formatStreamEvent } from './stream-display.js';
+export type { DisplayVerbosity } from '../config/schema.js';

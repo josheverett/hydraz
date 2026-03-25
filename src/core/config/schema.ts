@@ -1,4 +1,4 @@
-export type ExecutionTarget = 'local' | 'cloud';
+export type ExecutionTarget = 'local' | 'local-container' | 'cloud';
 export type AuthMode = 'claude-ai-oauth' | 'api-key';
 export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
 
@@ -74,7 +74,7 @@ export function validateConfig(data: unknown): HydrazConfig {
   const executionTarget = expectEnum(
     obj,
     'executionTarget',
-    ['local', 'cloud'] as const,
+    ['local', 'local-container', 'cloud'] as const,
     defaults.executionTarget,
   );
 

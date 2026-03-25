@@ -110,6 +110,7 @@ async function newSessionFlow(repoRoot: string, repoName: string): Promise<void>
     message: 'Execution target',
     choices: [
       { name: 'Local', value: 'local' as const },
+      { name: 'Local (container)', value: 'local-container' as const },
       { name: 'Cloud', value: 'cloud' as const },
     ],
     default: config.executionTarget,

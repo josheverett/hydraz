@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ExecutionTarget } from '../config/schema.js';
 
 export type SessionState =
   | 'created'
@@ -54,7 +55,7 @@ export interface SessionMetadata {
   repoRoot: string;
   branchName: string;
   personas: [string, string, string];
-  executionTarget: 'local' | 'cloud';
+  executionTarget: ExecutionTarget;
   task: string;
   state: SessionState;
   createdAt: string;
@@ -69,7 +70,7 @@ export function createSession(params: {
   repoRoot: string;
   branchName: string;
   personas: [string, string, string];
-  executionTarget: 'local' | 'cloud';
+  executionTarget: ExecutionTarget;
   task: string;
 }): SessionMetadata {
   const now = new Date().toISOString();

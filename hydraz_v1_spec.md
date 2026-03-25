@@ -1773,6 +1773,26 @@ Tests should live alongside source files or in a parallel `__tests__/` structure
 
 ---
 
+## 26b. Coding Standards
+
+These standards apply to all code in the Hydraz codebase. They must be followed by any agent or contributor working on the project.
+
+### Single source of truth for types and constants
+Every type, interface, constant, and enum must be defined in exactly one place. Other files must import from the canonical definition — never duplicate it. If a type is used across module boundaries, it should live in the appropriate domain module (e.g. `config/schema.ts` for config types, `sessions/schema.ts` for session types) and be re-exported through barrel files as needed.
+
+Duplicating a type definition, even if the values are identical, is a bug. When the canonical definition changes, duplicates silently drift.
+
+### Barrel files for public module APIs
+Each `src/core/<module>/` directory should have an `index.ts` that re-exports the module's public API. Consumers import from the barrel, not from internal files. Internal files may import from each other directly within the same module.
+
+### Prove-it-first methodology
+All assumptions about external tool behavior (CLI interfaces, APIs, env vars, file formats) must be verified with evidence before acting on them. Never trust documentation or web search results over actually running the tool. When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec.
+
+### API-design-driven TDD
+Define interfaces and types first, write tests against them, then implement until green. Tests should test behavior, not implementation details.
+
+---
+
 ## 27. Open Design Questions for the Implementation Agent
 
 ### Resolved

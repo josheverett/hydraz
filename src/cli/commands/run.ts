@@ -17,12 +17,14 @@ export function registerRunCommand(program: Command): void {
     .argument('<task>', 'Task description')
     .option('--session <name>', 'Session name')
     .option('--branch <name>', 'Branch name')
-    .option('--local', 'Run locally')
+    .option('--local', 'Run locally (bare metal)')
+    .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
     .action(async (task: string, options: {
       session?: string;
       branch?: string;
       local?: boolean;
+      container?: boolean;
       cloud?: boolean;
     }) => {
       const repo = detectRepo();
@@ -39,7 +41,11 @@ export function registerRunCommand(program: Command): void {
       const config = loadConfig();
       const sessionName = options.session ?? generateSessionName(task);
       const branchName = options.branch ?? suggestBranchName(sessionName, config.branchNaming.prefix);
-      const executionTarget = options.cloud ? 'cloud' as const : 'local' as const;
+      const executionTarget = options.cloud
+        ? 'cloud' as const
+        : options.container
+          ? 'local-container' as const
+          : 'local' as const;
 
       let session;
       try {
