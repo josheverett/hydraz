@@ -1531,6 +1531,13 @@ Repo-specific application containers (e.g. from `docker-compose.yml`) are the ag
 
 The only hard requirement Hydraz places on the devcontainer is that Claude Code CLI must be callable inside it. Hydraz validates this post-launch and fails with a clear error if `claude` is not found.
 
+### `.worktreeinclude` and environment files
+Hydraz supports the `.worktreeinclude` convention — a community standard used by Claude Code (desktop and CLI), Roo Code, and the standalone `git-worktreeinclude` CLI. A `.worktreeinclude` file at the repo root lists gitignored files (like `.env`) that should be copied into new worktrees.
+
+Hydraz implements this independently because Hydraz creates worktrees itself (via `git worktree add`), so Claude Code's native `.worktreeinclude` handling never fires. Hydraz's `copyWorktreeIncludes` runs during worktree creation and copies listed files from the main checkout into the new worktree.
+
+This is critical for container mode: the worktree is mounted into the DevPod container, so files copied by `.worktreeinclude` (e.g. `.env` files) are available inside the container at `/workspaces/<name>/`. Without this, the agent would have no access to repo env files inside the container.
+
 ### Docker access inside containers
 For local container mode, the host Docker socket is mounted into the container (socket mount, not Docker-in-Docker). This is the devcontainer ecosystem default for local dev — simple, performant, and well-supported.
 
