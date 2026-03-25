@@ -7,6 +7,7 @@ import {
   checkDockerAvailability,
   hasDevcontainerJson,
   buildSshCommand,
+  verifyClaudeInContainer,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -83,5 +84,32 @@ describe('buildSshCommand', () => {
     const result = buildSshCommand('ws', 'claude --print --output-format stream-json "do stuff"');
     expect(result.args[0]).toBe('ws.devpod');
     expect(result.args[1]).toContain('claude');
+  });
+});
+
+describe('verifyClaudeInContainer', () => {
+  it('returns available when claude responds inside the container', () => {
+    mockExecFileSync.mockReturnValue('Claude Code v2.1.74\n' as never);
+    const result = verifyClaudeInContainer('my-workspace');
+    expect(result.available).toBe(true);
+    expect(result.version).toContain('2.1.74');
+  });
+
+  it('returns unavailable when claude is not found in the container', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('command not found'); });
+    const result = verifyClaudeInContainer('my-workspace');
+    expect(result.available).toBe(false);
+    expect(result.error).toContain('Claude Code');
+    expect(result.error).toContain('container');
+  });
+
+  it('calls ssh with the correct workspace name and claude --version', () => {
+    mockExecFileSync.mockReturnValue('Claude Code v2.1.74\n' as never);
+    verifyClaudeInContainer('hydraz-abc123');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['hydraz-abc123.devpod', 'claude --version'],
+      expect.any(Object),
+    );
   });
 });

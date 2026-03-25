@@ -67,3 +67,18 @@ export function buildSshCommand(workspaceName: string, command: string): { cmd: 
     args: [`${workspaceName}.devpod`, command],
   };
 }
+
+export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
+  try {
+    const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {
+      ...EXEC_OPTIONS,
+      encoding: 'utf-8',
+    });
+    return { available: true, version: output.trim() };
+  } catch {
+    return {
+      available: false,
+      error: 'Claude Code CLI is not available inside the container. Ensure your devcontainer includes Claude Code.',
+    };
+  }
+}

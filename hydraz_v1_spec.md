@@ -1802,6 +1802,15 @@ Tests should test behavior, not implementation details. Every atomic commit must
 
 When refactoring, existing tests must continue to pass. New tests should cover the new or changed API surface.
 
+### Phase completion gate
+A phase is not complete until every item in its **Deliverables** section has been implemented and verified. Before declaring any phase done, the agent must:
+1. Re-read the phase's Deliverables list from this spec
+2. Verify each deliverable against the actual codebase (not memory or a personal todo list)
+3. List any undelivered items explicitly
+4. Only declare the phase complete when all items are confirmed delivered
+
+This is non-negotiable. Declaring a phase complete while deliverables remain is a bug in the process, not a judgment call.
+
 ---
 
 ## 27. Open Design Questions for the Implementation Agent
