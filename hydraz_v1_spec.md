@@ -1509,13 +1509,12 @@ Add GitHub Actions CI so tests and type-checking run automatically on every PR a
 - run `npm run typecheck` (tsc --noEmit)
 - run on push to `main` and `dev`, and on all PRs
 - fail the PR if tests or type-check fail
-- Node version matrix (at minimum: Node 20 LTS)
-- badge in README (optional but nice)
+- pinned to Node 22 (no matrix — forward-compat over breadth)
+- CI status badge in README
 
 ### Deliverables
-- `.github/workflows/ci.yml`
-- PR check enforcement
-- this section to be fleshed out further during implementation
+- `.github/workflows/ci.yml` — single job: checkout → setup-node 22 → npm ci → typecheck → test
+- CI badge at top of `README.md`
 
 ### Note
 This phase is intentionally minimal. Linting, coverage thresholds, and release automation can be added incrementally later.
