@@ -1,5 +1,7 @@
 # Hydraz
 
+[![CI](https://github.com/josheverett/hydraz/actions/workflows/ci.yml/badge.svg)](https://github.com/josheverett/hydraz/actions/workflows/ci.yml)
+
 An opinionated CLI for autonomous, persona-driven coding swarms.
 
 Hydraz lets an engineer stand in a repository, launch a session, paste a task, and walk away while a strict 3-persona swarm operates autonomously in an isolated workspace — powered by Claude Code CLI under the hood.
