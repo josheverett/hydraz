@@ -3,14 +3,6 @@ import { LocalContainerProvider } from './local-container.js';
 import { createSession } from '../sessions/schema.js';
 import { createDefaultConfig } from '../config/schema.js';
 
-vi.mock('./worktree.js', () => ({
-  createWorktree: vi.fn(() => ({
-    directory: '/fake/worktree/dir',
-    branchName: 'hydraz/test-session',
-  })),
-  destroyWorktree: vi.fn(),
-}));
-
 vi.mock('./devpod.js', () => ({
   checkDevPodAvailability: vi.fn(() => ({ available: true, version: 'v0.6.15' })),
   checkDockerAvailability: vi.fn(() => true),
@@ -18,9 +10,11 @@ vi.mock('./devpod.js', () => ({
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
+  createWorktreeInContainer: vi.fn(() => '/workspaces/hydraz-session-id/worktrees/session-id'),
+  copyWorktreeIncludesInContainer: vi.fn(),
+  sshExec: vi.fn(),
 }));
 
-import { createWorktree, destroyWorktree } from './worktree.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -28,16 +22,20 @@ import {
   devpodUp,
   devpodDelete,
   verifyClaudeInContainer,
+  createWorktreeInContainer,
+  copyWorktreeIncludesInContainer,
+  sshExec,
 } from './devpod.js';
 
-const mockCreateWorktree = vi.mocked(createWorktree);
-const mockDestroyWorktree = vi.mocked(destroyWorktree);
 const mockCheckDevPod = vi.mocked(checkDevPodAvailability);
 const mockCheckDocker = vi.mocked(checkDockerAvailability);
 const mockHasDevcontainer = vi.mocked(hasDevcontainerJson);
 const mockDevpodUp = vi.mocked(devpodUp);
 const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
+const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
+const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
+const _mockSshExec = vi.mocked(sshExec);
 
 function makeSession(name: string = 'test-session') {
   return createSession({
@@ -52,14 +50,11 @@ function makeSession(name: string = 'test-session') {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mockCreateWorktree.mockReturnValue({
-    directory: '/fake/worktree/dir',
-    branchName: 'hydraz/test-session',
-  });
   mockCheckDevPod.mockReturnValue({ available: true, version: 'v0.6.15' });
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
+  mockCreateWorktreeInContainer.mockReturnValue('/workspaces/hydraz-session-id/worktrees/session-id');
 });
 
 describe('LocalContainerProvider', () => {
@@ -93,26 +88,7 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('creates a worktree then launches devpod', () => {
-      const provider = new LocalContainerProvider();
-      const session = makeSession();
-      const config = createDefaultConfig();
-
-      const workspace = provider.createWorkspace({ session, config });
-
-      expect(mockCreateWorktree).toHaveBeenCalledWith(
-        session.repoRoot,
-        session.id,
-        session.branchName,
-      );
-      expect(mockDevpodUp).toHaveBeenCalled();
-      expect(workspace.type).toBe('local-container');
-      expect(workspace.directory).toBe('/fake/worktree/dir');
-      expect(workspace.sessionId).toBe(session.id);
-      expect(workspace.branchName).toBe('hydraz/test-session');
-    });
-
-    it('uses a devpod workspace name derived from the session id', () => {
+    it('launches devpod with the main repo root, not a worktree', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = createDefaultConfig();
@@ -120,18 +96,55 @@ describe('LocalContainerProvider', () => {
       provider.createWorkspace({ session, config });
 
       const devpodUpArgs = mockDevpodUp.mock.calls[0];
-      expect(devpodUpArgs?.[0]).toBe('/fake/worktree/dir');
-      expect(devpodUpArgs?.[1]).toContain(session.id);
+      expect(devpodUpArgs?.[0]).toBe('/fake/repo');
     });
 
-    it('cleans up worktree if devpod up fails', () => {
-      mockDevpodUp.mockImplementation(() => { throw new Error('devpod failed'); });
+    it('creates worktree inside the container via SSH', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = createDefaultConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('devpod failed');
-      expect(mockDestroyWorktree).toHaveBeenCalled();
+      provider.createWorkspace({ session, config });
+
+      expect(mockCreateWorktreeInContainer).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        expect.stringContaining('/workspaces/'),
+        session.branchName,
+        session.id,
+      );
+    });
+
+    it('copies .worktreeinclude files inside the container', () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      provider.createWorkspace({ session, config });
+
+      expect(mockCopyIncludes).toHaveBeenCalled();
+    });
+
+    it('returns container-internal worktree path as directory', () => {
+      mockCreateWorktreeInContainer.mockReturnValue('/workspaces/hydraz-abc/worktrees/abc');
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      const workspace = provider.createWorkspace({ session, config });
+
+      expect(workspace.type).toBe('local-container');
+      expect(workspace.directory).toBe('/workspaces/hydraz-abc/worktrees/abc');
+      expect(workspace.sessionId).toBe(session.id);
+    });
+
+    it('tears down devpod if worktree creation inside container fails', () => {
+      mockCreateWorktreeInContainer.mockImplementation(() => { throw new Error('git failed'); });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow('git failed');
+      expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
     it('fails if devcontainer.json is missing', () => {
@@ -151,7 +164,6 @@ describe('LocalContainerProvider', () => {
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('Claude Code');
       expect(mockDevpodDelete).toHaveBeenCalled();
-      expect(mockDestroyWorktree).toHaveBeenCalled();
     });
   });
 
@@ -159,27 +171,24 @@ describe('LocalContainerProvider', () => {
     const fakeWorkspace = {
       id: 'session-123',
       type: 'local-container' as const,
-      directory: '/fake/worktree/dir',
+      directory: '/workspaces/hydraz-session-123/worktrees/session-123',
       branchName: 'hydraz/test-session',
       sessionId: 'session-123',
     };
 
-    it('deletes devpod workspace then destroys worktree', () => {
+    it('deletes devpod workspace', () => {
       const provider = new LocalContainerProvider();
 
       provider.destroyWorkspace('/fake/repo', fakeWorkspace);
 
       expect(mockDevpodDelete).toHaveBeenCalledWith('hydraz-session-123');
-      expect(mockDestroyWorktree).toHaveBeenCalledWith('/fake/repo', '/fake/worktree/dir');
     });
 
-    it('still destroys worktree if devpod delete fails', () => {
+    it('does not throw if devpod delete fails', () => {
       mockDevpodDelete.mockImplementation(() => { throw new Error('delete failed'); });
       const provider = new LocalContainerProvider();
 
-      provider.destroyWorkspace('/fake/repo', fakeWorkspace);
-
-      expect(mockDestroyWorktree).toHaveBeenCalledWith('/fake/repo', '/fake/worktree/dir');
+      expect(() => provider.destroyWorkspace('/fake/repo', fakeWorkspace)).not.toThrow();
     });
   });
 });
