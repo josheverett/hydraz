@@ -1,10 +1,19 @@
-# Hydraz
+<p align="center">
+  <img src="hydraz-logo.png" alt="Hydraz logo" width="300">
+</p>
 
-[![CI](https://github.com/josheverett/hydraz/actions/workflows/ci.yml/badge.svg)](https://github.com/josheverett/hydraz/actions/workflows/ci.yml)
+<h1 align="center">Hydraz</h1>
 
-An opinionated CLI for autonomous, persona-driven coding swarms.
+<p align="center">
+  <strong>Hydra</strong> — many heads, one swarm. <strong>Hydrazine</strong> — rocket fuel.<br>
+  An opinionated CLI for autonomous, persona-driven coding swarms.
+</p>
 
-Hydraz lets an engineer stand in a repository, launch a session, paste a task, and walk away while a strict 3-persona swarm operates autonomously in an isolated workspace — powered by Claude Code CLI under the hood.
+<p align="center">
+  <a href="https://github.com/josheverett/hydraz/actions/workflows/ci.yml"><img src="https://github.com/josheverett/hydraz/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+Hydraz lets an engineer stand in a repository, launch a session, describe a task, and walk away while a strict 3-persona swarm operates autonomously in an isolated workspace — powered by Claude Code CLI under the hood.
 
 ## Prerequisites
 
