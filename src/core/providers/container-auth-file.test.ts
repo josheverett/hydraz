@@ -15,17 +15,23 @@ afterEach(() => {
 });
 
 describe('writeAuthFile', () => {
-  it('writes env vars as KEY=VALUE lines', () => {
+  it('writes env vars as KEY=quoted-VALUE lines', () => {
     writeAuthFile(testDir, { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-test' });
     const content = readFileSync(join(testDir, AUTH_FILE_NAME), 'utf-8');
-    expect(content).toBe('CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-test\n');
+    expect(content).toBe("CLAUDE_CODE_OAUTH_TOKEN='sk-ant-oat01-test'\n");
   });
 
   it('writes multiple env vars on separate lines', () => {
     writeAuthFile(testDir, { VAR1: 'val1', VAR2: 'val2' });
     const content = readFileSync(join(testDir, AUTH_FILE_NAME), 'utf-8');
-    expect(content).toContain('VAR1=val1\n');
-    expect(content).toContain('VAR2=val2\n');
+    expect(content).toContain("VAR1='val1'\n");
+    expect(content).toContain("VAR2='val2'\n");
+  });
+
+  it('escapes values containing shell metacharacters', () => {
+    writeAuthFile(testDir, { TOKEN: "val'ue$(whoami)" });
+    const content = readFileSync(join(testDir, AUTH_FILE_NAME), 'utf-8');
+    expect(content).toContain("TOKEN='val'\\''ue$(whoami)'");
   });
 
   it('creates the file with 0600 permissions', () => {
@@ -45,6 +51,21 @@ describe('writeAuthFile', () => {
     writeAuthFile(testDir, { NEW: 'value' });
     const content = readFileSync(join(testDir, AUTH_FILE_NAME), 'utf-8');
     expect(content).not.toContain('OLD');
-    expect(content).toContain('NEW=value');
+    expect(content).toContain("NEW='value'");
+  });
+});
+
+describe('cleanupAuthFile', () => {
+  it('removes the auth file if it exists', async () => {
+    const { cleanupAuthFile } = await import('./container-auth-file.js');
+    writeAuthFile(testDir, { TOKEN: 'secret' });
+    expect(existsSync(join(testDir, AUTH_FILE_NAME))).toBe(true);
+    cleanupAuthFile(testDir);
+    expect(existsSync(join(testDir, AUTH_FILE_NAME))).toBe(false);
+  });
+
+  it('does not throw if auth file does not exist', async () => {
+    const { cleanupAuthFile } = await import('./container-auth-file.js');
+    expect(() => cleanupAuthFile(testDir)).not.toThrow();
   });
 });

@@ -16,7 +16,7 @@ import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
-import { writeAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
+import { writeAuthFile, cleanupAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -166,6 +166,10 @@ export async function startSession(
 
   const result = await executor.waitForExit();
   activeSessions.delete(sessionId);
+
+  if (session.executionTarget === 'local-container') {
+    cleanupAuthFile(workspace.directory);
+  }
 
   const stateMapping = mapExitToSessionState(result);
   transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
