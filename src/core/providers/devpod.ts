@@ -105,7 +105,7 @@ export function copyWorktreeIncludesInContainer(
     `    fi`,
     `  done < .worktreeinclude`,
     `fi`,
-  ].join('; ');
+  ].join('\n');
   execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
 }
 
