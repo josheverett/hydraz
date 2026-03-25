@@ -16,13 +16,22 @@ export function buildSshClaudeArgs(
   workspaceName: string,
   claudeArgs: string[],
   authFilePath?: string,
+  workingDirectory?: string,
 ): { cmd: string; args: string[] } {
   const escapedArgs = claudeArgs.map(shellEscape);
   const claudeCommand = `claude ${escapedArgs.join(' ')}`;
 
-  const remoteCommand = authFilePath
-    ? `${buildAuthLoadPrefix(authFilePath)}${claudeCommand}`
-    : claudeCommand;
+  let remoteCommand = '';
+
+  if (workingDirectory) {
+    remoteCommand += `cd ${shellEscape(workingDirectory)} && `;
+  }
+
+  if (authFilePath) {
+    remoteCommand += buildAuthLoadPrefix(authFilePath);
+  }
+
+  remoteCommand += claudeCommand;
 
   return {
     cmd: 'ssh',
