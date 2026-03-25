@@ -60,6 +60,13 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs(makePrompt());
     expect(args).toContain('--dangerously-skip-permissions');
   });
+
+  it('pins model to claude-opus-4-6', () => {
+    const args = buildClaudeArgs(makePrompt());
+    const modelIdx = args.indexOf('--model');
+    expect(modelIdx).toBeGreaterThan(-1);
+    expect(args[modelIdx + 1]).toBe('claude-opus-4-6');
+  });
 });
 
 describe('buildClaudeEnv', () => {

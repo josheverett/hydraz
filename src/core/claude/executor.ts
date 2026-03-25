@@ -40,6 +40,7 @@ export interface ExecutorResult {
 export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
   return [
     '--print',
+    '--model', 'claude-opus-4-6',
     '--output-format', 'stream-json',
     '--verbose',
     '--dangerously-skip-permissions',
