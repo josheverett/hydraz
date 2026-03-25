@@ -5,7 +5,6 @@ import type {
   CreateWorkspaceParams,
   ProviderCheckResult,
 } from './provider.js';
-import { createWorktree, destroyWorktree } from './worktree.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -13,6 +12,8 @@ import {
   devpodUp,
   devpodDelete,
   verifyClaudeInContainer,
+  createWorktreeInContainer,
+  copyWorktreeIncludesInContainer,
 } from './devpod.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
@@ -46,13 +47,11 @@ export class LocalContainerProvider implements WorkspaceProvider {
       );
     }
 
-    const worktree = createWorktree(session.repoRoot, session.id, session.branchName);
     const workspaceName = `hydraz-${session.id}`;
 
     try {
-      devpodUp(worktree.directory, workspaceName);
+      devpodUp(session.repoRoot, workspaceName);
     } catch (err) {
-      destroyWorktree(session.repoRoot, worktree.directory);
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
@@ -60,28 +59,42 @@ export class LocalContainerProvider implements WorkspaceProvider {
     const claudeCheck = verifyClaudeInContainer(workspaceName);
     if (!claudeCheck.available) {
       devpodDelete(workspaceName);
-      destroyWorktree(session.repoRoot, worktree.directory);
       throw new Error(claudeCheck.error ?? 'Claude Code CLI is not available inside the container');
+    }
+
+    const containerRepoPath = `/workspaces/${workspaceName}`;
+    let worktreePath: string;
+
+    try {
+      worktreePath = createWorktreeInContainer(
+        workspaceName,
+        containerRepoPath,
+        session.branchName,
+        session.id,
+      );
+      copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath);
+    } catch (err) {
+      devpodDelete(workspaceName);
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to set up worktree in container: ${message}`);
     }
 
     return {
       id: session.id,
       type: 'local-container',
-      directory: worktree.directory,
-      branchName: worktree.branchName,
+      directory: worktreePath,
+      branchName: session.branchName,
       sessionId: session.id,
     };
   }
 
-  destroyWorkspace(repoRoot: string, workspace: WorkspaceInfo): void {
+  destroyWorkspace(_repoRoot: string, workspace: WorkspaceInfo): void {
     const workspaceName = `hydraz-${workspace.sessionId}`;
 
     try {
       devpodDelete(workspaceName);
     } catch {
-      // DevPod workspace may already be gone; proceed to worktree cleanup
+      // DevPod workspace may already be gone
     }
-
-    destroyWorktree(repoRoot, workspace.directory);
   }
 }

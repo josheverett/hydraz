@@ -68,6 +68,47 @@ export function buildSshCommand(workspaceName: string, command: string): { cmd: 
   };
 }
 
+export function sshExec(workspaceName: string, command: string): string {
+  return execFileSync('ssh', [`${workspaceName}.devpod`, command], {
+    ...EXEC_OPTIONS,
+    encoding: 'utf-8',
+  });
+}
+
+export function createWorktreeInContainer(
+  workspaceName: string,
+  containerRepoPath: string,
+  branchName: string,
+  sessionId: string,
+): string {
+  const worktreePath = `${containerRepoPath}/worktrees/${sessionId}`;
+  const command = `cd ${containerRepoPath} && git worktree add -b ${branchName} ${worktreePath}`;
+  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
+  return worktreePath;
+}
+
+export function copyWorktreeIncludesInContainer(
+  workspaceName: string,
+  containerRepoPath: string,
+  containerWorktreePath: string,
+): void {
+  const command = [
+    `cd ${containerRepoPath}`,
+    `if [ -f .worktreeinclude ]; then`,
+    `  while IFS= read -r line || [ -n "$line" ]; do`,
+    `    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')`,
+    `    [ -z "$line" ] && continue`,
+    `    echo "$line" | grep -q '^#' && continue`,
+    `    if [ -f "$line" ]; then`,
+    `      mkdir -p "${containerWorktreePath}/$(dirname "$line")"`,
+    `      cp "$line" "${containerWorktreePath}/$line"`,
+    `    fi`,
+    `  done < .worktreeinclude`,
+    `fi`,
+  ].join('\n');
+  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
+}
+
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
   try {
     const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {

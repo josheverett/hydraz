@@ -8,6 +8,9 @@ import {
   hasDevcontainerJson,
   buildSshCommand,
   verifyClaudeInContainer,
+  sshExec,
+  createWorktreeInContainer,
+  copyWorktreeIncludesInContainer,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -111,5 +114,70 @@ describe('verifyClaudeInContainer', () => {
       ['hydraz-abc123.devpod', 'claude --version'],
       expect.any(Object),
     );
+  });
+});
+
+describe('sshExec', () => {
+  it('executes a command inside the container via SSH', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    sshExec('my-workspace', 'echo hello');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-workspace.devpod', 'echo hello'],
+      expect.any(Object),
+    );
+  });
+
+  it('returns the command output', () => {
+    mockExecFileSync.mockReturnValue('hello\n' as never);
+    const output = sshExec('my-workspace', 'echo hello');
+    expect(output).toBe('hello\n');
+  });
+
+  it('throws on failure', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('connection refused'); });
+    expect(() => sshExec('my-workspace', 'echo hello')).toThrow('connection refused');
+  });
+});
+
+describe('createWorktreeInContainer', () => {
+  it('runs git worktree add via SSH with the correct branch and path', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    createWorktreeInContainer('my-ws', '/workspaces/my-ws', 'hydraz/fix-bug', 'session-123');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-ws.devpod', expect.stringContaining('git worktree add')],
+      expect.any(Object),
+    );
+  });
+
+  it('includes the branch name in the command', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    createWorktreeInContainer('my-ws', '/workspaces/my-ws', 'hydraz/fix-bug', 'session-123');
+    const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(command).toContain('hydraz/fix-bug');
+  });
+
+  it('returns the container-internal worktree path', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    const result = createWorktreeInContainer('my-ws', '/workspaces/my-ws', 'hydraz/fix-bug', 'session-123');
+    expect(result).toContain('session-123');
+  });
+});
+
+describe('copyWorktreeIncludesInContainer', () => {
+  it('runs the copy command via SSH', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    copyWorktreeIncludesInContainer('my-ws', '/workspaces/my-ws', '/workspaces/my-ws/worktrees/s1');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-ws.devpod', expect.stringContaining('.worktreeinclude')],
+      expect.any(Object),
+    );
+  });
+
+  it('does not throw if .worktreeinclude does not exist', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt')).not.toThrow();
   });
 });

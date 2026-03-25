@@ -8,6 +8,7 @@ import { buildSshClaudeArgs } from './ssh.js';
 export interface ContainerContext {
   workspaceName: string;
   authFilePath?: string;
+  workingDirectory?: string;
 }
 
 export interface ExecutorOptions {
@@ -40,6 +41,7 @@ export interface ExecutorResult {
 export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
   return [
     '--print',
+    '--model', 'claude-opus-4-6',
     '--output-format', 'stream-json',
     '--verbose',
     '--dangerously-skip-permissions',
@@ -70,6 +72,7 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
       options.containerContext.workspaceName,
       claudeArgs,
       options.containerContext.authFilePath,
+      options.containerContext.workingDirectory,
     );
     child = spawn(ssh.cmd, ssh.args, {
       stdio: ['pipe', 'pipe', 'pipe'],

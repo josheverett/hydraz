@@ -129,18 +129,18 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
-  let containerContext: { workspaceName: string; authFilePath?: string } | undefined;
+  let containerContext: { workspaceName: string; authFilePath?: string; workingDirectory?: string } | undefined;
   if (session.executionTarget === 'local-container') {
     const workspaceName = `hydraz-${session.id}`;
+    const containerRepoPath = `/workspaces/${workspaceName}`;
     const authEnv = prepareContainerAuthEnv(config);
     if (Object.keys(authEnv).length > 0) {
-      writeAuthFile(workspace.directory, authEnv);
+      writeAuthFile(repoRoot, authEnv);
     }
-    const containerWorkspacePath = `/workspaces/${workspaceName}`;
     const authFilePath = Object.keys(authEnv).length > 0
-      ? `${containerWorkspacePath}/${AUTH_FILE_NAME}`
+      ? `${containerRepoPath}/${AUTH_FILE_NAME}`
       : undefined;
-    containerContext = { workspaceName, authFilePath };
+    containerContext = { workspaceName, authFilePath, workingDirectory: workspace.directory };
   }
 
   const executor = launchClaude({
@@ -168,7 +168,7 @@ export async function startSession(
   activeSessions.delete(sessionId);
 
   if (session.executionTarget === 'local-container') {
-    cleanupAuthFile(workspace.directory);
+    cleanupAuthFile(repoRoot);
   }
 
   const stateMapping = mapExitToSessionState(result);

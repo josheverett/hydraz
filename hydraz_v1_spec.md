@@ -8,8 +8,8 @@ The near-term goal is not to build a generic "agent platform." The goal is to sh
 
 Hydraz is intended to become:
 - an internal engineering standard first
-- a public installable CLI later
-- eventually packaged for Homebrew distribution on macOS
+- a public installable CLI later, via npm (`npm install -g hydraz`) as the primary distribution channel
+- eventually also packaged for Homebrew distribution on macOS
 
 The design should therefore optimize for:
 - fast onboarding
@@ -1469,20 +1469,23 @@ Implement MCP configuration management.
 - merge logic for global + repo scope
 
 ## Phase 11: Packaging and install path
-Make the CLI installable and ready for public packaging.
+Make the CLI installable and ready for public distribution.
+
+npm is the primary distribution channel (`npm install -g hydraz`). Node is already a prerequisite, every target user has npm, and the `package.json` is already configured with `bin`, `files`, and `main` fields. Homebrew is a future secondary channel for macOS-native feel.
 
 ### Needs
 - package metadata
 - versioning
 - build/release artifacts
 - install docs
-- Homebrew-forward-compatible packaging layout
+- npm publish pipeline
+- Homebrew-forward-compatible packaging layout (future)
 
 ### Deliverables
-- npm-ready release flow
-- tarball/binary strategy as needed
-- draft Homebrew formula strategy
-- install instructions
+- npm publish flow (primary)
+- install instructions for npm
+- draft Homebrew formula strategy (future)
+- versioning and release automation
 
 ## Phase 12: Move session/workspace data out of target repos
 Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of the target repo's `.hydraz/` directory and into `~/.hydraz/`, keyed by repo path. This eliminates the need for `.gitignore` entries in target repos and avoids polluting the working tree.
@@ -1565,19 +1568,30 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 ### Execution target model
 The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local-container' | 'cloud'`:
 - **`local`** — bare metal, current behavior (worktree + spawn `claude` on host)
-- **`local-container`** — Docker on your machine via DevPod (worktree + container + exec `claude` inside container via SSH)
+- **`local-container`** — Docker on your machine via DevPod (container + worktree inside container + exec `claude` inside container via SSH)
 - **`cloud`** — same container model, remote host via DevPod with cloud provider (future, out of scope for Phase 14)
+
+### Git lifecycle: bare metal vs container (verified)
+Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
+
+The solution: **all git operations in container mode happen inside the container, not on the host.** This creates two distinct git strategies:
+
+- **Bare metal (`local`):** Hydraz creates worktrees on the host via `git worktree add`. All file and git operations happen on the host filesystem. This is the existing behavior.
+- **Container (`local-container`, future `cloud`):** Hydraz mounts the main repo root into the container via DevPod, then creates the worktree inside the container via SSH. All git operations (worktree creation, branch management, commit, push) happen container-side. The host orchestrates via SSH but never touches git state for container sessions.
+
+This divergence is correct and intentional. Container mode (both local-container and future cloud) shares one git strategy; bare metal has another. The container strategy will work identically for cloud — cloud is just "same thing, different host."
 
 ### Architecture: where container lifecycle sits
 A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface:
-1. Creates the git worktree on the host (reuses existing worktree logic from `LocalProvider`)
-2. Starts a DevPod workspace with the worktree directory as the source (`devpod up <worktree-dir> --ide none`)
-3. Returns a `WorkspaceInfo` tracking both the host path and the DevPod workspace identity
-4. `destroyWorkspace` calls `devpod delete` to tear down the container
+1. Starts a DevPod workspace with the **main repo root** as the source (`devpod up <repo-root> --ide none`)
+2. SSHs into the container and creates the git worktree (`git worktree add -b <branch> <path>`)
+3. SSHs into the container and copies `.worktreeinclude` files from the mounted repo root into the worktree
+4. Returns a `WorkspaceInfo` with the container-internal worktree path
+5. `destroyWorkspace` removes the worktree inside the container (via SSH), then calls `devpod delete`
 
 ### Architecture: how Claude executes inside the container
 The executor spawns Claude Code CLI inside the container via SSH rather than on the host:
-- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod "claude <args>"` (or equivalent spawn with SSH)
+- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod "cd <worktree-path> && claude <args>"` (or equivalent spawn with SSH)
 - The controller passes an execution context to the executor indicating whether to run locally or via SSH
 - Streaming output works the same way — stdout from the SSH process is the stream-json output from Claude
 
@@ -1586,10 +1600,13 @@ Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable 
 
 1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
 2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
-3. **Container launch:** Hydraz injects `CLAUDE_CODE_OAUTH_TOKEN` via `containerEnv` in the devcontainer.json (or DevPod's env mechanisms) before launching the container
+3. **Container launch:** Hydraz writes the token to a temp file (`.hydraz-auth`) in the mounted repo, which is visible inside the container. The SSH command sources the file, exports the token, deletes the file, then runs Claude. The token never appears in `ps` output.
 4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
 
 Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
+
+### Model selection
+Hydraz v1 hardcodes `--model claude-opus-4-6` for all Claude Code sessions. This is an opinionated product decision — Hydraz uses the best available model. Configurable model selection is deferred until there's a real use case driving it.
 
 ### Prerequisites for container mode
 - Docker (or OrbStack) running on the host

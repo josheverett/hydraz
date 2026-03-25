@@ -84,6 +84,22 @@ describe('buildSshClaudeArgs', () => {
     expect(commandString).toMatch(/^claude /);
   });
 
+  it('prepends cd to working directory when provided', () => {
+    const result = buildSshClaudeArgs('ws', ['--print'], undefined, '/workspaces/ws/worktrees/s1');
+    const commandString = result.args[1];
+    expect(commandString).toMatch(/^cd '\/workspaces\/ws\/worktrees\/s1' && claude/);
+  });
+
+  it('combines cd, auth, and claude in the correct order', () => {
+    const result = buildSshClaudeArgs('ws', ['--print'], '/ws/.hydraz-auth', '/ws/worktrees/s1');
+    const commandString = result.args[1];
+    const cdIdx = commandString.indexOf('cd ');
+    const authIdx = commandString.indexOf('set -a');
+    const claudeIdx = commandString.indexOf('claude');
+    expect(cdIdx).toBeLessThan(authIdx);
+    expect(authIdx).toBeLessThan(claudeIdx);
+  });
+
   it('deletes auth file after reading in the remote command', () => {
     const result = buildSshClaudeArgs('ws', ['--print'], '/workspaces/ws/.hydraz-auth');
     const commandString = result.args[1];
