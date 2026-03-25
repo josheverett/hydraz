@@ -7,6 +7,7 @@ import { buildSshClaudeArgs } from './ssh.js';
 
 export interface ContainerContext {
   workspaceName: string;
+  env?: Record<string, string>;
 }
 
 export interface ExecutorOptions {
@@ -65,7 +66,11 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
   let child: ChildProcess;
 
   if (options.containerContext) {
-    const ssh = buildSshClaudeArgs(options.containerContext.workspaceName, claudeArgs);
+    const ssh = buildSshClaudeArgs(
+      options.containerContext.workspaceName,
+      claudeArgs,
+      options.containerContext.env,
+    );
     child = spawn(ssh.cmd, ssh.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });

@@ -10,9 +10,20 @@ export function shellEscape(arg: string): string {
 export function buildSshClaudeArgs(
   workspaceName: string,
   claudeArgs: string[],
+  env?: Record<string, string>,
 ): { cmd: string; args: string[] } {
   const escapedArgs = claudeArgs.map(shellEscape);
-  const remoteCommand = `claude ${escapedArgs.join(' ')}`;
+  const claudeCommand = `claude ${escapedArgs.join(' ')}`;
+
+  let remoteCommand: string;
+  if (env && Object.keys(env).length > 0) {
+    const envPrefix = Object.entries(env)
+      .map(([key, value]) => `${key}=${shellEscape(value)}`)
+      .join(' ');
+    remoteCommand = `${envPrefix} ${claudeCommand}`;
+  } else {
+    remoteCommand = claudeCommand;
+  }
 
   return {
     cmd: 'ssh',

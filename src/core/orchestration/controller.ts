@@ -15,6 +15,7 @@ import {
 import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
+import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -79,6 +80,18 @@ export async function startSession(
     return;
   }
 
+  if (session.executionTarget === 'local-container') {
+    const containerAuth = validateContainerAuth(config);
+    if (!containerAuth.valid) {
+      const msg = containerAuth.error ?? 'Container auth not configured';
+      transitionState(repoRoot, sessionId, 'blocked', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.blocked', msg);
+      callbacks.onError?.(msg);
+      return;
+    }
+  }
+
   const provider = getProvider(session.executionTarget);
   const providerCheck = provider.checkAvailability();
   if (!providerCheck.available) {
@@ -116,7 +129,7 @@ export async function startSession(
   emitEvent('claude.ready', 'Claude Code launching');
 
   const containerContext = session.executionTarget === 'local-container'
-    ? { workspaceName: `hydraz-${session.id}` }
+    ? { workspaceName: `hydraz-${session.id}`, env: prepareContainerAuthEnv(config) }
     : undefined;
 
   const executor = launchClaude({

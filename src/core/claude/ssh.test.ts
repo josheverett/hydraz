@@ -69,4 +69,33 @@ describe('buildSshClaudeArgs', () => {
     expect(commandString).toContain("'--print'");
     expect(commandString).toContain("'--verbose'");
   });
+
+  it('prepends env vars to the remote command when provided', () => {
+    const env = { CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-test' };
+    const result = buildSshClaudeArgs('ws', ['--print', 'do stuff'], env);
+    const commandString = result.args[1];
+    expect(commandString).toMatch(/^CLAUDE_CODE_OAUTH_TOKEN=/);
+    expect(commandString).toContain('claude');
+  });
+
+  it('escapes env var values with single quotes', () => {
+    const env = { TOKEN: "it's a token" };
+    const result = buildSshClaudeArgs('ws', ['--print'], env);
+    const commandString = result.args[1];
+    expect(commandString).toContain("TOKEN='it'\\''s a token'");
+  });
+
+  it('handles multiple env vars', () => {
+    const env = { VAR1: 'val1', VAR2: 'val2' };
+    const result = buildSshClaudeArgs('ws', ['--print'], env);
+    const commandString = result.args[1];
+    expect(commandString).toContain("VAR1='val1'");
+    expect(commandString).toContain("VAR2='val2'");
+  });
+
+  it('omits env var prefix when env is empty or undefined', () => {
+    const result = buildSshClaudeArgs('ws', ['--print']);
+    const commandString = result.args[1];
+    expect(commandString).toMatch(/^claude /);
+  });
 });

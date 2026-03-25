@@ -8,6 +8,8 @@ export interface BranchNamingConfig {
 
 export interface ClaudeAuthConfig {
   mode: AuthMode;
+  oauthToken?: string;
+  apiKey?: string;
 }
 
 export interface RetentionConfig {
