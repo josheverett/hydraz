@@ -1,4 +1,5 @@
 export {
+  type ContainerContext,
   type ExecutorOptions,
   type ExecutorHandle,
   type ExecutorResult,
@@ -7,6 +8,10 @@ export {
   launchClaude,
   mapExitToSessionState,
 } from './executor.js';
+export {
+  shellEscape,
+  buildSshClaudeArgs,
+} from './ssh.js';
 export {
   type AuthResolution,
   resolveAuth,

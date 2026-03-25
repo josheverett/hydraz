@@ -13,6 +13,7 @@ import {
   type SessionMetadata,
 } from '../sessions/index.js';
 import { LocalProvider } from '../providers/local.js';
+import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
@@ -36,7 +37,7 @@ export function getProvider(target: ExecutionTarget): WorkspaceProvider {
     case 'local':
       return new LocalProvider();
     case 'local-container':
-      throw new Error('local-container provider not yet implemented');
+      return new LocalContainerProvider();
     case 'cloud':
       return new CloudProvider();
   }
@@ -114,10 +115,15 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
+  const containerContext = session.executionTarget === 'local-container'
+    ? { workspaceName: `hydraz-${session.id}` }
+    : undefined;
+
   const executor = launchClaude({
     workingDirectory: workspace.directory,
     prompt,
     config,
+    containerContext,
     onStreamEvent: (event: ParsedClaudeEvent) => {
       const formatted = formatStreamEvent(event, verbosity);
       if (formatted) {

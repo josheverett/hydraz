@@ -3,11 +3,17 @@ import type { AssembledPrompt } from '../prompts/builder.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { prepareClaudeEnv } from '../providers/auth.js';
 import { parseStreamLine, type ParsedClaudeEvent } from './stream-parser.js';
+import { buildSshClaudeArgs } from './ssh.js';
+
+export interface ContainerContext {
+  workspaceName: string;
+}
 
 export interface ExecutorOptions {
   workingDirectory: string;
   prompt: AssembledPrompt;
   config: HydrazConfig;
+  containerContext?: ContainerContext;
   onStreamEvent?: (event: ParsedClaudeEvent) => void;
   onExit?: (code: number | null) => void;
 }
@@ -54,14 +60,23 @@ export function buildClaudeEnv(
 }
 
 export function launchClaude(options: ExecutorOptions): ExecutorHandle {
-  const args = buildClaudeArgs(options.prompt);
-  const env = buildClaudeEnv(options.config, options.workingDirectory);
+  const claudeArgs = buildClaudeArgs(options.prompt);
 
-  const child = spawn('claude', args, {
-    cwd: options.workingDirectory,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  let child: ChildProcess;
+
+  if (options.containerContext) {
+    const ssh = buildSshClaudeArgs(options.containerContext.workspaceName, claudeArgs);
+    child = spawn(ssh.cmd, ssh.args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } else {
+    const env = buildClaudeEnv(options.config, options.workingDirectory);
+    child = spawn('claude', claudeArgs, {
+      cwd: options.workingDirectory,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  }
 
   child.stdin?.end();
 
