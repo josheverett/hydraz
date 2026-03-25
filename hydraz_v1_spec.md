@@ -1633,8 +1633,56 @@ The full local pipeline must work end-to-end before cloud is attempted. Cloud is
 - Post-launch validation (Claude Code callable inside container)
 - Execution target type expansion (`local-container`)
 
-## Phase 15: Multi-executor backend support
-Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in.
+## Phase 15: Cloud container execution
+Add cloud execution via DevPod with a GCP provider. This is the same container model proven in Phase 14 (local containers), running on a remote host instead of local Docker.
+
+The spec has stated since the beginning: "Support both local and cloud execution" (secondary product goal #1). Phase 14 proved the container model locally. Phase 15 proves it in the cloud.
+
+### Architecture
+Cloud execution reuses the container pipeline from Phase 14:
+- Same `devcontainer.json` per repo
+- Same worktree-inside-container strategy
+- Same SSH-based command execution
+- Same auth token injection via `.hydraz-auth` file
+- Docker-in-Docker instead of socket mount (no host Docker to share on a remote VM)
+
+The only difference is the DevPod provider: `gcp` instead of `docker`.
+
+### Needs
+- DevPod GCP provider integration (`devpod provider add gcp`)
+- `CloudProvider` implementation replacing the current stub (or extending `LocalContainerProvider` with provider selection)
+- GCP project/region/machine-type configuration in Hydraz config
+- Prove-it-first: manually verify DevPod + GCP provider lifecycle before implementing
+- DinD inside cloud containers (no host Docker socket)
+- Port isolation and network access for cloud workspaces
+
+### Deliverables
+- Working `CloudProvider` (no longer a stub)
+- GCP configuration in `hydraz config`
+- DevPod GCP provider lifecycle management
+- DinD support for cloud containers
+- End-to-end cloud pipeline proven manually
+- Updated README with cloud prerequisites
+
+### Important
+Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
+
+## Phase 16: DevPod workspace cleanup
+Completed container sessions leave DevPod workspaces running. Hydraz should clean them up automatically after session completion.
+
+### Needs
+- Call `devpodDelete` in the controller's post-execution path for container sessions
+- Handle cleanup on session stop and session failure, not just completion
+- Graceful handling when DevPod workspace is already gone
+- Consider: should `hydraz clean` also clean up orphaned DevPod workspaces?
+
+### Deliverables
+- Automatic DevPod workspace teardown after session ends (complete, stop, or fail)
+- `hydraz clean` command for manual orphan cleanup (optional for v1)
+- No orphaned containers after normal session lifecycle
+
+## Phase 17: Multi-executor backend support
+Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in. Deferred until a second backend is actually needed.
 
 ### Needs
 - define an `ExecutorBackend` interface with `launch()`, `stop()`, `parseStream()` methods
@@ -1869,7 +1917,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** v1 never auto-deletes workspaces. Completed/stopped/failed sessions keep their worktree on disk for review. Session metadata and events always persist. A future `hydraz clean` command can be added for explicit cleanup.
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
-   **Resolved:** v1 does not implement its own token store. For local execution, Claude Code manages its own auth state (user logs in once via `claude`). For future container/cloud, env var injection (`CLAUDE_ACCESS_TOKEN`) is the planned path but not implemented in v1's stub cloud provider.
+   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and future cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) in the mounted repo, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output. Config file is `0600`. Implemented in Phase 14.
 
 6. ~~**How should Hydraz detect and report auth precedence conflicts cleanly?**~~
    **Resolved:** v1 reports the configured auth mode and validates prerequisites (e.g. `ANTHROPIC_API_KEY` is set for api-key mode). Claude Code handles its own auth precedence. Hydraz surfaces the active mode in status and review outputs.
