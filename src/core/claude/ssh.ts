@@ -7,23 +7,22 @@ export function shellEscape(arg: string): string {
   return "'" + arg.replace(/'/g, "'\\''") + "'";
 }
 
+export function buildAuthLoadPrefix(authFilePath: string): string {
+  const escaped = shellEscape(authFilePath);
+  return `set -a && . ${escaped} && set +a && rm -f ${escaped} && `;
+}
+
 export function buildSshClaudeArgs(
   workspaceName: string,
   claudeArgs: string[],
-  env?: Record<string, string>,
+  authFilePath?: string,
 ): { cmd: string; args: string[] } {
   const escapedArgs = claudeArgs.map(shellEscape);
   const claudeCommand = `claude ${escapedArgs.join(' ')}`;
 
-  let remoteCommand: string;
-  if (env && Object.keys(env).length > 0) {
-    const envPrefix = Object.entries(env)
-      .map(([key, value]) => `${key}=${shellEscape(value)}`)
-      .join(' ');
-    remoteCommand = `${envPrefix} ${claudeCommand}`;
-  } else {
-    remoteCommand = claudeCommand;
-  }
+  const remoteCommand = authFilePath
+    ? `${buildAuthLoadPrefix(authFilePath)}${claudeCommand}`
+    : claudeCommand;
 
   return {
     cmd: 'ssh',

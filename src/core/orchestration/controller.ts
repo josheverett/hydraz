@@ -16,6 +16,7 @@ import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
+import { writeAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -128,9 +129,19 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
-  const containerContext = session.executionTarget === 'local-container'
-    ? { workspaceName: `hydraz-${session.id}`, env: prepareContainerAuthEnv(config) }
-    : undefined;
+  let containerContext: { workspaceName: string; authFilePath?: string } | undefined;
+  if (session.executionTarget === 'local-container') {
+    const workspaceName = `hydraz-${session.id}`;
+    const authEnv = prepareContainerAuthEnv(config);
+    if (Object.keys(authEnv).length > 0) {
+      writeAuthFile(workspace.directory, authEnv);
+    }
+    const containerWorkspacePath = `/workspaces/${workspaceName}`;
+    const authFilePath = Object.keys(authEnv).length > 0
+      ? `${containerWorkspacePath}/${AUTH_FILE_NAME}`
+      : undefined;
+    containerContext = { workspaceName, authFilePath };
+  }
 
   const executor = launchClaude({
     workingDirectory: workspace.directory,
