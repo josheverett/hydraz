@@ -1574,13 +1574,15 @@ The executor spawns Claude Code CLI inside the container via SSH rather than on 
 - The controller passes an execution context to the executor indicating whether to run locally or via SSH
 - Streaming output works the same way — stdout from the SSH process is the stream-json output from Claude
 
-### Auth inside containers
-Claude Code OAuth tokens are injected via environment variables:
-1. User configures their Claude OAuth token once via `hydraz config`
-2. Hydraz writes the token into the devcontainer.json's `containerEnv` (or passes it via DevPod's env mechanisms) before launching the container
-3. Claude Code CLI inside the container picks it up automatically
+### Auth inside containers (verified)
+Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable for headless authentication. The full flow:
 
-The exact env var name Claude Code respects for OAuth tokens must be verified (prove-it-first) before implementation.
+1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
+2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
+3. **Container launch:** Hydraz injects `CLAUDE_CODE_OAUTH_TOKEN` via `containerEnv` in the devcontainer.json (or DevPod's env mechanisms) before launching the container
+4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
+
+Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
 
 ### Prerequisites for container mode
 - Docker (or OrbStack) running on the host
