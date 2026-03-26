@@ -182,7 +182,7 @@ The working plan assumes:
 - Good interop with shell tooling and JSON/YAML-based config
 
 ### Why Claude Code CLI
-Claude Code CLI is required for v1. It is the only supported executor backend. The architecture uses a clean adapter boundary (see Phase 15) so alternative backends can be added in the future, but that is out of scope for v1.
+Claude Code CLI is required for v1. It is the only supported executor backend. The architecture uses a clean adapter boundary (see Phase 17) so alternative backends can be added in the future, but that is out of scope for v1.
 
 For v1, Hydraz requires:
 - Claude Code CLI is installed and available inside the workspace
@@ -203,7 +203,7 @@ Claude Code was chosen because of:
 This section is critical and should be treated as hard architecture, not an implementation footnote.
 
 ## 6.1 Claude Code is required for v1
-Hydraz v1 requires Claude Code CLI. Alternative backends are out of scope for v1 (see Phase 15 for future plans).
+Hydraz v1 requires Claude Code CLI. Alternative backends are out of scope for v1 (see Phase 17 for future plans).
 
 This means:
 - Hydraz should verify Claude Code availability during `hydraz config`
@@ -1361,7 +1361,7 @@ The user should select local/cloud in the same workflow. The orchestration layer
 ### Deliverables
 - provider interface
 - local provider
-- cloud provider placeholder or first implementation
+- cloud provider (DevPod abstracts local vs cloud; no separate implementation needed)
 - create/resume workspace hooks
 - workspace events
 - Claude auth propagation path
@@ -1544,7 +1544,7 @@ This is critical for container mode: the worktree is mounted into the DevPod con
 ### Docker access inside containers
 For local container mode, the host Docker socket is mounted into the container (socket mount, not Docker-in-Docker). This is the devcontainer ecosystem default for local dev — simple, performant, and well-supported.
 
-For future cloud mode, true Docker-in-Docker would be used instead (no host socket to share). The agent code doesn't care which mechanism is in play — it just runs `docker` commands either way.
+For cloud mode, Docker-in-Docker is used instead (no host socket to share on a remote VM). The agent code doesn't care which mechanism is in play — it just runs `docker` commands either way.
 
 ### DevPod as workspace abstraction
 DevPod is the workspace launcher abstraction for both local and cloud execution:
@@ -1560,7 +1560,7 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 - **`devpod up <local-dir> --ide none`** — creates and starts a workspace from a local directory's devcontainer.json. First run ~30s (image build + feature install). Subsequent runs faster (cached image).
 - **Repo files mounted at `/workspaces/<workspace-name>/`** — DevPod copies/mounts the repo contents into the container at this path automatically.
 - **devcontainer features** — standard features (e.g. `ghcr.io/devcontainers/features/node`, `ghcr.io/devcontainers/features/git`) install correctly during image build.
-- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. This is the auth injection path for Claude Code OAuth tokens.
+- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. (Auth injection uses SSH-based file writing instead, for cloud compatibility.)
 - **`ssh <workspace>.devpod "command"`** — executes a command inside the container via SSH. Clean exit, proper stdout. This is the programmatic exec interface Hydraz will use.
 - **`devpod ssh --command`** — also works but produces a spurious "Error tunneling to container" message on exit. Use raw SSH instead.
 - **`devpod delete <workspace>`** — clean teardown, removes container.
@@ -1568,8 +1568,8 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 ### Execution target model
 The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local-container' | 'cloud'`:
 - **`local`** — bare metal, current behavior (worktree + spawn `claude` on host)
-- **`local-container`** — Docker on your machine via DevPod (container + worktree inside container + exec `claude` inside container via SSH)
-- **`cloud`** — same container model, remote host via DevPod with cloud provider (future, out of scope for Phase 14)
+- **`local-container`** — Docker on your machine via DevPod with Docker provider (container + worktree inside container + exec `claude` inside container via SSH)
+- **`cloud`** — same container model, same `LocalContainerProvider`, remote host via DevPod with GCP provider. No separate `CloudProvider` needed — DevPod abstracts the infrastructure.
 
 ### Git lifecycle: bare metal vs container (verified)
 Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
@@ -1577,9 +1577,9 @@ Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh
 The solution: **all git operations in container mode happen inside the container, not on the host.** This creates two distinct git strategies:
 
 - **Bare metal (`local`):** Hydraz creates worktrees on the host via `git worktree add`. All file and git operations happen on the host filesystem. This is the existing behavior.
-- **Container (`local-container`, future `cloud`):** Hydraz mounts the main repo root into the container via DevPod, then creates the worktree inside the container via SSH. All git operations (worktree creation, branch management, commit, push) happen container-side. The host orchestrates via SSH but never touches git state for container sessions.
+- **Container (`local-container` and `cloud`):** Hydraz mounts the main repo root into the container via DevPod, then creates the worktree inside the container via SSH at `/tmp/hydraz-worktrees/<session-id>` (outside the mounted repo root to avoid host filesystem pollution). All git operations (worktree creation, branch management, commit, push) happen container-side. The host orchestrates via SSH but never touches git state for container sessions.
 
-This divergence is correct and intentional. Container mode (both local-container and future cloud) shares one git strategy; bare metal has another. The container strategy will work identically for cloud — cloud is just "same thing, different host."
+This divergence is correct and intentional. Container mode (both local-container and cloud) shares one git strategy; bare metal has another. The container strategy works identically for cloud — proven end-to-end on GCP with zero code changes from local container mode.
 
 ### Architecture: where container lifecycle sits
 A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface:
@@ -1600,7 +1600,7 @@ Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable 
 
 1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
 2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
-3. **Container launch:** Hydraz writes the token to a temp file (`.hydraz-auth`) in the mounted repo, which is visible inside the container. The SSH command sources the file, exports the token, deletes the file, then runs Claude. The token never appears in `ps` output.
+3. **Container launch:** Hydraz writes the token to a temp file (`/tmp/.hydraz-auth`) inside the container via SSH. The SSH command that launches Claude sources the file, exports the token, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem.
 4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
 
 Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
@@ -1638,31 +1638,51 @@ Add cloud execution via DevPod with a GCP provider. This is the same container m
 
 The spec has stated since the beginning: "Support both local and cloud execution" (secondary product goal #1). Phase 14 proved the container model locally. Phase 15 proves it in the cloud.
 
+### Key finding: no separate CloudProvider needed (verified)
+The full Hydraz cloud pipeline was proven end-to-end on GCP with **zero code changes** from the local container implementation. The `LocalContainerProvider` works identically on GCP — DevPod abstracts the infrastructure difference completely.
+
+What was proven:
+- `devpod provider add gcloud -o PROJECT=hydraz-dev -o ZONE=us-central1-a -o MACHINE_TYPE=e2-standard-8` — one-time setup
+- The active DevPod provider determines whether containers run locally (Docker) or on cloud (GCP). Hydraz never knows or cares.
+- Full pipeline: auth → VM provisioning (~15s) → container build (~75s) → worktree creation → Opus 4.6 → git commit → session complete
+- SSH exec works identically to local containers
+- Auth injection via SSH works identically to local containers
+- Worktree at `/tmp/hydraz-worktrees/` works identically to local containers
+
+This means the `CloudProvider` stub can remain as-is or be removed. The `cloud` execution target in the CLI should route to the same `LocalContainerProvider` — the name is misleading, but the implementation is correct. The user selects local vs cloud by configuring which DevPod provider is active, not by changing Hydraz code.
+
 ### Architecture
-Cloud execution reuses the container pipeline from Phase 14:
+Cloud execution reuses the container pipeline from Phase 14 exactly:
+- Same `LocalContainerProvider`
 - Same `devcontainer.json` per repo
-- Same worktree-inside-container strategy
+- Same worktree-inside-container strategy (at `/tmp/hydraz-worktrees/`)
 - Same SSH-based command execution
-- Same auth token injection via `.hydraz-auth` file
-- Docker-in-Docker instead of socket mount (no host Docker to share on a remote VM)
+- Same auth token injection via SSH (`sshExec` to write `.hydraz-auth` inside the container)
 
-The only difference is the DevPod provider: `gcp` instead of `docker`.
+DevPod handles VM provisioning, Docker installation, file sync, and SSH tunneling. Hydraz talks to DevPod; DevPod talks to the infrastructure.
 
-### Needs
-- DevPod GCP provider integration (`devpod provider add gcp`)
-- `CloudProvider` implementation replacing the current stub (or extending `LocalContainerProvider` with provider selection)
-- GCP project/region/machine-type configuration in Hydraz config
-- Prove-it-first: manually verify DevPod + GCP provider lifecycle before implementing
-- DinD inside cloud containers (no host Docker socket)
-- Port isolation and network access for cloud workspaces
+### GCP setup (verified)
+One-time setup for cloud execution:
+1. Install `gcloud` CLI and authenticate: `gcloud auth login && gcloud auth application-default login`
+2. Create GCP project with Compute Engine API enabled and billing linked
+3. `gcloud auth application-default set-quota-project <project-id>`
+4. `devpod provider add gcloud -o PROJECT=<project-id> -o ZONE=<zone> -o MACHINE_TYPE=e2-standard-8`
+5. `devpod provider use gcloud` (makes it the default)
+
+Cost: e2-standard-8 (8 vCPUs, 32GB RAM) = ~$0.27/hr on-demand. VMs auto-stop after 10 minutes of inactivity.
+
+### Remaining needs
+- Route `cloud` execution target to `LocalContainerProvider` in the controller (or rename the execution targets)
+- DevPod provider selection in Hydraz config (which provider to use: docker vs gcloud)
+- GCP project/zone/machine-type configuration in `hydraz config`
+- Updated README with cloud prerequisites
+- DevPod workspace cleanup after sessions (see Phase 16)
 
 ### Deliverables
-- Working `CloudProvider` (no longer a stub)
-- GCP configuration in `hydraz config`
-- DevPod GCP provider lifecycle management
-- DinD support for cloud containers
-- End-to-end cloud pipeline proven manually
-- Updated README with cloud prerequisites
+- `cloud` execution target wired to container pipeline
+- DevPod provider configuration in Hydraz config
+- GCP setup documentation
+- End-to-end cloud pipeline proven manually (done)
 
 ### Important
 Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
@@ -1886,7 +1906,7 @@ This is non-negotiable. Declaring a phase complete while deliverables remain is 
 
 2. **Claude Code invocation strategy:** Direct process supervision via `claude` CLI behind an executor adapter boundary. The adapter isolates Claude-specific invocation details so the rest of Hydraz speaks in session/orchestration concepts.
 
-3. **Cloud provider for v1:** Local execution is the fully functional v1 path, including local container support (Phase 14). The full pipeline (worktree + container + Claude Code + env isolation) must be proven locally before cloud is attempted. Cloud is the same container model on a remote host. Cloud execution remains a well-defined provider interface with a stub implementation until local containers are proven.
+3. **Cloud provider for v1:** Local execution is the fully functional v1 path, including local container support (Phase 14). Cloud execution was proven on GCP with zero code changes from the local container implementation — DevPod abstracts the infrastructure. No separate `CloudProvider` implementation is needed; `LocalContainerProvider` serves both local-container and cloud targets. The user selects local vs cloud by configuring which DevPod provider is active.
 
 4. **Session event persistence format:** JSONL. Confirmed. Append-only, streamable, easy to tail and parse.
 
@@ -1917,7 +1937,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** v1 never auto-deletes workspaces. Completed/stopped/failed sessions keep their worktree on disk for review. Session metadata and events always persist. A future `hydraz clean` command can be added for explicit cleanup.
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
-   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and future cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) in the mounted repo, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output. Config file is `0600`. Implemented in Phase 14.
+   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) inside the container via SSH, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
 
 6. ~~**How should Hydraz detect and report auth precedence conflicts cleanly?**~~
    **Resolved:** v1 reports the configured auth mode and validates prerequisites (e.g. `ANTHROPIC_API_KEY` is set for api-key mode). Claude Code handles its own auth precedence. Hydraz surfaces the active mode in status and review outputs.
