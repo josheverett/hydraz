@@ -7,6 +7,7 @@ import {
   checkDockerAvailability,
   hasDevcontainerJson,
   buildSshCommand,
+  verifyBranchPushed,
   verifyClaudeInContainer,
   sshExec,
   createWorktreeInContainer,
@@ -88,6 +89,45 @@ describe('buildSshCommand', () => {
     const result = buildSshCommand('ws', 'claude --print --output-format stream-json "do stuff"');
     expect(result.args[0]).toBe('ws.devpod');
     expect(result.args[1]).toContain('claude');
+  });
+});
+
+describe('verifyBranchPushed', () => {
+  it('returns true when branch exists on remote', () => {
+    mockExecFileSync.mockReturnValue('abc123def456\trefs/heads/hydraz/fix-bug\n' as never);
+    expect(verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug')).toBe(true);
+  });
+
+  it('returns false when branch does not exist on remote', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    expect(verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug')).toBe(false);
+  });
+
+  it('returns false when SSH connection fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connect to host failed'); });
+    expect(verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug')).toBe(false);
+  });
+
+  it('runs git ls-remote via SSH targeting the correct branch', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-ws.devpod', expect.stringContaining('git ls-remote --heads origin hydraz/fix-bug')],
+      expect.any(Object),
+    );
+  });
+
+  it('executes from the worktree path inside the container', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/session-abc', 'hydraz/test');
+    const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(command).toContain('cd /tmp/hydraz-worktrees/session-abc');
+  });
+
+  it('returns false on whitespace-only output', () => {
+    mockExecFileSync.mockReturnValue('  \n  \n' as never);
+    expect(verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug')).toBe(false);
   });
 });
 

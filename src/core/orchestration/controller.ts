@@ -10,6 +10,7 @@ import {
   loadSession,
   saveSession,
   transitionState,
+  isTerminalState,
   type SessionMetadata,
 } from '../sessions/index.js';
 import { LocalProvider } from '../providers/local.js';
@@ -17,7 +18,7 @@ import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
 import { cleanupAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
-import { sshExec } from '../providers/devpod.js';
+import { sshExec, verifyBranchPushed } from '../providers/devpod.js';
 import { shellEscape } from '../claude/ssh.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
@@ -35,6 +36,36 @@ export interface RunningSession {
 }
 
 const activeSessions = new Map<string, RunningSession>();
+
+export interface ContainerCleanupResult {
+  action: 'destroyed' | 'preserved';
+  message: string;
+}
+
+export function cleanupContainerWorkspace(
+  sessionId: string,
+  workspace: WorkspaceInfo,
+  branchName: string,
+  repoRoot: string,
+  provider: WorkspaceProvider,
+): ContainerCleanupResult {
+  const workspaceName = `hydraz-${sessionId}`;
+  const pushed = verifyBranchPushed(workspaceName, workspace.directory, branchName);
+
+  if (pushed) {
+    provider.destroyWorkspace(repoRoot, workspace);
+    return {
+      action: 'destroyed',
+      message: 'Workspace cleaned up after verified push',
+    };
+  }
+
+  return {
+    action: 'preserved',
+    message: `Branch "${branchName}" not found on remote. ` +
+      `Workspace preserved for recovery: devpod ssh ${workspaceName}`,
+  };
+}
 
 export function getProvider(target: ExecutionTarget): WorkspaceProvider {
   switch (target) {
@@ -177,14 +208,33 @@ export async function startSession(
     cleanupAuthFile(repoRoot);
   }
 
-  const stateMapping = mapExitToSessionState(result);
-  transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
-  callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+  const currentSession = loadSession(repoRoot, sessionId);
+  if (!isTerminalState(currentSession.state)) {
+    const stateMapping = mapExitToSessionState(result);
+    transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
+    callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
 
-  if (stateMapping.state === 'completed') {
-    emitEvent('session.completed', 'Session completed successfully');
-  } else {
-    emitEvent('session.failed', stateMapping.message ?? 'Session failed');
+    if (stateMapping.state === 'completed') {
+      emitEvent('session.completed', 'Session completed successfully');
+    } else {
+      emitEvent('session.failed', stateMapping.message ?? 'Session failed');
+    }
+  }
+
+  if (session.executionTarget === 'local-container') {
+    const cleanup = cleanupContainerWorkspace(
+      session.id, workspace, session.branchName, repoRoot, provider,
+    );
+
+    if (cleanup.action === 'destroyed') {
+      emitEvent('workspace.destroyed', cleanup.message);
+    } else {
+      emitEvent('workspace.preserved', cleanup.message);
+      callbacks.onError?.(
+        `Warning: Branch "${session.branchName}" was not found on the remote. ` +
+        `The DevPod workspace has been preserved.\n` +
+        `To access and manually push: devpod ssh hydraz-${session.id}`);
+    }
   }
 }
 
