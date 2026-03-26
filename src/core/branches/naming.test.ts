@@ -45,6 +45,21 @@ describe('isValidBranchName', () => {
   it('rejects names with @{', () => {
     expect(isValidBranchName('branch@{0}')).toBe(false);
   });
+
+  it('rejects shell metacharacters', () => {
+    expect(isValidBranchName('branch;rm -rf /')).toBe(false);
+    expect(isValidBranchName('branch|cat /etc/passwd')).toBe(false);
+    expect(isValidBranchName('branch&bg')).toBe(false);
+    expect(isValidBranchName('branch$(whoami)')).toBe(false);
+    expect(isValidBranchName('branch`id`')).toBe(false);
+    expect(isValidBranchName("branch'inject")).toBe(false);
+    expect(isValidBranchName('branch"inject')).toBe(false);
+    expect(isValidBranchName('branch!history')).toBe(false);
+    expect(isValidBranchName('branch>file')).toBe(false);
+    expect(isValidBranchName('branch<file')).toBe(false);
+    expect(isValidBranchName('branch{a,b}')).toBe(false);
+    expect(isValidBranchName('branch#comment')).toBe(false);
+  });
 });
 
 describe('isValidSessionName', () => {

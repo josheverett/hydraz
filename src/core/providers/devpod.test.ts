@@ -113,7 +113,7 @@ describe('verifyBranchPushed', () => {
     verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug');
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining('git ls-remote --heads origin hydraz/fix-bug')],
+      ['my-ws.devpod', expect.stringContaining("git ls-remote --heads origin 'hydraz/fix-bug'")],
       expect.any(Object),
     );
   });
@@ -122,7 +122,7 @@ describe('verifyBranchPushed', () => {
     mockExecFileSync.mockReturnValue('' as never);
     verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/session-abc', 'hydraz/test');
     const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(command).toContain('cd /tmp/hydraz-worktrees/session-abc');
+    expect(command).toContain("cd '/tmp/hydraz-worktrees/session-abc'");
   });
 
   it('returns false on whitespace-only output', () => {

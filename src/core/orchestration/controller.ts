@@ -17,7 +17,7 @@ import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
-import { cleanupAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
+import { AUTH_FILE_NAME } from '../providers/container-auth-file.js';
 import { sshExec, verifyBranchPushed } from '../providers/devpod.js';
 import { shellEscape } from '../claude/ssh.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
@@ -203,10 +203,6 @@ export async function startSession(
 
   const result = await executor.waitForExit();
   activeSessions.delete(sessionId);
-
-  if (session.executionTarget === 'local-container') {
-    cleanupAuthFile(repoRoot);
-  }
 
   const currentSession = loadSession(repoRoot, sessionId);
   if (!isTerminalState(currentSession.state)) {

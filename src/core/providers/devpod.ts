@@ -1,6 +1,7 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { shellEscape } from '../claude/ssh.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -82,7 +83,7 @@ export function createWorktreeInContainer(
   sessionId: string,
 ): string {
   const worktreePath = `/tmp/hydraz-worktrees/${sessionId}`;
-  const command = `mkdir -p /tmp/hydraz-worktrees && cd ${containerRepoPath} && git worktree add -b ${branchName} ${worktreePath}`;
+  const command = `mkdir -p /tmp/hydraz-worktrees && cd ${shellEscape(containerRepoPath)} && git worktree add -b ${shellEscape(branchName)} ${shellEscape(worktreePath)}`;
   execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
   return worktreePath;
 }
@@ -127,7 +128,7 @@ export function verifyBranchPushed(
   try {
     const output = execFileSync('ssh', [
       `${workspaceName}.devpod`,
-      `cd ${worktreePath} && git ls-remote --heads origin ${branchName}`,
+      `cd ${shellEscape(worktreePath)} && git ls-remote --heads origin ${shellEscape(branchName)}`,
     ], { ...EXEC_OPTIONS, encoding: 'utf-8' });
     return output.trim().length > 0;
   } catch {

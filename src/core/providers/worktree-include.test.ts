@@ -86,4 +86,18 @@ describe('copyWorktreeIncludes', () => {
     expect(copied).toContain('agent/.env');
     expect(copied).toContain('ui/.env');
   });
+
+  it('skips entries that traverse outside the repo root', () => {
+    writeFileSync(join(repoRoot, '.worktreeinclude'), '../../etc/passwd\n');
+    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
+    expect(copied).toEqual([]);
+  });
+
+  it('skips entries that would write outside the worktree', () => {
+    mkdirSync(join(repoRoot, 'legit'), { recursive: true });
+    writeFileSync(join(repoRoot, 'legit', 'file'), 'ok');
+    writeFileSync(join(repoRoot, '.worktreeinclude'), '../escape\n');
+    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
+    expect(copied).toEqual([]);
+  });
 });

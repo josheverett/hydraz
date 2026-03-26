@@ -7,7 +7,7 @@ import {
   SessionError,
 } from '../../core/sessions/index.js';
 import { createEvent, appendEvent } from '../../core/events/index.js';
-import { suggestBranchName } from '../../core/branches/index.js';
+import { suggestBranchName, isValidBranchName } from '../../core/branches/index.js';
 import { startSession } from '../../core/orchestration/index.js';
 
 export function registerRunCommand(program: Command): void {
@@ -41,6 +41,11 @@ export function registerRunCommand(program: Command): void {
       const config = loadConfig();
       const sessionName = options.session ?? generateSessionName(task);
       const branchName = options.branch ?? suggestBranchName(sessionName, config.branchNaming.prefix);
+
+      if (!isValidBranchName(branchName)) {
+        console.error(`Invalid branch name: "${branchName}". Branch names must not contain shell metacharacters.`);
+        return;
+      }
       const executionTarget = options.cloud
         ? 'cloud' as const
         : options.container
