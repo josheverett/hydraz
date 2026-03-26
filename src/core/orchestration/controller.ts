@@ -17,9 +17,7 @@ import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
-import { AUTH_FILE_NAME } from '../providers/container-auth-file.js';
-import { sshExec, verifyBranchPushed } from '../providers/devpod.js';
-import { shellEscape } from '../claude/ssh.js';
+import { verifyBranchPushed } from '../providers/devpod.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -162,20 +160,13 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
-  let containerContext: { workspaceName: string; authFilePath?: string; workingDirectory?: string } | undefined;
+  let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
   if (session.executionTarget === 'local-container') {
     const workspaceName = `hydraz-${session.id}`;
     const authEnv = prepareContainerAuthEnv(config);
-    const authFilePath = `/tmp/${AUTH_FILE_NAME}`;
-    if (Object.keys(authEnv).length > 0) {
-      const content = Object.entries(authEnv)
-        .map(([key, value]) => `${key}=${shellEscape(value)}`)
-        .join('\n');
-      sshExec(workspaceName, `echo ${shellEscape(content)} > ${authFilePath} && chmod 600 ${authFilePath}`);
-    }
     containerContext = {
       workspaceName,
-      authFilePath: Object.keys(authEnv).length > 0 ? authFilePath : undefined,
+      authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
       workingDirectory: workspace.directory,
     };
   }

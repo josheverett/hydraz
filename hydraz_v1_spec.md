@@ -1582,7 +1582,7 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 - **`devpod up <local-dir> --ide none`** — creates and starts a workspace from a local directory's devcontainer.json. First run ~30s (image build + feature install). Subsequent runs faster (cached image).
 - **Repo files mounted at `/workspaces/<workspace-name>/`** — DevPod copies/mounts the repo contents into the container at this path automatically.
 - **devcontainer features** — standard features (e.g. `ghcr.io/devcontainers/features/node`, `ghcr.io/devcontainers/features/git`) install correctly during image build.
-- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. (Auth injection uses SSH-based file writing instead, for cloud compatibility.)
+- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. (Auth injection uses an SSH stdin launch script instead, for cloud compatibility and to avoid temp auth files.)
 - **`ssh <workspace>.devpod "command"`** — executes a command inside the container via SSH. Clean exit, proper stdout. This is the programmatic exec interface Hydraz will use.
 - **`devpod ssh --command`** — also works but produces a spurious "Error tunneling to container" message on exit. Use raw SSH instead.
 - **`devpod delete <workspace>`** — clean teardown, removes container.
@@ -1613,7 +1613,7 @@ A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface
 
 ### Architecture: how Claude executes inside the container
 The executor spawns Claude Code CLI inside the container via SSH rather than on the host:
-- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod "cd <worktree-path> && claude <args>"` (or equivalent spawn with SSH)
+- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod sh -s` and streams a short launch script over SSH stdin that `cd`s into the worktree, exports any auth env vars in-memory, and `exec`s `claude <args>`
 - The controller passes an execution context to the executor indicating whether to run locally or via SSH
 - Streaming output works the same way — stdout from the SSH process is the stream-json output from Claude
 
@@ -1622,7 +1622,7 @@ Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable 
 
 1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
 2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
-3. **Container launch:** Hydraz writes the token to a temp file (`/tmp/.hydraz-auth`) inside the container via SSH. The SSH command that launches Claude sources the file, exports the token, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem.
+3. **Container launch:** Hydraz streams a shell script to the container over SSH stdin. That script exports `CLAUDE_CODE_OAUTH_TOKEN` in-memory and immediately `exec`s Claude in the target worktree. No temp auth file is created inside the container, and the token never appears on the host filesystem.
 4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
 
 Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
@@ -1688,7 +1688,7 @@ Cloud execution reuses the container pipeline from Phase 14 exactly:
 - Same `devcontainer.json` per repo
 - Same worktree-inside-container strategy (at `/tmp/hydraz-worktrees/`)
 - Same SSH-based command execution
-- Same auth token injection via SSH (`sshExec` to write `.hydraz-auth` inside the container)
+- Same auth token injection via SSH stdin (no temp auth file inside the container)
 
 DevPod handles VM provisioning, Docker installation, file sync, and SSH tunneling. Hydraz talks to DevPod; DevPod talks to the infrastructure.
 
@@ -1992,7 +1992,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** For bare-metal local mode, v1 keeps worktrees on disk for review. For container mode, DevPod workspaces are destroyed after session completion once push is verified (Phase 16). Session metadata and events always persist regardless of execution mode. `hydraz clean` provides manual orphan cleanup for DevPod workspaces that weren't automatically destroyed (implemented in Phase 16).
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
-   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) inside the container via SSH, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
+   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz streams a short shell script over SSH stdin that exports `CLAUDE_CODE_OAUTH_TOKEN` in-memory and immediately `exec`s Claude in the target worktree. No temp auth file is created inside the container, and the token never appears on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
 
 6. ~~**How should Hydraz detect and report auth precedence conflicts cleanly?**~~
    **Resolved:** v1 reports the configured auth mode and validates prerequisites (e.g. `ANTHROPIC_API_KEY` is set for api-key mode). Claude Code handles its own auth precedence. Hydraz surfaces the active mode in status and review outputs.

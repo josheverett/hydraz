@@ -7,7 +7,7 @@ import { buildSshClaudeArgs } from './ssh.js';
 
 export interface ContainerContext {
   workspaceName: string;
-  authFilePath?: string;
+  authEnv?: Record<string, string>;
   workingDirectory?: string;
 }
 
@@ -72,12 +72,15 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     const ssh = buildSshClaudeArgs(
       options.containerContext.workspaceName,
       claudeArgs,
-      options.containerContext.authFilePath,
+      options.containerContext.authEnv,
       options.containerContext.workingDirectory,
     );
     child = spawn(ssh.cmd, ssh.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    if (ssh.stdinScript) {
+      child.stdin?.write(ssh.stdinScript);
+    }
   } else {
     const env = buildClaudeEnv(options.config, options.workingDirectory);
     child = spawn('claude', claudeArgs, {

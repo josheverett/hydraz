@@ -214,19 +214,25 @@ describe('createWorktreeInContainer', () => {
 });
 
 describe('copyWorktreeIncludesInContainer', () => {
-  it('runs the copy command via SSH', () => {
+  it('runs the copy command via SSH for provided safe files', () => {
     mockExecFileSync.mockReturnValue('' as never);
-    copyWorktreeIncludesInContainer('my-ws', '/workspaces/my-ws', '/workspaces/my-ws/worktrees/s1');
+    copyWorktreeIncludesInContainer(
+      'my-ws',
+      '/workspaces/my-ws',
+      '/workspaces/my-ws/worktrees/s1',
+      ['agent/.env', 'deep/nested/.env'],
+    );
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining('.worktreeinclude')],
+      ['my-ws.devpod', expect.stringContaining("cp 'agent/.env'")],
       expect.any(Object),
     );
   });
 
-  it('does not throw if .worktreeinclude does not exist', () => {
+  it('does not invoke SSH when there are no files to copy', () => {
     mockExecFileSync.mockReturnValue('' as never);
-    expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt')).not.toThrow();
+    expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 });
 

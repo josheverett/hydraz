@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import type {
   WorkspaceProvider,
   WorkspaceInfo,
@@ -16,6 +17,7 @@ import {
   copyWorktreeIncludesInContainer,
   setupContainerGitSsh,
 } from './devpod.js';
+import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
@@ -73,6 +75,10 @@ export class LocalContainerProvider implements WorkspaceProvider {
     }
 
     const containerRepoPath = `/workspaces/${workspaceName}`;
+    const safeIncludes = listCopyableWorktreeIncludes(
+      session.repoRoot,
+      join(session.repoRoot, '.hydraz-container-worktree'),
+    );
     let worktreePath: string;
 
     try {
@@ -82,7 +88,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
         session.branchName,
         session.id,
       );
-      copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath);
+      copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {
       devpodDelete(workspaceName);
       const message = err instanceof Error ? err.message : String(err);

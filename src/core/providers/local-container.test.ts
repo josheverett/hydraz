@@ -7,6 +7,10 @@ vi.mock('../repo/detect.js', () => ({
   hasGitRemote: vi.fn(() => true),
 }));
 
+vi.mock('./worktree-include.js', () => ({
+  listCopyableWorktreeIncludes: vi.fn(() => ['agent/.env']),
+}));
+
 vi.mock('./devpod.js', () => ({
   checkDevPodAvailability: vi.fn(() => ({ available: true, version: 'v0.6.15' })),
   checkDockerAvailability: vi.fn(() => true),
@@ -32,6 +36,7 @@ import {
   copyWorktreeIncludesInContainer,
   sshExec,
 } from './devpod.js';
+import { listCopyableWorktreeIncludes } from './worktree-include.js';
 
 const mockCheckDevPod = vi.mocked(checkDevPodAvailability);
 const mockCheckDocker = vi.mocked(checkDockerAvailability);
@@ -43,6 +48,7 @@ const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
+const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
 function makeSession(name: string = 'test-session') {
   return createSession({
@@ -63,6 +69,7 @@ beforeEach(() => {
   mockHasGitRemote.mockReturnValue(true);
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
+  mockListCopyableIncludes.mockReturnValue(['agent/.env']);
 });
 
 describe('LocalContainerProvider', () => {
@@ -129,7 +136,16 @@ describe('LocalContainerProvider', () => {
 
       provider.createWorkspace({ session, config });
 
-      expect(mockCopyIncludes).toHaveBeenCalled();
+      expect(mockListCopyableIncludes).toHaveBeenCalledWith(
+        '/fake/repo',
+        '/fake/repo/.hydraz-container-worktree',
+      );
+      expect(mockCopyIncludes).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('/workspaces/'),
+        expect.stringContaining('/tmp/hydraz-worktrees/'),
+        ['agent/.env'],
+      );
     });
 
     it('returns container-internal worktree path as directory', () => {

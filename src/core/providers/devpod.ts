@@ -1,6 +1,6 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { shellEscape } from '../claude/ssh.js';
 
 export interface DevPodWorkspace {
@@ -92,22 +92,20 @@ export function copyWorktreeIncludesInContainer(
   workspaceName: string,
   containerRepoPath: string,
   containerWorktreePath: string,
+  files: string[],
 ): void {
-  const command = [
-    `cd ${containerRepoPath}`,
-    `if [ -f .worktreeinclude ]; then`,
-    `  while IFS= read -r line || [ -n "$line" ]; do`,
-    `    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')`,
-    `    [ -z "$line" ] && continue`,
-    `    echo "$line" | grep -q '^#' && continue`,
-    `    if [ -f "$line" ]; then`,
-    `      mkdir -p "${containerWorktreePath}/$(dirname "$line")"`,
-    `      cp "$line" "${containerWorktreePath}/$line"`,
-    `    fi`,
-    `  done < .worktreeinclude`,
-    `fi`,
-  ].join('\n');
-  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
+  if (files.length === 0) {
+    return;
+  }
+
+  const command = [`cd ${shellEscape(containerRepoPath)}`];
+  for (const file of files) {
+    const destDir = `${containerWorktreePath}/${posix.dirname(file)}`;
+    const destFile = `${containerWorktreePath}/${file}`;
+    command.push(`mkdir -p ${shellEscape(destDir)}`);
+    command.push(`cp ${shellEscape(file)} ${shellEscape(destFile)}`);
+  }
+  execFileSync('ssh', [`${workspaceName}.devpod`, command.join('\n')], EXEC_OPTIONS);
 }
 
 export function setupContainerGitSsh(workspaceName: string): void {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, copyFileSync, mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 
 export function parseWorktreeInclude(repoRoot: string): string[] {
@@ -20,15 +20,15 @@ function isWithin(parent: string, child: string): boolean {
   return resolvedChild.startsWith(resolvedParent);
 }
 
-export function copyWorktreeIncludes(repoRoot: string, worktreeDir: string): string[] {
+export function listCopyableWorktreeIncludes(repoRoot: string, worktreeDir: string): string[] {
   const files = parseWorktreeInclude(repoRoot);
-  const copied: string[] = [];
+  const copyable: string[] = [];
 
   for (const file of files) {
     const source = join(repoRoot, file);
-    const dest = join(worktreeDir, file);
+    const destination = join(worktreeDir, file);
 
-    if (!isWithin(repoRoot, source) || !isWithin(worktreeDir, dest)) {
+    if (!isWithin(repoRoot, source) || !isWithin(worktreeDir, destination)) {
       continue;
     }
 
@@ -36,10 +36,21 @@ export function copyWorktreeIncludes(repoRoot: string, worktreeDir: string): str
       continue;
     }
 
-    mkdirSync(dirname(dest), { recursive: true });
-    copyFileSync(source, dest);
-    copied.push(file);
+    copyable.push(file);
   }
 
-  return copied;
+  return copyable;
+}
+
+export function copyWorktreeIncludes(repoRoot: string, worktreeDir: string): string[] {
+  const files = listCopyableWorktreeIncludes(repoRoot, worktreeDir);
+
+  for (const file of files) {
+    const source = join(repoRoot, file);
+    const dest = join(worktreeDir, file);
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSync(source, dest);
+  }
+
+  return files;
 }
