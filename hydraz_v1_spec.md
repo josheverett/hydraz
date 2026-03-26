@@ -1,5 +1,22 @@
 # Hydraz v1 Specification
 
+## 0. Current State (read this first)
+
+**Status:** Phases 0-15 complete. Phase 16 is next. 362 tests across 35 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local).
+
+**Next step:** Phase 16 — DevPod workspace cleanup and push verification. See the `[NEXT]` marker in the phase list below.
+
+**Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
+
+**Agent workflow conventions:**
+- Suggest a conventional commit message at the end of every turn where you write code. The human commits manually.
+- Put any questions for the human at the very bottom of your message, in bold.
+- Never suggest stopping or "picking up in the next session." Keep working until told to stop.
+- When you encounter an ambiguity or design decision that needs input, discuss it before proceeding. When agreement is reached, update the spec.
+- Always remind the human to rebuild (`npm run build`) before manual testing.
+- Stop after each atomic sub-phase so the human can run `npm test` and commit.
+- **CRITICAL:** See Section 26b (Coding Standards) for prove-it-first methodology (the most important rule), TDD, type deduplication, and phase completion gate rules.
+
 ## 1. Overview
 
 Hydraz is an interactive, repo-root CLI for autonomous, persona-driven coding swarms.
@@ -1217,7 +1234,7 @@ Hydraz should feel like it returns something reviewable, not merely "some stuff 
 
 This section is written for an implementation agent.
 
-## Phase 0: Foundation decisions
+## Phase 0: Foundation decisions [DONE]
 1. Create repo for Hydraz CLI
 2. Initial tech stack (resolved):
    - Node.js / TypeScript
@@ -1236,7 +1253,7 @@ This section is written for an implementation agent.
 - packaging skeleton
 - initial README with product intent
 
-## Phase 1: CLI shell and basic command framework
+## Phase 1: CLI shell and basic command framework [DONE]
 Implement the public command surface with stubs:
 
 - `hydraz`
@@ -1264,7 +1281,7 @@ Implement the public command surface with stubs:
 - command routing
 - interactive top-level menu
 
-## Phase 2: Config system
+## Phase 2: Config system [DONE]
 Implement global config and file layout.
 
 ### Needs
@@ -1299,7 +1316,7 @@ Should support at least:
 - auth-config management
 - Claude Code health checks
 
-## Phase 3: Persona management
+## Phase 3: Persona management [DONE]
 Implement persona storage and selection.
 
 ### Needs
@@ -1321,7 +1338,7 @@ Implement persona storage and selection.
 - selection/validation logic
 - session-time persona override flow
 
-## Phase 4: Session model and local state
+## Phase 4: Session model and local state [DONE]
 Implement the session state system (stored under `~/.hydraz/repos/`).
 
 ### Needs
@@ -1343,7 +1360,7 @@ Implement the session state system (stored under `~/.hydraz/repos/`).
 - `hydraz status`
 - `hydraz events`
 
-## Phase 5: Workspace/provider abstraction
+## Phase 5: Workspace/provider abstraction [DONE]
 Implement a provider abstraction without overcomplicating v1.
 
 ### Needs
@@ -1366,7 +1383,7 @@ The user should select local/cloud in the same workflow. The orchestration layer
 - workspace events
 - Claude auth propagation path
 
-## Phase 6: Prompt assembly system
+## Phase 6: Prompt assembly system [DONE]
 Implement the prompt composition model.
 
 ### Needs
@@ -1382,7 +1399,7 @@ Implement the prompt composition model.
 - prompt reset/update behavior
 - config integration for master prompt edits
 
-## Phase 7: Claude Code executor integration
+## Phase 7: Claude Code executor integration [DONE]
 Integrate Claude Code as the execution backend.
 
 ### Needs
@@ -1403,7 +1420,7 @@ Integrate Claude Code as the execution backend.
 - task submission path
 - state mapping from Claude execution to Hydraz session states
 
-## Phase 8: Autonomous workflow controller
+## Phase 8: Autonomous workflow controller [DONE]
 Implement the internal session workflow that the user does not manually drive.
 
 ### Core expectations
@@ -1424,7 +1441,7 @@ Hydraz should:
 - resume handling
 - stop handling
 
-## Phase 9: Review surfaces
+## Phase 9: Review surfaces [DONE]
 Implement polished human-facing outputs.
 
 ### `hydraz review`
@@ -1452,7 +1469,7 @@ Should be compact and structured.
 - events renderer
 - artifact summarization logic
 
-## Phase 10: MCP management
+## Phase 10: MCP management [DONE]
 Implement MCP configuration management.
 
 ### Needs
@@ -1468,7 +1485,7 @@ Implement MCP configuration management.
 - connectivity test path
 - merge logic for global + repo scope
 
-## Phase 11: Packaging and install path
+## Phase 11: Packaging and install path [DONE]
 Make the CLI installable and ready for public distribution.
 
 npm is the primary distribution channel (`npm install -g hydraz`). Node is already a prerequisite, every target user has npm, and the `package.json` is already configured with `bin`, `files`, and `main` fields. Homebrew is a future secondary channel for macOS-native feel.
@@ -1487,7 +1504,7 @@ npm is the primary distribution channel (`npm install -g hydraz`). Node is alrea
 - draft Homebrew formula strategy (future)
 - versioning and release automation
 
-## Phase 12: Move session/workspace data out of target repos
+## Phase 12: Move session/workspace data out of target repos [DONE]
 Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of the target repo's `.hydraz/` directory and into `~/.hydraz/`, keyed by repo path. This eliminates the need for `.gitignore` entries in target repos and avoids polluting the working tree.
 
 ### Needs
@@ -1503,7 +1520,7 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 - no `.hydraz/` pollution in target repos
 - backward compatibility or clean migration
 
-## Phase 13: CI and PR checks
+## Phase 13: CI and PR checks [DONE]
 Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 272+ tests but no automation enforcing they pass before merge.
 
 ### Needs
@@ -1522,7 +1539,7 @@ Add GitHub Actions CI so tests and type-checking run automatically on every PR a
 ### Note
 This phase is intentionally minimal. Linting, coverage thresholds, and release automation can be added incrementally later.
 
-## Phase 14: Local container execution
+## Phase 14: Local container execution [DONE]
 Add container support to local mode so agents operate in isolated Docker environments. This is required before cloud execution because the full pipeline (worktree + container + Claude Code + env isolation) must be proven locally first. Cloud is the same model with a different host.
 
 ### Container model
@@ -1642,7 +1659,7 @@ The full local pipeline must work end-to-end before cloud is attempted. Cloud is
 - Post-launch validation (Claude Code callable inside container)
 - Execution target type expansion (`local-container`)
 
-## Phase 15: Cloud container execution
+## Phase 15: Cloud container execution [DONE]
 Add cloud execution via DevPod with a GCP provider. This is the same container model proven in Phase 14 (local containers), running on a remote host instead of local Docker.
 
 The spec has stated since the beginning: "Support both local and cloud execution" (secondary product goal #1). Phase 14 proved the container model locally. Phase 15 proves it in the cloud.
@@ -1696,7 +1713,7 @@ Cost: e2-standard-8 (8 vCPUs, 32GB RAM) = ~$0.27/hr on-demand. VMs auto-stop aft
 ### Important
 Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
 
-## Phase 16: DevPod workspace cleanup and push verification
+## Phase 16: DevPod workspace cleanup and push verification [NEXT]
 Completed container sessions leave DevPod workspaces running on GCP (costing ~$0.27/hr). Hydraz should verify work is safely pushed before cleanup, and clean up automatically after.
 
 ### Push verification before cleanup
@@ -1723,7 +1740,7 @@ Hydraz must verify the branch was pushed before destroying the workspace:
 - `hydraz clean` command for manual orphan cleanup (optional for v1)
 - No orphaned containers after normal session lifecycle with successful push
 
-## Phase 17: Multi-executor backend support
+## Phase 17: Multi-executor backend support [DEFERRED]
 Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in. Deferred until a second backend is actually needed.
 
 ### Needs
@@ -1900,7 +1917,17 @@ Duplicating a type definition, even if the values are identical, is a bug. When 
 Each `src/core/<module>/` directory should have an `index.ts` that re-exports the module's public API. Consumers import from the barrel, not from internal files. Internal files may import from each other directly within the same module.
 
 ### Prove-it-first methodology
-All assumptions about external tool behavior (CLI interfaces, APIs, env vars, file formats) must be verified with evidence before acting on them. Never trust documentation or web search results over actually running the tool. When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec.
+This is the most important rule in this document. It applies to everything — not just external tools, but any assertion, conclusion, diagnosis, or claim made during development.
+
+**Never assert something as fact without evidence.** If you say "X is the default behavior," prove it. If you say "Y caused the bug," prove it. If you say "Z is a community standard," prove it. If you say "the config validation is dropping the field," verify before coding a fix. Memory, intuition, and pattern-matching are starting points for investigation, not substitutes for verification.
+
+Specific applications:
+- **External tool behavior:** CLI interfaces, APIs, env vars, file formats must be verified by actually running the tool. Never trust documentation or web search results alone.
+- **Bug diagnosis:** Verify the actual cause before writing a fix. Reproduce the bug, isolate the root cause, then fix what is actually broken.
+- **Community claims:** If you assert something is a standard, convention, or common practice, find evidence (docs, issues, implementations) or say "I don't know."
+- **Codebase state:** If you claim "this is already handled" or "this field is preserved," verify against the actual code, not your memory of the code.
+
+When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec. See Section 26 for the full prove-it-first policy with a real example of why it matters.
 
 ### API-design-driven TDD
 The implementation order is strict: define interfaces/types → write tests that use them (tests fail) → implement until tests pass. This is not optional or aspirational — it is the required workflow.
