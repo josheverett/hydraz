@@ -1612,7 +1612,16 @@ Hydraz v1 hardcodes `--model claude-opus-4-6` for all Claude Code sessions. This
 - Docker (or OrbStack) running on the host
 - DevPod CLI installed (`devpod version` to verify)
 - Target repo has a `.devcontainer/devcontainer.json`
+- Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. This matches every major cloud coding agent (Devin, Copilot Coding Agent, Claude Code Web, Kilo).
 - Claude Code CLI available inside the container (repo's devcontainer responsibility)
+
+### Container setup steps (automatic)
+After launching the DevPod workspace, Hydraz automatically:
+1. Adds GitHub's SSH host key to `~/.ssh/known_hosts` inside the container (via `ssh-keyscan`) — required because DevPod does not copy `known_hosts` from the host
+2. Verifies Claude Code CLI is callable inside the container
+3. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
+4. Copies `.worktreeinclude` files into the worktree
+5. Injects OAuth token via SSH for Claude Code auth
 
 ### Needs
 - `LocalContainerProvider` implementing `WorkspaceProvider`
@@ -1687,19 +1696,32 @@ Cost: e2-standard-8 (8 vCPUs, 32GB RAM) = ~$0.27/hr on-demand. VMs auto-stop aft
 ### Important
 Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
 
-## Phase 16: DevPod workspace cleanup
-Completed container sessions leave DevPod workspaces running. Hydraz should clean them up automatically after session completion.
+## Phase 16: DevPod workspace cleanup and push verification
+Completed container sessions leave DevPod workspaces running on GCP (costing ~$0.27/hr). Hydraz should verify work is safely pushed before cleanup, and clean up automatically after.
+
+### Push verification before cleanup
+Container mode delivers work via push to a remote branch. If the push fails (network, auth, GitHub outage), the work only exists inside the ephemeral container. Destroying the workspace loses the work.
+
+Hydraz must verify the branch was pushed before destroying the workspace:
+- After session completion, check if the session branch exists on the remote (`git ls-remote`)
+- If push succeeded: destroy the workspace
+- If push failed: preserve the workspace, notify the user with recovery instructions (`devpod ssh <workspace>` to access and manually push)
+- VMs auto-stop after 10 minutes of inactivity (data preserved), so preserving the workspace doesn't mean paying indefinitely
 
 ### Needs
-- Call `devpodDelete` in the controller's post-execution path for container sessions
+- Push verification in the controller after session completion
+- Call `devpodDelete` only after confirmed push
 - Handle cleanup on session stop and session failure, not just completion
 - Graceful handling when DevPod workspace is already gone
+- Notify user on push failure with workspace recovery instructions
 - Consider: should `hydraz clean` also clean up orphaned DevPod workspaces?
 
 ### Deliverables
-- Automatic DevPod workspace teardown after session ends (complete, stop, or fail)
+- Push verification before workspace destruction
+- Automatic DevPod workspace teardown after confirmed push
+- Clear error messaging and recovery path for push failures
 - `hydraz clean` command for manual orphan cleanup (optional for v1)
-- No orphaned containers after normal session lifecycle
+- No orphaned containers after normal session lifecycle with successful push
 
 ## Phase 17: Multi-executor backend support
 Hydraz currently hardcodes Claude Code CLI as the executor. This phase extracts an `ExecutorBackend` interface so alternative backends (e.g. Codex, OpenCode) can be swapped in. Deferred until a second backend is actually needed.
@@ -1934,7 +1956,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** v1 state machine: `created` → `starting` → `planning` → `implementing` → `verifying` → `completed`. Terminal exit states: `stopped` (user action), `blocked` (agent self-reported), `failed` (crash/error). No distinct `paused` state in v1 — interrupted sessions stay in their last active state and `hydraz resume` detects and picks up. The `queued` state from the original list is dropped for v1 (no queue system yet).
 
 4. ~~**How should session/workspace cleanup be handled after completion?**~~
-   **Resolved:** v1 never auto-deletes workspaces. Completed/stopped/failed sessions keep their worktree on disk for review. Session metadata and events always persist. A future `hydraz clean` command can be added for explicit cleanup.
+   **Resolved:** For bare-metal local mode, v1 keeps worktrees on disk for review. For container mode, DevPod workspaces are destroyed after session completion once push is verified (see Phase 16). Session metadata and events always persist regardless of execution mode. A future `hydraz clean` command can be added for manual orphan cleanup.
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
    **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) inside the container via SSH, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
