@@ -10,7 +10,7 @@ vi.mock('./devpod.js', () => ({
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
-  createWorktreeInContainer: vi.fn(() => '/workspaces/hydraz-session-id/worktrees/session-id'),
+  createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
   copyWorktreeIncludesInContainer: vi.fn(),
   sshExec: vi.fn(),
 }));
@@ -54,7 +54,7 @@ beforeEach(() => {
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
-  mockCreateWorktreeInContainer.mockReturnValue('/workspaces/hydraz-session-id/worktrees/session-id');
+  mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
 });
 
 describe('LocalContainerProvider', () => {
@@ -125,7 +125,7 @@ describe('LocalContainerProvider', () => {
     });
 
     it('returns container-internal worktree path as directory', () => {
-      mockCreateWorktreeInContainer.mockReturnValue('/workspaces/hydraz-abc/worktrees/abc');
+      mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/abc');
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = createDefaultConfig();
@@ -133,7 +133,7 @@ describe('LocalContainerProvider', () => {
       const workspace = provider.createWorkspace({ session, config });
 
       expect(workspace.type).toBe('local-container');
-      expect(workspace.directory).toBe('/workspaces/hydraz-abc/worktrees/abc');
+      expect(workspace.directory).toBe('/tmp/hydraz-worktrees/abc');
       expect(workspace.sessionId).toBe(session.id);
     });
 
@@ -171,7 +171,7 @@ describe('LocalContainerProvider', () => {
     const fakeWorkspace = {
       id: 'session-123',
       type: 'local-container' as const,
-      directory: '/workspaces/hydraz-session-123/worktrees/session-123',
+      directory: '/tmp/hydraz-worktrees/session-123',
       branchName: 'hydraz/test-session',
       sessionId: 'session-123',
     };

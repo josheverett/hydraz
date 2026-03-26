@@ -81,8 +81,8 @@ export function createWorktreeInContainer(
   branchName: string,
   sessionId: string,
 ): string {
-  const worktreePath = `${containerRepoPath}/worktrees/${sessionId}`;
-  const command = `cd ${containerRepoPath} && git worktree add -b ${branchName} ${worktreePath}`;
+  const worktreePath = `/tmp/hydraz-worktrees/${sessionId}`;
+  const command = `mkdir -p /tmp/hydraz-worktrees && cd ${containerRepoPath} && git worktree add -b ${branchName} ${worktreePath}`;
   execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
   return worktreePath;
 }
