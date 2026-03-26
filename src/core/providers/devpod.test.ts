@@ -11,6 +11,7 @@ import {
   sshExec,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  setupContainerGitSsh,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -186,5 +187,29 @@ describe('copyWorktreeIncludesInContainer', () => {
   it('does not throw if .worktreeinclude does not exist', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt')).not.toThrow();
+  });
+});
+
+describe('setupContainerGitSsh', () => {
+  it('adds GitHub host key to known_hosts inside the container', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    setupContainerGitSsh('my-ws');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-ws.devpod', expect.stringContaining('ssh-keyscan')],
+      expect.any(Object),
+    );
+  });
+
+  it('includes github.com in the ssh-keyscan command', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    setupContainerGitSsh('my-ws');
+    const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(command).toContain('github.com');
+  });
+
+  it('does not throw on failure', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('keyscan failed'); });
+    expect(() => setupContainerGitSsh('my-ws')).not.toThrow();
   });
 });

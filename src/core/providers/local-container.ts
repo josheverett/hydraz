@@ -14,7 +14,9 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  setupContainerGitSsh,
 } from './devpod.js';
+import { hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
   readonly type = 'local-container' as const;
@@ -47,6 +49,12 @@ export class LocalContainerProvider implements WorkspaceProvider {
       );
     }
 
+    if (!hasGitRemote(session.repoRoot)) {
+      throw new Error(
+        'Container mode requires a git remote. Work inside containers can only be delivered via push to a remote branch.',
+      );
+    }
+
     const workspaceName = `hydraz-${session.id}`;
 
     try {
@@ -55,6 +63,8 @@ export class LocalContainerProvider implements WorkspaceProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
+
+    setupContainerGitSsh(workspaceName);
 
     const claudeCheck = verifyClaudeInContainer(workspaceName);
     if (!claudeCheck.available) {

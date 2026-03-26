@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectRepo } from './detect.js';
+import { detectRepo, hasGitRemote } from './detect.js';
 
 describe('detectRepo', () => {
   it('detects the current repo from the repo root', () => {
@@ -23,5 +23,15 @@ describe('detectRepo', () => {
   it('returns the directory name as the repo name', () => {
     const result = detectRepo();
     expect(result!.name).toBe('hydraz');
+  });
+});
+
+describe('hasGitRemote', () => {
+  it('returns true for a repo with a remote', () => {
+    expect(hasGitRemote(process.cwd())).toBe(true);
+  });
+
+  it('returns false for a repo without a remote', () => {
+    expect(hasGitRemote('/')).toBe(false);
   });
 });
