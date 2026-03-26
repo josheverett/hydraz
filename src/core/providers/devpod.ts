@@ -119,6 +119,22 @@ export function setupContainerGitSsh(workspaceName: string): void {
   }
 }
 
+export function verifyBranchPushed(
+  workspaceName: string,
+  worktreePath: string,
+  branchName: string,
+): boolean {
+  try {
+    const output = execFileSync('ssh', [
+      `${workspaceName}.devpod`,
+      `cd ${worktreePath} && git ls-remote --heads origin ${branchName}`,
+    ], { ...EXEC_OPTIONS, encoding: 'utf-8' });
+    return output.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
   try {
     const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {

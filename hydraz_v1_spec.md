@@ -2,9 +2,9 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 0-15 complete. Phase 16 is next. 362 tests across 35 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local).
+**Status:** Phases 0-16 complete. 37 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
 
-**Next step:** Phase 16 — DevPod workspace cleanup and push verification. See the `[NEXT]` marker in the phase list below.
+**Next step:** Phase 17 (multi-executor backend support) is deferred until a second backend is needed. All v1 phases are complete.
 
 **Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
 
@@ -15,6 +15,7 @@
 - When you encounter an ambiguity or design decision that needs input, discuss it before proceeding. When agreement is reached, update the spec.
 - Always remind the human to rebuild (`npm run build`) before manual testing.
 - Stop after each atomic sub-phase so the human can run `npm test` and commit.
+- **Spec and README must stay current with every commit.** Any commit that changes behavior, adds commands, changes test counts, or modifies the public surface must include corresponding updates to both `hydraz_v1_spec.md` and `README.md`. When editing either document, perform multiple self-review passes to ensure all information is internally consistent — test counts, command lists, phase statuses, deliverable claims, and current-state summaries must all agree with each other and with the actual codebase.
 - **CRITICAL:** See Section 26b (Coding Standards) for prove-it-first methodology (the most important rule), TDD, type deduplication, and phase completion gate rules.
 
 ## 1. Overview
@@ -337,6 +338,7 @@ hydraz stop
 hydraz events
 hydraz personas
 hydraz mcp
+hydraz clean
 ```
 
 This should remain intentionally small.
@@ -412,6 +414,9 @@ Manage built-in and custom personas and choose the global default swarm.
 
 #### `hydraz mcp`
 Manage MCP server configuration and connectivity.
+
+#### `hydraz clean`
+Clean up orphaned DevPod workspaces from completed, stopped, or failed container sessions. Lists orphans with their session state and DevPod status, then prompts for confirmation before destroying. Supports `--force` to skip the confirmation prompt.
 
 ---
 
@@ -1713,7 +1718,7 @@ Cost: e2-standard-8 (8 vCPUs, 32GB RAM) = ~$0.27/hr on-demand. VMs auto-stop aft
 ### Important
 Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
 
-## Phase 16: DevPod workspace cleanup and push verification [NEXT]
+## Phase 16: DevPod workspace cleanup and push verification [DONE]
 Completed container sessions leave DevPod workspaces running on GCP (costing ~$0.27/hr). Hydraz should verify work is safely pushed before cleanup, and clean up automatically after.
 
 ### Push verification before cleanup
@@ -1777,6 +1782,7 @@ src/
       events.ts
       personas.ts
       mcp.ts
+      clean.ts
     ui/
       app.tsx
       screens/
@@ -1983,7 +1989,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** v1 state machine: `created` → `starting` → `planning` → `implementing` → `verifying` → `completed`. Terminal exit states: `stopped` (user action), `blocked` (agent self-reported), `failed` (crash/error). No distinct `paused` state in v1 — interrupted sessions stay in their last active state and `hydraz resume` detects and picks up. The `queued` state from the original list is dropped for v1 (no queue system yet).
 
 4. ~~**How should session/workspace cleanup be handled after completion?**~~
-   **Resolved:** For bare-metal local mode, v1 keeps worktrees on disk for review. For container mode, DevPod workspaces are destroyed after session completion once push is verified (see Phase 16). Session metadata and events always persist regardless of execution mode. A future `hydraz clean` command can be added for manual orphan cleanup.
+   **Resolved:** For bare-metal local mode, v1 keeps worktrees on disk for review. For container mode, DevPod workspaces are destroyed after session completion once push is verified (Phase 16). Session metadata and events always persist regardless of execution mode. `hydraz clean` provides manual orphan cleanup for DevPod workspaces that weren't automatically destroyed (implemented in Phase 16).
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
    **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) inside the container via SSH, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.

@@ -109,6 +109,7 @@ hydraz events          # show structured event history
 hydraz config          # configure defaults, auth, master prompt
 hydraz personas        # manage personas and default swarm
 hydraz mcp             # manage MCP server configuration
+hydraz clean           # clean up orphaned DevPod workspaces
 ```
 
 ## Prerequisites
@@ -142,7 +143,7 @@ Global config lives at `~/.config/hydraz/`. Session data and worktrees live at `
 
 ```bash
 npm install
-npm test               # 362 tests
+npm test               # 384 tests
 npm run test:watch     # watch mode
 npm run build          # compile TypeScript
 npm run typecheck      # type-check without emitting

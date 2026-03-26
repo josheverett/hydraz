@@ -27,7 +27,9 @@ export type EventType =
   | 'swarm.phase_changed'
   | 'artifact.created'
   | 'verification.passed'
-  | 'verification.failed';
+  | 'verification.failed'
+  | 'workspace.destroyed'
+  | 'workspace.preserved';
 
 export function createEvent(
   sessionId: string,
