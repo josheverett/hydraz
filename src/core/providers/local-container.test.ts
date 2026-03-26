@@ -3,6 +3,10 @@ import { LocalContainerProvider } from './local-container.js';
 import { createSession } from '../sessions/schema.js';
 import { createDefaultConfig } from '../config/schema.js';
 
+vi.mock('../repo/detect.js', () => ({
+  hasGitRemote: vi.fn(() => true),
+}));
+
 vi.mock('./devpod.js', () => ({
   checkDevPodAvailability: vi.fn(() => ({ available: true, version: 'v0.6.15' })),
   checkDockerAvailability: vi.fn(() => true),
@@ -15,6 +19,7 @@ vi.mock('./devpod.js', () => ({
   sshExec: vi.fn(),
 }));
 
+import { hasGitRemote } from '../repo/detect.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -36,6 +41,7 @@ const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
 const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const _mockSshExec = vi.mocked(sshExec);
+const mockHasGitRemote = vi.mocked(hasGitRemote);
 
 function makeSession(name: string = 'test-session') {
   return createSession({
@@ -53,6 +59,7 @@ beforeEach(() => {
   mockCheckDevPod.mockReturnValue({ available: true, version: 'v0.6.15' });
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
+  mockHasGitRemote.mockReturnValue(true);
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
 });
@@ -154,6 +161,15 @@ describe('LocalContainerProvider', () => {
       const config = createDefaultConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('devcontainer');
+    });
+
+    it('fails if no git remote is configured', () => {
+      mockHasGitRemote.mockReturnValue(false);
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow('remote');
     });
 
     it('tears down workspace if Claude Code is not found in the container', () => {

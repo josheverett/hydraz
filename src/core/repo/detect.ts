@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { basename, dirname, resolve } from 'node:path';
 
 export interface RepoInfo {
@@ -23,4 +24,17 @@ export function detectRepo(cwd?: string): RepoInfo | null {
   }
 
   return null;
+}
+
+export function hasGitRemote(repoRoot: string): boolean {
+  try {
+    const output = execFileSync('git', ['remote'], {
+      cwd: repoRoot,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    return output.trim().length > 0;
+  } catch {
+    return false;
+  }
 }

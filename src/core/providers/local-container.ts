@@ -15,6 +15,7 @@ import {
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
 } from './devpod.js';
+import { hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
   readonly type = 'local-container' as const;
@@ -44,6 +45,12 @@ export class LocalContainerProvider implements WorkspaceProvider {
     if (!hasDevcontainerJson(session.repoRoot)) {
       throw new Error(
         'Container mode requires a .devcontainer/devcontainer.json in the target repo',
+      );
+    }
+
+    if (!hasGitRemote(session.repoRoot)) {
+      throw new Error(
+        'Container mode requires a git remote. Work inside containers can only be delivered via push to a remote branch.',
       );
     }
 
