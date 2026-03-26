@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { registerAttachCommand } from './attach.js';
+import { registerCleanCommand } from './clean.js';
 import { registerConfigCommand } from './config.js';
 import { registerEventsCommand } from './events.js';
 import { registerMcpCommand } from './mcp.js';
@@ -23,4 +24,5 @@ export function registerCommands(program: Command): void {
   registerEventsCommand(program);
   registerPersonasCommand(program);
   registerMcpCommand(program);
+  registerCleanCommand(program);
 }

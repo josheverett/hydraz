@@ -13,6 +13,7 @@ const EXPECTED_COMMANDS = [
   'events',
   'personas',
   'mcp',
+  'clean',
 ] as const;
 
 describe('createProgram', () => {

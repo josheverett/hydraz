@@ -109,6 +109,7 @@ hydraz events          # show structured event history
 hydraz config          # configure defaults, auth, master prompt
 hydraz personas        # manage personas and default swarm
 hydraz mcp             # manage MCP server configuration
+hydraz clean           # clean up orphaned DevPod workspaces
 ```
 
 ## Prerequisites

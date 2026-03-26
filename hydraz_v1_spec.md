@@ -2,9 +2,9 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 0-15 complete. Phase 16 is next. 362 tests across 35 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local).
+**Status:** Phases 0-16 complete. 37 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
 
-**Next step:** Phase 16 — DevPod workspace cleanup and push verification. See the `[NEXT]` marker in the phase list below.
+**Next step:** Phase 17 (multi-executor backend support) is deferred until a second backend is needed. All v1 phases are complete.
 
 **Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
 
@@ -337,6 +337,7 @@ hydraz stop
 hydraz events
 hydraz personas
 hydraz mcp
+hydraz clean
 ```
 
 This should remain intentionally small.
@@ -412,6 +413,9 @@ Manage built-in and custom personas and choose the global default swarm.
 
 #### `hydraz mcp`
 Manage MCP server configuration and connectivity.
+
+#### `hydraz clean`
+Clean up orphaned DevPod workspaces from completed, stopped, or failed container sessions. Lists orphans with their session state and DevPod status, then prompts for confirmation before destroying. Supports `--force` to skip the confirmation prompt.
 
 ---
 
@@ -1713,7 +1717,7 @@ Cost: e2-standard-8 (8 vCPUs, 32GB RAM) = ~$0.27/hr on-demand. VMs auto-stop aft
 ### Important
 Phase 14's local container pipeline is the foundation. Cloud is "same thing, different host." If something breaks in cloud, debug locally first.
 
-## Phase 16: DevPod workspace cleanup and push verification [NEXT]
+## Phase 16: DevPod workspace cleanup and push verification [DONE]
 Completed container sessions leave DevPod workspaces running on GCP (costing ~$0.27/hr). Hydraz should verify work is safely pushed before cleanup, and clean up automatically after.
 
 ### Push verification before cleanup
