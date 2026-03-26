@@ -28,6 +28,7 @@ Supports local bare-metal execution, local container execution (Docker via DevPo
 - **Docker** (or OrbStack) — container runtime
 - **DevPod CLI** — workspace launcher (`devpod version` to verify)
 - A `.devcontainer/devcontainer.json` in the target repo (with Claude Code CLI included)
+- A **git remote** configured on the target repo — container mode delivers work via push to remote
 
 **Required for cloud mode (GCP):**
 - **gcloud CLI** — authenticated with Application Default Credentials
