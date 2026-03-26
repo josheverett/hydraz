@@ -31,6 +31,7 @@ export interface ExecutorResult {
   exitCode: number | null;
   signal: string | null;
   success: boolean;
+  stderr?: string;
   cost?: number;
   durationMs?: number;
   inputTokens?: number;
@@ -90,6 +91,7 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
 
   let lastResult: ParsedClaudeEvent | null = null;
   let buffer = '';
+  let stderrBuffer = '';
   let spawnError: Error | null = null;
 
   child.on('error', (err) => {
@@ -101,6 +103,12 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
       raw: { type: 'result' },
     });
   });
+
+  if (child.stderr) {
+    child.stderr.on('data', (data: Buffer) => {
+      stderrBuffer += data.toString();
+    });
+  }
 
   if (child.stdout) {
     child.stdout.on('data', (data: Buffer) => {
@@ -139,6 +147,7 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
         const result: ExecutorResult = {
           exitCode: code,
           signal: signal?.toString() ?? null,
+          stderr: stderrBuffer.trim() || undefined,
           success: code === 0,
           cost: lastResult?.cost,
           durationMs: lastResult?.durationMs,
@@ -172,15 +181,17 @@ export function mapExitToSessionState(result: ExecutorResult): {
     return { state: 'completed' };
   }
 
+  const stderrSuffix = result.stderr ? `\nstderr: ${result.stderr}` : '';
+
   if (result.signal) {
     return {
       state: 'failed',
-      message: `Claude Code process killed by signal: ${result.signal}`,
+      message: `Claude Code process killed by signal: ${result.signal}${stderrSuffix}`,
     };
   }
 
   return {
     state: 'failed',
-    message: `Claude Code process exited with code ${result.exitCode}`,
+    message: `Claude Code process exited with code ${result.exitCode}${stderrSuffix}`,
   };
 }

@@ -163,6 +163,13 @@ describe('createWorktreeInContainer', () => {
     const result = createWorktreeInContainer('my-ws', '/workspaces/my-ws', 'hydraz/fix-bug', 'session-123');
     expect(result).toContain('session-123');
   });
+
+  it('creates worktree outside the mounted repo root to avoid host pollution', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    const result = createWorktreeInContainer('my-ws', '/workspaces/my-ws', 'hydraz/fix-bug', 'session-123');
+    expect(result).not.toContain('/workspaces/my-ws');
+    expect(result).toMatch(/^\/tmp\/hydraz-worktrees\//);
+  });
 });
 
 describe('copyWorktreeIncludesInContainer', () => {
