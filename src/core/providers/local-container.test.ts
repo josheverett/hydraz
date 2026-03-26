@@ -16,6 +16,7 @@ vi.mock('./devpod.js', () => ({
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
   createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
   copyWorktreeIncludesInContainer: vi.fn(),
+  setupContainerGitSsh: vi.fn(),
   sshExec: vi.fn(),
 }));
 
