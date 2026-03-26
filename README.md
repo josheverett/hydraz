@@ -15,11 +15,24 @@
 
 Hydraz lets an engineer stand in a repository, launch a session, describe a task, and walk away while a strict 3-persona swarm operates autonomously in an isolated workspace — powered by Claude Code CLI under the hood.
 
+Supports local bare-metal execution, local container execution (Docker via DevPod), and cloud container execution (GCP via DevPod).
+
 ## Prerequisites
 
+**Required for all modes:**
 - **Node.js** >= 20.0.0
 - **Claude Code CLI** — must be installed and authenticated (`claude --version` to verify)
 - **Git** — required for workspace isolation via worktrees
+
+**Required for container mode (local or cloud):**
+- **Docker** (or OrbStack) — container runtime
+- **DevPod CLI** — workspace launcher (`devpod version` to verify)
+- A `.devcontainer/devcontainer.json` in the target repo (with Claude Code CLI included)
+
+**Required for cloud mode (GCP):**
+- **gcloud CLI** — authenticated with Application Default Credentials
+- A GCP project with Compute Engine API enabled and billing linked
+- DevPod GCP provider configured: `devpod provider add gcloud -o PROJECT=<id> -o ZONE=<zone> -o MACHINE_TYPE=e2-standard-8`
 
 ## Install
 
@@ -42,7 +55,7 @@ This opens the interactive console where you can start new sessions, attach to e
 
 ```bash
 hydraz run "fix the auth timeout regression"
-hydraz run "refactor the database connection pool to use async/await"
+hydraz run --container "refactor the database connection pool"
 hydraz run --session fix-auth --branch hydraz/fix-auth "fix the auth timeout"
 ```
 
@@ -69,8 +82,10 @@ hydraz mcp             # manage MCP server configuration
 ## How it works
 
 1. You submit a task
-2. Hydraz creates an isolated workspace (git worktree) on a session branch
-3. A 3-persona swarm runs autonomously using Claude Code CLI:
+2. Hydraz creates an isolated workspace on a session branch
+   - **Local:** git worktree on the host
+   - **Container:** DevPod workspace with git worktree inside the container
+3. A 3-persona swarm runs autonomously using Claude Code CLI (Opus 4.6):
    - **Planning** — the Architect decomposes the task
    - **Implementation** — the Implementer writes the code
    - **Verification** — the Verifier checks the work
@@ -78,18 +93,26 @@ hydraz mcp             # manage MCP server configuration
 
 ## Config
 
-Global config and session data live at `~/.hydraz/`:
+Global config lives at `~/.config/hydraz/`:
 
 ```
-~/.hydraz/
-  config.json          # defaults, auth mode, branch naming
+~/.config/hydraz/
+  config.json          # defaults, auth mode, branch naming, OAuth token
   master-prompt.md     # swarm coordination prompt
   personas/            # built-in + custom persona prompts
   mcp/servers.json     # global MCP server config
-  repos/               # per-repo session and workspace data
 ```
 
-No files are created in the target repository.
+Session data and worktrees live at `~/.hydraz/repos/<reponame>-<hash>/`.
+
+No Hydraz-generated files are created in the target repository.
+
+## Container auth
+
+For container mode, Claude Code needs a portable OAuth token (the host's browser-based auth doesn't transfer into containers):
+
+1. Run `claude setup-token` to generate a long-lived token
+2. Run `hydraz config` → Claude Code auth → Set OAuth token
 
 ## Personas
 
