@@ -143,7 +143,7 @@ Global config lives at `~/.config/hydraz/`. Session data and worktrees live at `
 
 ```bash
 npm install
-npm test               # 362 tests
+npm test               # 384 tests
 npm run test:watch     # watch mode
 npm run build          # compile TypeScript
 npm run typecheck      # type-check without emitting
