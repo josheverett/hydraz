@@ -15,10 +15,9 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
-  setupContainerGitSsh,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
-import { hasGitRemote } from '../repo/detect.js';
+import { getGitHubRepo, hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
   readonly type = 'local-container' as const;
@@ -58,6 +57,12 @@ export class LocalContainerProvider implements WorkspaceProvider {
       );
     }
 
+    if (!getGitHubRepo(session.repoRoot)) {
+      throw new Error(
+        'Container mode beta automation is currently GitHub-only. Configure `origin` to point at github.com and try again.',
+      );
+    }
+
     listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
 
     const workspaceName = `hydraz-${session.id}`;
@@ -68,8 +73,6 @@ export class LocalContainerProvider implements WorkspaceProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
-
-    setupContainerGitSsh(workspaceName);
 
     const claudeCheck = verifyClaudeInContainer(workspaceName);
     if (!claudeCheck.available) {

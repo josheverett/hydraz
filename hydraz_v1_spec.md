@@ -1639,16 +1639,15 @@ Hydraz v1 hardcodes `--model claude-opus-4-6` for all Claude Code sessions. This
 - Docker (or OrbStack) running on the host
 - DevPod CLI installed (`devpod version` to verify)
 - Target repo has a `.devcontainer/devcontainer.json`
-- Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. This matches every major cloud coding agent (Devin, Copilot Coding Agent, Claude Code Web, Kilo).
+- Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. For the initial beta, automated push/PR delivery is GitHub-only: `origin` must point at `github.com`.
 - Claude Code CLI available inside the container (repo's devcontainer responsibility)
 
 ### Container setup steps (automatic)
 After launching the DevPod workspace, Hydraz automatically:
-1. Adds GitHub's SSH host key to `~/.ssh/known_hosts` inside the container (via `ssh-keyscan`) — required because DevPod does not copy `known_hosts` from the host
-2. Verifies Claude Code CLI is callable inside the container
-3. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
-4. Revalidates and copies `.worktreeinclude` files into the worktree (symlink entries fail setup)
-5. Injects OAuth token via SSH for Claude Code auth
+1. Verifies Claude Code CLI is callable inside the container
+2. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
+3. Revalidates and copies `.worktreeinclude` files into the worktree (symlink entries fail setup)
+4. Injects Claude auth via SSH for the remote `claude` invocation
 
 ### Needs
 - `LocalContainerProvider` implementing `WorkspaceProvider`

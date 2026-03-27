@@ -5,6 +5,13 @@ import { createDefaultConfig } from '../config/schema.js';
 
 vi.mock('../repo/detect.js', () => ({
   hasGitRemote: vi.fn(() => true),
+  getGitHubRepo: vi.fn(() => ({
+    remoteName: 'origin',
+    remoteUrl: 'git@github.com:octocat/hello-world.git',
+    owner: 'octocat',
+    repo: 'hello-world',
+    httpsUrl: 'https://github.com/octocat/hello-world.git',
+  })),
 }));
 
 vi.mock('./worktree-include.js', () => ({
@@ -24,7 +31,7 @@ vi.mock('./devpod.js', () => ({
   sshExec: vi.fn(),
 }));
 
-import { hasGitRemote } from '../repo/detect.js';
+import { hasGitRemote, getGitHubRepo } from '../repo/detect.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -48,6 +55,7 @@ const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
+const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
 const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
 function makeSession(name: string = 'test-session') {
@@ -67,6 +75,13 @@ beforeEach(() => {
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
   mockHasGitRemote.mockReturnValue(true);
+  mockGetGitHubRepo.mockReturnValue({
+    remoteName: 'origin',
+    remoteUrl: 'git@github.com:octocat/hello-world.git',
+    owner: 'octocat',
+    repo: 'hello-world',
+    httpsUrl: 'https://github.com/octocat/hello-world.git',
+  });
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
@@ -201,6 +216,17 @@ describe('LocalContainerProvider', () => {
       const config = createDefaultConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('remote');
+    });
+
+    it('fails early when the repo remote is not supported for GitHub-only beta automation', () => {
+      mockGetGitHubRepo.mockReturnValue(null);
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub-only/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
     it('tears down workspace if Claude Code is not found in the container', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectRepo, hasGitRemote } from './detect.js';
+import { detectRepo, hasGitRemote, parseGitHubRemoteUrl } from './detect.js';
 
 describe('detectRepo', () => {
   it('detects the current repo from the repo root', () => {
@@ -33,5 +33,42 @@ describe('hasGitRemote', () => {
 
   it('returns false for a repo without a remote', () => {
     expect(hasGitRemote('/')).toBe(false);
+  });
+});
+
+describe('parseGitHubRemoteUrl', () => {
+  it('parses SSH scp-style GitHub remotes', () => {
+    expect(parseGitHubRemoteUrl('git@github.com:octocat/hello-world.git')).toEqual({
+      owner: 'octocat',
+      repo: 'hello-world',
+      httpsUrl: 'https://github.com/octocat/hello-world.git',
+      remoteUrl: 'git@github.com:octocat/hello-world.git',
+    });
+  });
+
+  it('parses HTTPS GitHub remotes', () => {
+    expect(parseGitHubRemoteUrl('https://github.com/octocat/hello-world')).toEqual({
+      owner: 'octocat',
+      repo: 'hello-world',
+      httpsUrl: 'https://github.com/octocat/hello-world.git',
+      remoteUrl: 'https://github.com/octocat/hello-world',
+    });
+  });
+
+  it('parses SSH URL GitHub remotes', () => {
+    expect(parseGitHubRemoteUrl('ssh://git@github.com/octocat/hello-world.git')).toEqual({
+      owner: 'octocat',
+      repo: 'hello-world',
+      httpsUrl: 'https://github.com/octocat/hello-world.git',
+      remoteUrl: 'ssh://git@github.com/octocat/hello-world.git',
+    });
+  });
+
+  it('returns null for non-GitHub remotes', () => {
+    expect(parseGitHubRemoteUrl('git@gitlab.com:octocat/hello-world.git')).toBeNull();
+  });
+
+  it('returns null for malformed GitHub remotes', () => {
+    expect(parseGitHubRemoteUrl('https://github.com/octocat')).toBeNull();
   });
 });

@@ -108,16 +108,6 @@ export function copyWorktreeIncludesInContainer(
   execFileSync('ssh', [`${workspaceName}.devpod`, command.join('\n')], EXEC_OPTIONS);
 }
 
-export function setupContainerGitSsh(workspaceName: string): void {
-  try {
-    execFileSync('ssh', [`${workspaceName}.devpod`,
-      'mkdir -p ~/.ssh && ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts 2>/dev/null',
-    ], EXEC_OPTIONS);
-  } catch {
-    // Non-fatal — push may still work via HTTPS or the repo may not use GitHub
-  }
-}
-
 export function verifyBranchPushed(
   workspaceName: string,
   worktreePath: string,
