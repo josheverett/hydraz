@@ -47,6 +47,9 @@ Container mode runs the swarm in an isolated Docker container (locally or on any
 claude setup-token
 hydraz config                               # → Claude Code auth → Set OAuth token
 
+# Configure GitHub delivery auth (beta container push/PR automation)
+hydraz config                               # → GitHub push/PR auth → Set GitHub token
+
 # For local containers
 devpod provider add docker
 

@@ -69,6 +69,14 @@ function makeSession(name: string = 'test-session') {
   });
 }
 
+function makeConfig(withGitHubToken: boolean = true) {
+  const config = createDefaultConfig();
+  if (withGitHubToken) {
+    config.github.token = 'github_pat_test';
+  }
+  return config;
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   mockCheckDevPod.mockReturnValue({ available: true, version: 'v0.6.15' });
@@ -121,7 +129,7 @@ describe('LocalContainerProvider', () => {
     it('launches devpod with the main repo root, not a worktree', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
@@ -132,7 +140,7 @@ describe('LocalContainerProvider', () => {
     it('creates worktree inside the container via SSH', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
@@ -147,7 +155,7 @@ describe('LocalContainerProvider', () => {
     it('copies .worktreeinclude files inside the container', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
@@ -169,7 +177,7 @@ describe('LocalContainerProvider', () => {
       });
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow(/symlink/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
@@ -181,7 +189,7 @@ describe('LocalContainerProvider', () => {
       mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/abc');
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       const workspace = provider.createWorkspace({ session, config });
 
@@ -194,7 +202,7 @@ describe('LocalContainerProvider', () => {
       mockCreateWorktreeInContainer.mockImplementation(() => { throw new Error('git failed'); });
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('git failed');
       expect(mockDevpodDelete).toHaveBeenCalled();
@@ -204,7 +212,7 @@ describe('LocalContainerProvider', () => {
       mockHasDevcontainer.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('devcontainer');
     });
@@ -213,7 +221,7 @@ describe('LocalContainerProvider', () => {
       mockHasGitRemote.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('remote');
     });
@@ -222,9 +230,19 @@ describe('LocalContainerProvider', () => {
       mockGetGitHubRepo.mockReturnValue(null);
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub-only/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
+    });
+
+    it('fails early when GitHub auth is not configured', () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig(false);
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub token/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
@@ -233,7 +251,7 @@ describe('LocalContainerProvider', () => {
       mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('Claude Code');
       expect(mockDevpodDelete).toHaveBeenCalled();

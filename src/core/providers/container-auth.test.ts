@@ -25,6 +25,15 @@ describe('prepareContainerAuthEnv', () => {
     const env = prepareContainerAuthEnv(config);
     expect(env['ANTHROPIC_API_KEY']).toBe('sk-ant-api-test');
   });
+
+  it('includes GitHub HTTPS git auth env when a GitHub token is configured', () => {
+    const config = createDefaultConfig();
+    config.github.token = 'github_pat_test';
+    const env = prepareContainerAuthEnv(config);
+    expect(env['GIT_TERMINAL_PROMPT']).toBe('0');
+    expect(env['GIT_CONFIG_VALUE_0']).toBe('git@github.com:');
+    expect(env['GIT_CONFIG_KEY_2']).toBe('http.https://github.com/.extraheader');
+  });
 });
 
 describe('validateContainerAuth', () => {

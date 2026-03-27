@@ -14,6 +14,10 @@ export interface ClaudeAuthConfig {
   apiKey?: string;
 }
 
+export interface GitHubAuthConfig {
+  token?: string;
+}
+
 export interface RetentionConfig {
   keepTranscripts: boolean;
   keepTestLogs: boolean;
@@ -25,6 +29,7 @@ export interface HydrazConfig {
   defaultPersonas: [string, string, string];
   branchNaming: BranchNamingConfig;
   claudeAuth: ClaudeAuthConfig;
+  github: GitHubAuthConfig;
   retention: RetentionConfig;
   displayVerbosity: DisplayVerbosity;
 }
@@ -57,6 +62,7 @@ export function createDefaultConfig(): HydrazConfig {
     claudeAuth: {
       mode: 'claude-ai-oauth',
     },
+    github: {},
     retention: {
       keepTranscripts: false,
       keepTestLogs: false,
@@ -99,6 +105,10 @@ export function validateConfig(data: unknown): HydrazConfig {
     apiKey: expectOptionalString(val as Record<string, unknown>, 'apiKey'),
   }));
 
+  const github = expectObject(obj, 'github', defaults.github, (val) => ({
+    token: expectOptionalString(val as Record<string, unknown>, 'token'),
+  }));
+
   const retention = expectObject(obj, 'retention', defaults.retention, (val) => ({
     keepTranscripts: expectBoolean(
       val as Record<string, unknown>,
@@ -119,7 +129,16 @@ export function validateConfig(data: unknown): HydrazConfig {
     defaults.displayVerbosity,
   );
 
-  return { version, executionTarget, defaultPersonas, branchNaming, claudeAuth, retention, displayVerbosity };
+  return {
+    version,
+    executionTarget,
+    defaultPersonas,
+    branchNaming,
+    claudeAuth,
+    github,
+    retention,
+    displayVerbosity,
+  };
 }
 
 export class ConfigValidationError extends Error {

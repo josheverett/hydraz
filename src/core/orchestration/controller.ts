@@ -18,8 +18,9 @@ import {
 import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
+import { finalizeGitHubContainerDelivery } from '../github/delivery.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
-import { verifyBranchPushed } from '../providers/devpod.js';
+import { getGitHubAutomationReadiness } from '../github/requirements.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 
 export interface ControllerCallbacks {
@@ -36,36 +37,6 @@ export interface RunningSession {
 }
 
 const activeSessions = new Map<string, RunningSession>();
-
-export interface ContainerCleanupResult {
-  action: 'destroyed' | 'preserved';
-  message: string;
-}
-
-export function cleanupContainerWorkspace(
-  sessionId: string,
-  workspace: WorkspaceInfo,
-  branchName: string,
-  repoRoot: string,
-  provider: WorkspaceProvider,
-): ContainerCleanupResult {
-  const workspaceName = `hydraz-${sessionId}`;
-  const pushed = verifyBranchPushed(workspaceName, workspace.directory, branchName);
-
-  if (pushed) {
-    provider.destroyWorkspace(repoRoot, workspace);
-    return {
-      action: 'destroyed',
-      message: 'Workspace cleaned up after verified push',
-    };
-  }
-
-  return {
-    action: 'preserved',
-    message: `Branch "${branchName}" not found on remote. ` +
-      `Workspace preserved for recovery: devpod ssh ${workspaceName}`,
-  };
-}
 
 export function getProvider(target: ExecutionTarget): WorkspaceProvider {
   switch (target) {
@@ -118,6 +89,16 @@ export async function startSession(
     const containerAuth = validateContainerAuth(config);
     if (!containerAuth.valid) {
       const msg = containerAuth.error ?? 'Container auth not configured';
+      transitionState(repoRoot, sessionId, 'blocked', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.blocked', msg);
+      callbacks.onError?.(msg);
+      return;
+    }
+
+    const gitHubAutomation = getGitHubAutomationReadiness(config, repoRoot);
+    if (!gitHubAutomation.ok) {
+      const msg = gitHubAutomation.error ?? 'GitHub automation is not configured';
       transitionState(repoRoot, sessionId, 'blocked', msg);
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.blocked', msg);
@@ -199,8 +180,39 @@ export async function startSession(
   activeSessions.delete(sessionId);
 
   const currentSession = loadSession(repoRoot, sessionId);
+  let stateMapping: ReturnType<typeof mapExitToSessionState> | null = null;
   if (!isTerminalState(currentSession.state)) {
-    const stateMapping = mapExitToSessionState(result);
+    stateMapping = mapExitToSessionState(result);
+  }
+
+  let containerDelivery: Awaited<ReturnType<typeof finalizeGitHubContainerDelivery>> | null = null;
+  if (session.executionTarget === 'local-container' && config.github.token) {
+    try {
+      containerDelivery = await finalizeGitHubContainerDelivery({
+        session,
+        workspace,
+        repoRoot,
+        provider,
+        token: config.github.token,
+        createPullRequest: stateMapping?.state === 'completed',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      containerDelivery = {
+        action: 'preserved',
+        message: `Workspace preserved after GitHub delivery failure: ${message}`,
+      };
+    }
+
+    if (stateMapping?.state === 'completed' && containerDelivery.action !== 'destroyed') {
+      stateMapping = {
+        state: 'failed',
+        message: containerDelivery.message,
+      };
+    }
+  }
+
+  if (stateMapping) {
     transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
     callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
 
@@ -211,19 +223,18 @@ export async function startSession(
     }
   }
 
-  if (session.executionTarget === 'local-container') {
-    const cleanup = cleanupContainerWorkspace(
-      session.id, workspace, session.branchName, repoRoot, provider,
-    );
+  if (session.executionTarget === 'local-container' && containerDelivery) {
+    if (containerDelivery.prUrl) {
+      emitEvent('pull_request.created', `Pull request: ${containerDelivery.prUrl}`);
+    }
 
-    if (cleanup.action === 'destroyed') {
-      emitEvent('workspace.destroyed', cleanup.message);
+    if (containerDelivery.action === 'destroyed') {
+      emitEvent('workspace.destroyed', containerDelivery.message);
     } else {
-      emitEvent('workspace.preserved', cleanup.message);
+      emitEvent('workspace.preserved', containerDelivery.message);
       callbacks.onError?.(
-        `Warning: Branch "${session.branchName}" was not found on the remote. ` +
-        `The DevPod workspace has been preserved.\n` +
-        `To access and manually push: devpod ssh hydraz-${session.id}`);
+        `${containerDelivery.message}\n` +
+        `To access and manually recover: devpod ssh hydraz-${session.id}`);
     }
   }
 }

@@ -1641,13 +1641,14 @@ Hydraz v1 hardcodes `--model claude-opus-4-6` for all Claude Code sessions. This
 - Target repo has a `.devcontainer/devcontainer.json`
 - Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. For the initial beta, automated push/PR delivery is GitHub-only: `origin` must point at `github.com`.
 - Claude Code CLI available inside the container (repo's devcontainer responsibility)
+- A GitHub token configured in Hydraz for beta automated push/PR delivery
 
 ### Container setup steps (automatic)
 After launching the DevPod workspace, Hydraz automatically:
 1. Verifies Claude Code CLI is callable inside the container
 2. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
 3. Revalidates and copies `.worktreeinclude` files into the worktree (symlink entries fail setup)
-4. Injects Claude auth via SSH for the remote `claude` invocation
+4. Injects Claude auth and ephemeral GitHub HTTPS git auth into the remote `claude` invocation
 
 ### Needs
 - `LocalContainerProvider` implementing `WorkspaceProvider`
