@@ -148,6 +148,20 @@ describe('LocalContainerProvider', () => {
       );
     });
 
+    it('fails before launching devpod when .worktreeinclude validation rejects a symlink', () => {
+      mockListCopyableIncludes.mockImplementation(() => {
+        throw new Error('Refusing to copy symlink entry from .worktreeinclude: agent/.env');
+      });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = createDefaultConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/symlink/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockVerifyClaude).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
+    });
+
     it('returns container-internal worktree path as directory', () => {
       mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/abc');
       const provider = new LocalContainerProvider();

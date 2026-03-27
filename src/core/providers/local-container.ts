@@ -44,6 +44,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
   createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo {
     const { session } = params;
+    const includeDestinationRoot = join(session.repoRoot, '.hydraz-container-worktree');
 
     if (!hasDevcontainerJson(session.repoRoot)) {
       throw new Error(
@@ -56,6 +57,8 @@ export class LocalContainerProvider implements WorkspaceProvider {
         'Container mode requires a git remote. Work inside containers can only be delivered via push to a remote branch.',
       );
     }
+
+    listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
 
     const workspaceName = `hydraz-${session.id}`;
 
@@ -75,10 +78,6 @@ export class LocalContainerProvider implements WorkspaceProvider {
     }
 
     const containerRepoPath = `/workspaces/${workspaceName}`;
-    const safeIncludes = listCopyableWorktreeIncludes(
-      session.repoRoot,
-      join(session.repoRoot, '.hydraz-container-worktree'),
-    );
     let worktreePath: string;
 
     try {
@@ -88,6 +87,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
         session.branchName,
         session.id,
       );
+      const safeIncludes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
       copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {
       devpodDelete(workspaceName);

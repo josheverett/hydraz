@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -53,6 +53,24 @@ describe('createWorktree', () => {
 
     const result = createWorktree(testRepo, 'session-1', 'hydraz/test');
     expect(existsSync(join(result.directory, '.env'))).toBe(true);
+  });
+
+  it('fails before creating a worktree when a listed entry is a symlink', () => {
+    if (process.platform === 'win32') return;
+
+    writeFileSync(join(testRepo, '.env.real'), 'SECRET=123');
+    symlinkSync(join(testRepo, '.env.real'), join(testRepo, '.env'));
+    writeFileSync(join(testRepo, '.worktreeinclude'), '.env\n');
+    execSync('git add .worktreeinclude .env.real .env && git commit -m "add symlink include"', {
+      cwd: testRepo,
+      stdio: 'pipe',
+    });
+
+    const expectedDir = join(resolveRepoDataPaths(testRepo).workspacesDir, 'session-1');
+
+    expect(() => createWorktree(testRepo, 'session-1', 'hydraz/test')).toThrow(/symlink/i);
+    expect(existsSync(expectedDir)).toBe(false);
+    expect(execSync('git worktree list --porcelain', { cwd: testRepo, encoding: 'utf-8' })).not.toContain(expectedDir);
   });
 
   it('throws on invalid repo root', () => {

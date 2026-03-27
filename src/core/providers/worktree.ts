@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { copyWorktreeIncludes } from './worktree-include.js';
+import { copyWorktreeIncludes, listCopyableWorktreeIncludes } from './worktree-include.js';
 import { getWorkspaceDir } from './provider.js';
 
 export interface WorktreeResult {
@@ -14,6 +14,7 @@ export function createWorktree(
   branchName: string,
 ): WorktreeResult {
   const workDir = getWorkspaceDir(repoRoot, sessionId);
+  listCopyableWorktreeIncludes(repoRoot, workDir);
   mkdirSync(workDir, { recursive: true });
 
   const branchExists = gitBranchExists(repoRoot, branchName);

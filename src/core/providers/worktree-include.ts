@@ -1,5 +1,12 @@
-import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync, mkdirSync, lstatSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
+
+export class WorktreeIncludeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorktreeIncludeError';
+  }
+}
 
 export function parseWorktreeInclude(repoRoot: string): string[] {
   const includeFile = join(repoRoot, '.worktreeinclude');
@@ -34,6 +41,17 @@ export function listCopyableWorktreeIncludes(repoRoot: string, worktreeDir: stri
 
     if (!existsSync(source)) {
       continue;
+    }
+
+    try {
+      if (lstatSync(source).isSymbolicLink()) {
+        throw new WorktreeIncludeError(`Refusing to copy symlink entry from .worktreeinclude: ${file}`);
+      }
+    } catch (err) {
+      if (err instanceof WorktreeIncludeError) {
+        throw err;
+      }
+      throw new WorktreeIncludeError(`Unable to verify .worktreeinclude entry: ${file}`);
     }
 
     copyable.push(file);

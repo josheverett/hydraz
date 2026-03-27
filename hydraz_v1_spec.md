@@ -1563,6 +1563,8 @@ Hydraz supports the `.worktreeinclude` convention — a community standard used 
 
 Hydraz implements this independently because Hydraz creates worktrees itself (via `git worktree add`), so Claude Code's native `.worktreeinclude` handling never fires. Hydraz's `copyWorktreeIncludes` runs during worktree creation and copies listed files from the main checkout into the new worktree.
 
+For security, Hydraz treats `.worktreeinclude` as a fail-closed allowlist of regular files. If any listed entry resolves to a symlink, Hydraz aborts worktree setup rather than dereferencing it into the new worktree.
+
 This is critical for container mode: the worktree is mounted into the DevPod container, so files copied by `.worktreeinclude` (e.g. `.env` files) are available inside the container at `/workspaces/<name>/`. Without this, the agent would have no access to repo env files inside the container.
 
 ### Docker access inside containers
@@ -1609,9 +1611,10 @@ This divergence is correct and intentional. Container mode (both local-container
 A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface:
 1. Starts a DevPod workspace with the **main repo root** as the source (`devpod up <repo-root> --ide none`)
 2. SSHs into the container and creates the git worktree (`git worktree add -b <branch> <path>`)
-3. SSHs into the container and copies `.worktreeinclude` files from the mounted repo root into the worktree
-4. Returns a `WorkspaceInfo` with the container-internal worktree path
-5. `destroyWorkspace` removes the worktree inside the container (via SSH), then calls `devpod delete`
+3. Host-side prevalidates `.worktreeinclude` entries, rejecting symlinks before any container-side copy
+4. SSHs into the container and copies `.worktreeinclude` files from the mounted repo root into the worktree
+5. Returns a `WorkspaceInfo` with the container-internal worktree path
+6. `destroyWorkspace` removes the worktree inside the container (via SSH), then calls `devpod delete`
 
 ### Architecture: how Claude executes inside the container
 The executor spawns Claude Code CLI inside the container via SSH rather than on the host:
@@ -1644,7 +1647,7 @@ After launching the DevPod workspace, Hydraz automatically:
 1. Adds GitHub's SSH host key to `~/.ssh/known_hosts` inside the container (via `ssh-keyscan`) — required because DevPod does not copy `known_hosts` from the host
 2. Verifies Claude Code CLI is callable inside the container
 3. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
-4. Copies `.worktreeinclude` files into the worktree
+4. Revalidates and copies `.worktreeinclude` files into the worktree (symlink entries fail setup)
 5. Injects OAuth token via SSH for Claude Code auth
 
 ### Needs

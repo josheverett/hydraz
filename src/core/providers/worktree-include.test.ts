@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -115,5 +115,18 @@ describe('copyWorktreeIncludes', () => {
     writeFileSync(join(repoRoot, '.worktreeinclude'), '../escape\n');
     const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
     expect(copied).toEqual([]);
+  });
+
+  it('rejects symlink entries even when they point inside the repo', () => {
+    if (process.platform === 'win32') return;
+
+    mkdirSync(join(repoRoot, 'agent'), { recursive: true });
+    writeFileSync(join(repoRoot, 'agent', 'source.env'), 'A=1');
+    symlinkSync(join(repoRoot, 'agent', 'source.env'), join(repoRoot, 'agent', '.env'));
+    writeFileSync(join(repoRoot, '.worktreeinclude'), 'agent/.env\n');
+
+    expect(() => listCopyableWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/symlink/i);
+    expect(() => copyWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/symlink/i);
+    expect(existsSync(join(worktreeDir, 'agent', '.env'))).toBe(false);
   });
 });
