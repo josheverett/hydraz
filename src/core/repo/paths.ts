@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import { isValidSessionId, SessionError } from '../sessions/schema.js';
 
 export interface RepoDataPaths {
   hydrazHome: string;
@@ -39,9 +40,15 @@ export function resolveRepoDataPaths(repoRoot: string): RepoDataPaths {
 }
 
 export function getSessionDir(repoRoot: string, sessionId: string): string {
+  if (!isValidSessionId(sessionId)) {
+    throw new SessionError(`Invalid session id: "${sessionId}"`);
+  }
   return join(resolveRepoDataPaths(repoRoot).sessionsDir, sessionId);
 }
 
 export function getWorkspaceDir(repoRoot: string, sessionId: string): string {
+  if (!isValidSessionId(sessionId)) {
+    throw new SessionError(`Invalid session id: "${sessionId}"`);
+  }
   return join(resolveRepoDataPaths(repoRoot).workspacesDir, sessionId);
 }

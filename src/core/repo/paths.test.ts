@@ -67,6 +67,10 @@ describe('getSessionDir', () => {
     expect(dir).toContain('myrepo-');
     expect(dir).toContain('sessions/sess-123');
   });
+
+  it('rejects session ids that are not safe path segments', () => {
+    expect(() => getSessionDir('/tmp/myrepo', '../escape')).toThrow();
+  });
 });
 
 describe('getWorkspaceDir', () => {
@@ -74,5 +78,9 @@ describe('getWorkspaceDir', () => {
     const dir = getWorkspaceDir('/tmp/myrepo', 'sess-456');
     expect(dir).toContain('myrepo-');
     expect(dir).toContain('workspaces/sess-456');
+  });
+
+  it('rejects workspace ids that are not safe path segments', () => {
+    expect(() => getWorkspaceDir('/tmp/myrepo', '../../tmp/outside')).toThrow();
   });
 });

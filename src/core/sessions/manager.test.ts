@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -40,6 +40,16 @@ function makeSession(name: string = 'test-session') {
     executionTarget: 'local',
     task: 'Fix the thing',
   });
+}
+
+function tamperSessionFile(
+  sessionId: string,
+  mutate: (data: Record<string, unknown>) => void,
+) {
+  const sessionFile = join(getSessionDir(repoRoot, sessionId), 'session.json');
+  const data = JSON.parse(readFileSync(sessionFile, 'utf-8')) as Record<string, unknown>;
+  mutate(data);
+  writeFileSync(sessionFile, JSON.stringify(data, null, 2) + '\n');
 }
 
 describe('initRepoState', () => {
@@ -105,6 +115,34 @@ describe('loadSession', () => {
 
   it('throws for non-existent session', () => {
     expect(() => loadSession(repoRoot, 'nonexistent')).toThrow(SessionError);
+  });
+
+  it('rejects a session file whose stored id does not match its directory', () => {
+    const session = makeSession();
+    tamperSessionFile(session.id, (data) => {
+      data['id'] = '00000000-0000-0000-0000-000000000000';
+    });
+
+    expect(() => loadSession(repoRoot, session.id)).toThrow(SessionError);
+  });
+
+  it('rejects a session file whose stored repoRoot does not match the current repo', () => {
+    const session = makeSession();
+    tamperSessionFile(session.id, (data) => {
+      data['repoRoot'] = '/tmp/other-repo';
+    });
+
+    expect(() => loadSession(repoRoot, session.id)).toThrow(SessionError);
+  });
+});
+
+describe('saveSession', () => {
+  it('rejects saving a session under a different repo root', () => {
+    const session = makeSession();
+    const loaded = loadSession(repoRoot, session.id);
+    loaded.repoRoot = '/tmp/other-repo';
+
+    expect(() => saveSession(repoRoot, loaded)).toThrow(SessionError);
   });
 });
 
@@ -213,6 +251,30 @@ describe('listSessions', () => {
 
     const sessions = listSessions(repoRoot);
     expect(sessions[0].name).toBe('session-a');
+  });
+
+  it('skips session files whose stored id does not match the containing directory', () => {
+    makeSession('valid-session');
+    const tampered = makeSession('tampered-session');
+    tamperSessionFile(tampered.id, (data) => {
+      data['id'] = '11111111-1111-1111-1111-111111111111';
+    });
+
+    const sessions = listSessions(repoRoot);
+    expect(sessions.map((s) => s.name)).toContain('valid-session');
+    expect(sessions.map((s) => s.name)).not.toContain('tampered-session');
+  });
+
+  it('skips session files whose stored repoRoot does not match the current repo', () => {
+    makeSession('valid-session');
+    const tampered = makeSession('wrong-repo-session');
+    tamperSessionFile(tampered.id, (data) => {
+      data['repoRoot'] = '/tmp/other-repo';
+    });
+
+    const sessions = listSessions(repoRoot);
+    expect(sessions.map((s) => s.name)).toContain('valid-session');
+    expect(sessions.map((s) => s.name)).not.toContain('wrong-repo-session');
   });
 });
 

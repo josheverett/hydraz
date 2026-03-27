@@ -67,6 +67,12 @@ export interface SessionMetadata {
   failureMessage?: string;
 }
 
+const SAFE_SESSION_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+export function isValidSessionId(id: string): boolean {
+  return SAFE_SESSION_ID.test(id) && id.length <= 128;
+}
+
 export function createSession(params: {
   name: string;
   repoRoot: string;

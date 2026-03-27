@@ -1849,6 +1849,7 @@ These should be enforced early.
 - auth source must be explicit
 - secrets must not leak into repo-local session state
 - session should know which auth mode it used, without storing raw secrets
+- stored session metadata must be bound to its containing session directory and current repo; tampered `id` or `repoRoot` values are rejected
 
 ---
 
