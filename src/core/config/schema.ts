@@ -213,5 +213,8 @@ function expectPersonasTuple(
       );
     }
   }
+  if (new Set(val).size !== 3) {
+    throw new ConfigValidationError('"defaultPersonas" must contain 3 distinct personas');
+  }
   return val as [string, string, string];
 }

@@ -6,6 +6,7 @@ import {
   addCustomPersona,
   removeCustomPersona,
   isBuiltIn,
+  isValidPersonaName,
   PersonaError,
   validateSwarmSelection,
 } from '../../core/personas/index.js';
@@ -130,7 +131,7 @@ async function addPersona(): Promise<void> {
   const name = await input({
     message: 'Persona name (lowercase, hyphens allowed)',
     validate: (val) => {
-      if (/^[a-z][a-z0-9-]*[a-z0-9]$/.test(val) && val.length >= 2 && val.length <= 64) {
+      if (isValidPersonaName(val)) {
         return true;
       }
       return 'Use 2-64 characters: lowercase letters, numbers, and hyphens.';
