@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -48,6 +48,13 @@ describe('global MCP config', () => {
     const reloaded = loadGlobalMcpConfig(configDir);
     expect(reloaded.servers).toHaveLength(1);
     expect(reloaded.servers[0].name).toBe('github');
+  });
+
+  it('gracefully handles malformed servers.json', () => {
+    const paths = resolveConfigPaths(configDir);
+    writeFileSync(paths.mcpServersFile, '{ "servers": "not-an-array" }', { mode: 0o600 });
+    const config = loadGlobalMcpConfig(configDir);
+    expect(config.servers).toEqual([]);
   });
 
   it('writes global MCP config with restrictive permissions on POSIX', () => {

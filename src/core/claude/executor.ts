@@ -50,13 +50,38 @@ export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
   ];
 }
 
+const SAFE_ENV_NAMES = new Set([
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL',
+  'LANG', 'TERM', 'COLORTERM',
+  'TMPDIR', 'TMP', 'TEMP',
+  'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
+  'EDITOR', 'VISUAL',
+  'SSH_AUTH_SOCK', 'SSH_AGENT_PID', 'GPG_TTY',
+  'HOSTNAME', 'SHLVL', 'PWD', 'OLDPWD',
+  'NO_COLOR', 'FORCE_COLOR',
+  'NODE_ENV',
+]);
+
+const SAFE_ENV_PREFIXES = ['LC_'];
+
+function filterSafeEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const filtered: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    if (SAFE_ENV_NAMES.has(key) || SAFE_ENV_PREFIXES.some((p) => key.startsWith(p))) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 export function buildClaudeEnv(
   config: HydrazConfig,
   workingDirectory: string,
 ): Record<string, string> {
   const claudeEnv = prepareClaudeEnv(config);
   return {
-    ...process.env as Record<string, string>,
+    ...filterSafeEnv(process.env),
     ...claudeEnv,
     HYDRAZ_SESSION: 'true',
     HYDRAZ_WORKSPACE: workingDirectory,

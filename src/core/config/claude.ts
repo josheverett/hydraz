@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 export interface ClaudeCheckResult {
   available: boolean;
@@ -14,7 +14,7 @@ export function parseClaudeVersion(output: string): string | null {
 
 export function checkClaudeAvailability(): ClaudeCheckResult {
   try {
-    const output = execSync('claude --version', {
+    const output = execFileSync('claude', ['--version'], {
       encoding: 'utf-8',
       timeout: 10_000,
       stdio: ['pipe', 'pipe', 'pipe'],

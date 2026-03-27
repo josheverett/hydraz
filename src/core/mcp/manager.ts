@@ -2,14 +2,14 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { resolveConfigPaths } from '../config/paths.js';
 import { resolveRepoDataPaths } from '../repo/paths.js';
-import { createDefaultMcpConfig, type McpConfig } from './schema.js';
+import { createDefaultMcpConfig, validateMcpConfig, type McpConfig } from './schema.js';
 
 export function loadGlobalMcpConfig(configDir?: string): McpConfig {
   const paths = resolveConfigPaths(configDir);
   if (!existsSync(paths.mcpServersFile)) {
     return createDefaultMcpConfig();
   }
-  return JSON.parse(readFileSync(paths.mcpServersFile, 'utf-8')) as McpConfig;
+  return validateMcpConfig(JSON.parse(readFileSync(paths.mcpServersFile, 'utf-8')));
 }
 
 export function saveGlobalMcpConfig(config: McpConfig, configDir?: string): void {
@@ -23,7 +23,7 @@ export function loadRepoMcpConfig(repoRoot: string): McpConfig {
   if (!existsSync(paths.repoMcpFile)) {
     return createDefaultMcpConfig();
   }
-  return JSON.parse(readFileSync(paths.repoMcpFile, 'utf-8')) as McpConfig;
+  return validateMcpConfig(JSON.parse(readFileSync(paths.repoMcpFile, 'utf-8')));
 }
 
 export function saveRepoMcpConfig(repoRoot: string, config: McpConfig): void {

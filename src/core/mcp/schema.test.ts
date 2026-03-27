@@ -5,6 +5,7 @@ import {
   addServer,
   removeServer,
   toggleServer,
+  validateMcpConfig,
   McpError,
 } from './schema.js';
 
@@ -99,5 +100,65 @@ describe('findServer', () => {
 
   it('returns undefined for missing server', () => {
     expect(findServer(createDefaultMcpConfig(), 'nope')).toBeUndefined();
+  });
+});
+
+describe('validateMcpConfig', () => {
+  it('returns default for non-object input', () => {
+    expect(validateMcpConfig(null).servers).toEqual([]);
+    expect(validateMcpConfig('string').servers).toEqual([]);
+    expect(validateMcpConfig(42).servers).toEqual([]);
+    expect(validateMcpConfig([]).servers).toEqual([]);
+  });
+
+  it('returns default when servers is not an array', () => {
+    expect(validateMcpConfig({ servers: 'not-an-array' }).servers).toEqual([]);
+    expect(validateMcpConfig({}).servers).toEqual([]);
+  });
+
+  it('filters out entries with missing required fields', () => {
+    const data = {
+      servers: [
+        { name: 'valid', command: 'cmd', enabled: true },
+        { name: 'no-command', enabled: true },
+        { command: 'no-name', enabled: true },
+        { name: 'no-enabled', command: 'cmd' },
+      ],
+    };
+    const config = validateMcpConfig(data);
+    expect(config.servers).toHaveLength(1);
+    expect(config.servers[0].name).toBe('valid');
+  });
+
+  it('preserves valid server entries with optional fields', () => {
+    const data = {
+      servers: [{
+        name: 'full',
+        command: 'npx',
+        args: ['@mcp/server'],
+        env: { API_KEY: 'abc' },
+        enabled: true,
+      }],
+    };
+    const config = validateMcpConfig(data);
+    expect(config.servers).toHaveLength(1);
+    expect(config.servers[0].args).toEqual(['@mcp/server']);
+    expect(config.servers[0].env).toEqual({ API_KEY: 'abc' });
+  });
+
+  it('drops invalid optional fields without rejecting the entry', () => {
+    const data = {
+      servers: [{
+        name: 'partial',
+        command: 'cmd',
+        args: 'not-an-array',
+        env: 'not-an-object',
+        enabled: false,
+      }],
+    };
+    const config = validateMcpConfig(data);
+    expect(config.servers).toHaveLength(1);
+    expect(config.servers[0].args).toBeUndefined();
+    expect(config.servers[0].env).toBeUndefined();
   });
 });

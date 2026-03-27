@@ -1528,7 +1528,7 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 - backward compatibility or clean migration
 
 ## Phase 13: CI and PR checks [DONE]
-Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 407+ tests but no automation enforcing they pass before merge.
+Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 417+ tests but no automation enforcing they pass before merge.
 
 ### Needs
 - GitHub Actions workflow for PR checks
