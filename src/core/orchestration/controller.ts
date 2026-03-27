@@ -12,6 +12,7 @@ import {
   saveSession,
   transitionState,
   isTerminalState,
+  RESUMABLE_STATES,
   type SessionMetadata,
 } from '../sessions/index.js';
 import { LocalProvider } from '../providers/local.js';
@@ -256,10 +257,15 @@ export async function resumeSession(
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
 ): Promise<void> {
+  if (isSessionRunning(sessionId)) {
+    callbacks.onError?.('Cannot resume: session is currently running.');
+    return;
+  }
+
   const session = loadSession(repoRoot, sessionId);
 
-  if (['completed'].includes(session.state)) {
-    callbacks.onError?.('Cannot resume a completed session.');
+  if (!(RESUMABLE_STATES as readonly string[]).includes(session.state)) {
+    callbacks.onError?.(`Cannot resume a session in "${session.state}" state.`);
     return;
   }
 
@@ -267,9 +273,7 @@ export async function resumeSession(
   appendEvent(repoRoot, event);
   callbacks.onEvent?.('session.attached', `Resuming session "${session.name}"`);
 
-  session.state = 'created';
-  session.updatedAt = new Date().toISOString();
-  saveSession(repoRoot, session);
+  transitionState(repoRoot, sessionId, 'created');
 
   await startSession(sessionId, repoRoot, callbacks);
 }

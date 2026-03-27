@@ -4,6 +4,7 @@ export {
   type ArtifactFile,
   ACTIVE_STATES,
   TERMINAL_STATES,
+  RESUMABLE_STATES,
   VALID_TRANSITIONS,
   ARTIFACT_FILES,
   createSession,

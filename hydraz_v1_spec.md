@@ -570,6 +570,8 @@ The v1 state machine:
 
 `queued` was dropped for v1 (no queue system). `paused` was dropped — interrupted sessions stay in their last active state and `hydraz resume` picks up.
 
+Terminal states `stopped`, `blocked`, and `failed` have a single valid transition back to `created` (used by `hydraz resume`). `completed` has no outgoing transitions. `resumeSession` uses `transitionState` (not direct mutation), checks `RESUMABLE_STATES`, and rejects active or completed sessions.
+
 The CLI exposes these through `status` and `events`.
 
 ---
@@ -1526,7 +1528,7 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 - backward compatibility or clean migration
 
 ## Phase 13: CI and PR checks [DONE]
-Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 400+ tests but no automation enforcing they pass before merge.
+Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 407+ tests but no automation enforcing they pass before merge.
 
 ### Needs
 - GitHub Actions workflow for PR checks

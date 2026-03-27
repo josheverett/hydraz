@@ -34,10 +34,12 @@ export const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = 
   implementing: ['verifying', 'completed', 'blocked', 'stopped', 'failed'],
   verifying: ['completed', 'implementing', 'blocked', 'stopped', 'failed'],
   completed: [],
-  blocked: [],
-  stopped: [],
-  failed: [],
+  blocked: ['created'],
+  stopped: ['created'],
+  failed: ['created'],
 };
+
+export const RESUMABLE_STATES: readonly SessionState[] = ['stopped', 'blocked', 'failed'];
 
 export const ARTIFACT_FILES = [
   'intake.md',

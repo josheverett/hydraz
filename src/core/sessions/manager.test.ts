@@ -148,6 +148,37 @@ describe('transitionState', () => {
     const sessionFile = join(getSessionDir(repoRoot, session.id), 'session.json');
     expect(statSync(sessionFile).mode & 0o777).toBe(0o600);
   });
+
+  it('allows transition from stopped to created (for resume)', () => {
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'stopped');
+    const updated = transitionState(repoRoot, session.id, 'created');
+    expect(updated.state).toBe('created');
+  });
+
+  it('allows transition from blocked to created (for resume)', () => {
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'blocked');
+    const updated = transitionState(repoRoot, session.id, 'created');
+    expect(updated.state).toBe('created');
+  });
+
+  it('allows transition from failed to created (for resume)', () => {
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'failed');
+    const updated = transitionState(repoRoot, session.id, 'created');
+    expect(updated.state).toBe('created');
+  });
+
+  it('rejects transition from completed to created', () => {
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'planning');
+    transitionState(repoRoot, session.id, 'completed');
+    expect(() => transitionState(repoRoot, session.id, 'created')).toThrow(SessionError);
+  });
 });
 
 describe('listSessions', () => {

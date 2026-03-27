@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -179,6 +179,25 @@ describe('addCustomPersona', () => {
     addCustomPersona('mode-check', '# X', testDir);
     const paths = resolveConfigPaths(testDir);
     expect(statSync(join(paths.personasDir, 'mode-check.md')).mode & 0o777).toBe(0o600);
+  });
+
+  it('refuses to write through a symlink pointing outside the personas directory', () => {
+    if (process.platform === 'win32') return;
+
+    const paths = resolveConfigPaths(testDir);
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-persona-target-'));
+    const targetFile = join(outside, 'target.txt');
+    writeFileSync(targetFile, 'original-content', { mode: 0o600 });
+
+    const symlinkPath = join(paths.personasDir, 'evil-agent.md');
+    symlinkSync(targetFile, symlinkPath);
+
+    try {
+      expect(() => addCustomPersona('evil-agent', 'hijacked', testDir)).toThrow(PersonaError);
+      expect(readFileSync(targetFile, 'utf-8')).toBe('original-content');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

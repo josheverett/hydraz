@@ -1,8 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
-import { getProvider } from './controller.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { getProvider, resumeSession } from './controller.js';
 import { LocalProvider } from '../providers/local.js';
 import { CloudProvider } from '../providers/cloud.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
+import {
+  createNewSession,
+  initRepoState,
+  transitionState,
+  loadSession,
+} from '../sessions/index.js';
+import { resolveRepoDataPaths } from '../repo/paths.js';
 
 describe('getProvider', () => {
   it('returns LocalProvider for local target', () => {
@@ -25,12 +34,68 @@ describe('controller integration', () => {
   });
 
   it('resumeSession is a function', async () => {
-    const { resumeSession } = await import('./controller.js');
-    expect(typeof resumeSession).toBe('function');
+    const { resumeSession: fn } = await import('./controller.js');
+    expect(typeof fn).toBe('function');
   });
 
   it('isSessionRunning returns false for unknown sessions', async () => {
     const { isSessionRunning } = await import('./controller.js');
     expect(isSessionRunning('nonexistent')).toBe(false);
+  });
+});
+
+describe('resumeSession', () => {
+  let repoRoot: string;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(tmpdir() + '/hydraz-controller-test-');
+    initRepoState(repoRoot);
+  });
+
+  afterEach(() => {
+    rmSync(repoRoot, { recursive: true, force: true });
+    const paths = resolveRepoDataPaths(repoRoot);
+    rmSync(paths.repoDataDir, { recursive: true, force: true });
+  });
+
+  function makeSession(name: string = 'test-session') {
+    return createNewSession({
+      name,
+      repoRoot,
+      branchName: `hydraz/${name}`,
+      personas: ['architect', 'implementer', 'verifier'],
+      executionTarget: 'local',
+      task: 'Fix the thing',
+    });
+  }
+
+  it('rejects resuming a completed session', async () => {
+    const session = makeSession('completed-one');
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'planning');
+    transitionState(repoRoot, session.id, 'completed');
+
+    const errors: string[] = [];
+    await resumeSession(session.id, repoRoot, {
+      onError: (msg) => errors.push(msg),
+    });
+
+    expect(errors.some((e) => e.includes('Cannot resume'))).toBe(true);
+    const loaded = loadSession(repoRoot, session.id);
+    expect(loaded.state).toBe('completed');
+  });
+
+  it('rejects resuming a session in an active state', async () => {
+    const session = makeSession('active-one');
+    transitionState(repoRoot, session.id, 'starting');
+
+    const errors: string[] = [];
+    await resumeSession(session.id, repoRoot, {
+      onError: (msg) => errors.push(msg),
+    });
+
+    expect(errors.some((e) => e.includes('Cannot resume'))).toBe(true);
+    const loaded = loadSession(repoRoot, session.id);
+    expect(loaded.state).toBe('starting');
   });
 });

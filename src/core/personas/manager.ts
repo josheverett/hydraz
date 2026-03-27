@@ -1,5 +1,6 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -125,7 +126,20 @@ export function addCustomPersona(name: string, content: string, configDir?: stri
 
   const paths = resolveConfigPaths(configDir);
   mkdirSync(paths.personasDir, { recursive: true });
-  writeFileSync(join(paths.personasDir, `${name}.md`), content, { mode: 0o600 });
+
+  const filePath = join(paths.personasDir, `${name}.md`);
+  if (existsSync(filePath)) {
+    try {
+      if (lstatSync(filePath).isSymbolicLink()) {
+        throw new PersonaError(`Refusing to write persona "${name}": target path is a symlink`);
+      }
+    } catch (err) {
+      if (err instanceof PersonaError) throw err;
+      throw new PersonaError(`Cannot verify persona file path for "${name}"`);
+    }
+  }
+
+  writeFileSync(filePath, content, { mode: 0o600 });
 }
 
 export function removeCustomPersona(name: string, configDir?: string): void {
