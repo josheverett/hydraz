@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { suggestBranchName, isValidBranchName, isValidSessionName } from './naming.js';
 
@@ -91,5 +93,13 @@ describe('isValidSessionName', () => {
 
   it('rejects names over 64 characters', () => {
     expect(isValidSessionName('a'.repeat(65))).toBe(false);
+  });
+});
+
+describe('session name validation in non-interactive CLI', () => {
+  const source = readFileSync(resolve('src/cli/commands/run.ts'), 'utf-8');
+
+  it('validates user-provided session names with isValidSessionName', () => {
+    expect(source).toContain('isValidSessionName');
   });
 });

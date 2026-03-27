@@ -29,8 +29,8 @@ export function getSessionDir(repoRoot: string, sessionId: string): string {
 
 export function initRepoState(repoRoot: string): void {
   const paths = resolveRepoDataPaths(repoRoot);
-  mkdirSync(paths.sessionsDir, { recursive: true });
-  mkdirSync(paths.workspacesDir, { recursive: true });
+  mkdirSync(paths.sessionsDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.workspacesDir, { recursive: true, mode: 0o700 });
 }
 
 export function createNewSession(params: {
@@ -48,8 +48,8 @@ export function createNewSession(params: {
 
   const session = createSession(params);
   const sessionDir = getSessionDir(params.repoRoot, session.id);
-  mkdirSync(sessionDir, { recursive: true });
-  mkdirSync(join(sessionDir, 'artifacts'), { recursive: true });
+  mkdirSync(sessionDir, { recursive: true, mode: 0o700 });
+  mkdirSync(join(sessionDir, 'artifacts'), { recursive: true, mode: 0o700 });
   writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session, null, 2) + '\n', {
     mode: 0o600,
   });

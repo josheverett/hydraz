@@ -76,6 +76,15 @@ describe('initializeConfigDir', () => {
     expect(statSync(join(paths.personasDir, 'architect.md')).mode & 0o777).toBe(0o600);
   });
 
+  it('creates config directories with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    initializeConfigDir(testDir);
+    const paths = resolveConfigPaths(testDir);
+    expect(statSync(paths.configDir).mode & 0o777).toBe(0o700);
+    expect(statSync(paths.personasDir).mode & 0o777).toBe(0o700);
+    expect(statSync(paths.mcpDir).mode & 0o777).toBe(0o700);
+  });
+
   it('does not overwrite existing config on re-init', () => {
     initializeConfigDir(testDir);
     const paths = resolveConfigPaths(testDir);

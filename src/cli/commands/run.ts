@@ -7,7 +7,7 @@ import {
   SessionError,
 } from '../../core/sessions/index.js';
 import { createEvent, appendEvent } from '../../core/events/index.js';
-import { suggestBranchName, isValidBranchName } from '../../core/branches/index.js';
+import { suggestBranchName, isValidBranchName, isValidSessionName } from '../../core/branches/index.js';
 import { startSession } from '../../core/orchestration/index.js';
 
 export function registerRunCommand(program: Command): void {
@@ -40,6 +40,12 @@ export function registerRunCommand(program: Command): void {
 
       const config = loadConfig();
       const sessionName = options.session ?? generateSessionName(task);
+
+      if (options.session && !isValidSessionName(sessionName)) {
+        console.error(`Invalid session name: "${sessionName}". Use 2-64 chars: lowercase letters, numbers, hyphens.`);
+        return;
+      }
+
       const branchName = options.branch ?? suggestBranchName(sessionName, config.branchNaming.prefix);
 
       if (!isValidBranchName(branchName)) {

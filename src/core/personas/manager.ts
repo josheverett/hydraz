@@ -125,7 +125,7 @@ export function addCustomPersona(name: string, content: string, configDir?: stri
   }
 
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(paths.personasDir, { recursive: true });
+  mkdirSync(paths.personasDir, { recursive: true, mode: 0o700 });
 
   const filePath = join(paths.personasDir, `${name}.md`);
   if (existsSync(filePath)) {

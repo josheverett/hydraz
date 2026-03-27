@@ -103,6 +103,18 @@ describe('buildSshClaudeArgs', () => {
     expect(script).toContain("cd '/workspaces/ws/worktrees/s1'");
   });
 
+  it('rejects env var keys with shell metacharacters', () => {
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { 'FOO$(whoami)': 'val' }),
+    ).toThrow();
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { 'NAME WITH SPACES': 'val' }),
+    ).toThrow();
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { '': 'val' }),
+    ).toThrow();
+  });
+
   it('combines cd, auth exports, and claude in the correct order', () => {
     const result = buildSshClaudeArgs(
       'ws',

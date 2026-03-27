@@ -65,9 +65,9 @@ You are the Performance & Reliability Engineer persona. Your role is to:
 export function initializeConfigDir(configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
 
-  mkdirSync(paths.configDir, { recursive: true });
-  mkdirSync(paths.personasDir, { recursive: true });
-  mkdirSync(paths.mcpDir, { recursive: true });
+  mkdirSync(paths.configDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.personasDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.mcpDir, { recursive: true, mode: 0o700 });
 
   if (!configExists(configDir)) {
     saveConfig(createDefaultConfig(), configDir);

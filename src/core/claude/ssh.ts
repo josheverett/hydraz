@@ -13,8 +13,15 @@ export interface SshCommand {
   stdinScript?: string;
 }
 
+const VALID_ENV_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
 function buildExportStatements(env: Record<string, string>): string[] {
-  return Object.entries(env).map(([key, value]) => `export ${key}=${shellEscape(value)}`);
+  return Object.entries(env).map(([key, value]) => {
+    if (!VALID_ENV_KEY.test(key)) {
+      throw new Error(`Invalid environment variable name: ${key}`);
+    }
+    return `export ${key}=${shellEscape(value)}`;
+  });
 }
 
 export function buildSshClaudeArgs(

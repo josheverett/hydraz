@@ -76,6 +76,14 @@ describe('createNewSession', () => {
     expect(statSync(join(sessionDir, 'events.jsonl')).mode & 0o777).toBe(0o600);
   });
 
+  it('creates session directories with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    const session = makeSession();
+    const sessionDir = getSessionDir(repoRoot, session.id);
+    expect(statSync(sessionDir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(sessionDir, 'artifacts')).mode & 0o777).toBe(0o700);
+  });
+
   it('rejects duplicate session names', () => {
     makeSession('dup-name');
     expect(() => makeSession('dup-name')).toThrow(SessionError);

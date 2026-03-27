@@ -21,6 +21,6 @@ export function loadConfig(configDir?: string): HydrazConfig {
 
 export function saveConfig(config: HydrazConfig, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(paths.configDir, { recursive: true });
+  mkdirSync(paths.configDir, { recursive: true, mode: 0o700 });
   writeFileSync(paths.configFile, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 }

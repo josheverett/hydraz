@@ -92,7 +92,7 @@ export function loadMasterPrompt(configDir?: string): string {
 
 export function saveMasterPrompt(content: string, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(dirname(paths.masterPromptFile), { recursive: true });
+  mkdirSync(dirname(paths.masterPromptFile), { recursive: true, mode: 0o700 });
   writeFileSync(paths.masterPromptFile, content, { mode: 0o600 });
 }
 
