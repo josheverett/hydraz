@@ -74,11 +74,13 @@ export function initializeConfigDir(configDir?: string): void {
   }
 
   if (!existsSync(paths.masterPromptFile)) {
-    writeFileSync(paths.masterPromptFile, getDefaultMasterPrompt());
+    writeFileSync(paths.masterPromptFile, getDefaultMasterPrompt(), { mode: 0o600 });
   }
 
   if (!existsSync(paths.mcpServersFile)) {
-    writeFileSync(paths.mcpServersFile, JSON.stringify({ servers: [] }, null, 2) + '\n');
+    writeFileSync(paths.mcpServersFile, JSON.stringify({ servers: [] }, null, 2) + '\n', {
+      mode: 0o600,
+    });
   }
 
   seedBuiltInPersonas(paths.personasDir);
@@ -90,7 +92,7 @@ function seedBuiltInPersonas(personasDir: string): void {
     if (!existsSync(filePath)) {
       const content = BUILT_IN_PERSONA_CONTENT[name];
       if (content) {
-        writeFileSync(filePath, content);
+        writeFileSync(filePath, content, { mode: 0o600 });
       }
     }
   }

@@ -3,6 +3,7 @@ import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
 import { launchClaude, mapExitToSessionState, type ExecutorHandle } from '../claude/executor.js';
 import { assemblePrompt } from '../prompts/builder.js';
 import { createEvent, appendEvent } from '../events/index.js';
+import { persistToolInputForEvent } from '../events/tool-input-persist.js';
 import { formatStreamEvent } from '../claude/stream-display.js';
 import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
 import type { DisplayVerbosity, ExecutionTarget } from '../config/schema.js';
@@ -183,8 +184,9 @@ export async function startSession(
       }
 
       if (event.kind === 'tool_call') {
+        const persistedInput = persistToolInputForEvent(event.toolName, event.toolInput);
         appendEvent(repoRoot, createEvent(sessionId, 'swarm.phase_changed',
-          `${event.toolName}: ${event.toolInput ?? ''}`,
+          `${event.toolName}: ${persistedInput}`,
         ));
       }
     },

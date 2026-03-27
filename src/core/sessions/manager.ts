@@ -50,8 +50,10 @@ export function createNewSession(params: {
   const sessionDir = getSessionDir(params.repoRoot, session.id);
   mkdirSync(sessionDir, { recursive: true });
   mkdirSync(join(sessionDir, 'artifacts'), { recursive: true });
-  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session, null, 2) + '\n');
-  writeFileSync(join(sessionDir, 'events.jsonl'), '');
+  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session, null, 2) + '\n', {
+    mode: 0o600,
+  });
+  writeFileSync(join(sessionDir, 'events.jsonl'), '', { mode: 0o600 });
 
   return session;
 }
@@ -68,7 +70,7 @@ export function loadSession(repoRoot: string, sessionId: string): SessionMetadat
 
 export function saveSession(repoRoot: string, session: SessionMetadata): void {
   const sessionFile = join(getSessionDir(repoRoot, session.id), 'session.json');
-  writeFileSync(sessionFile, JSON.stringify(session, null, 2) + '\n');
+  writeFileSync(sessionFile, JSON.stringify(session, null, 2) + '\n', { mode: 0o600 });
 }
 
 export function transitionState(

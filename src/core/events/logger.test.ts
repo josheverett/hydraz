@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -64,6 +64,14 @@ describe('appendEvent + readEvents', () => {
     expect(events).toHaveLength(2);
     expect(events[0].type).toBe('session.created');
     expect(events[1].type).toBe('session.state_changed');
+  });
+
+  it('keeps events.jsonl restrictive on POSIX when appending creates or replaces lines', () => {
+    if (process.platform === 'win32') return;
+    const eventsFile = join(getSessionDir(repoRoot, sessionId), 'events.jsonl');
+    expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
+    appendEvent(repoRoot, createEvent(sessionId, 'claude.ready', 'ok'));
+    expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
   });
 
   it('preserves event data through serialization', () => {

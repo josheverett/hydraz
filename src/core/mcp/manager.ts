@@ -15,7 +15,7 @@ export function loadGlobalMcpConfig(configDir?: string): McpConfig {
 export function saveGlobalMcpConfig(config: McpConfig, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
   mkdirSync(dirname(paths.mcpServersFile), { recursive: true });
-  writeFileSync(paths.mcpServersFile, JSON.stringify(config, null, 2) + '\n');
+  writeFileSync(paths.mcpServersFile, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 }
 
 export function loadRepoMcpConfig(repoRoot: string): McpConfig {
@@ -29,7 +29,7 @@ export function loadRepoMcpConfig(repoRoot: string): McpConfig {
 export function saveRepoMcpConfig(repoRoot: string, config: McpConfig): void {
   const paths = resolveRepoDataPaths(repoRoot);
   mkdirSync(dirname(paths.repoMcpFile), { recursive: true });
-  writeFileSync(paths.repoMcpFile, JSON.stringify(config, null, 2) + '\n');
+  writeFileSync(paths.repoMcpFile, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 }
 
 export function mergeScopes(global: McpConfig, repo: McpConfig): McpConfig {

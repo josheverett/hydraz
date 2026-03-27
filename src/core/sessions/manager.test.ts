@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -68,6 +68,14 @@ describe('createNewSession', () => {
     expect(existsSync(join(sessionDir, 'artifacts'))).toBe(true);
   });
 
+  it('creates session.json and events.jsonl with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    const session = makeSession();
+    const sessionDir = getSessionDir(repoRoot, session.id);
+    expect(statSync(join(sessionDir, 'session.json')).mode & 0o777).toBe(0o600);
+    expect(statSync(join(sessionDir, 'events.jsonl')).mode & 0o777).toBe(0o600);
+  });
+
   it('rejects duplicate session names', () => {
     makeSession('dup-name');
     expect(() => makeSession('dup-name')).toThrow(SessionError);
@@ -131,6 +139,14 @@ describe('transitionState', () => {
     transitionState(repoRoot, session.id, 'starting');
     const reloaded = loadSession(repoRoot, session.id);
     expect(reloaded.state).toBe('starting');
+  });
+
+  it('rewrites session.json with restrictive permissions on POSIX after transition', () => {
+    if (process.platform === 'win32') return;
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'starting');
+    const sessionFile = join(getSessionDir(repoRoot, session.id), 'session.json');
+    expect(statSync(sessionFile).mode & 0o777).toBe(0o600);
   });
 });
 

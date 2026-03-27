@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -64,6 +64,16 @@ describe('initializeConfigDir', () => {
       const personaFile = join(paths.personasDir, `${name}.md`);
       expect(existsSync(personaFile), `missing persona: ${name}`).toBe(true);
     }
+  });
+
+  it('creates sensitive config files with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    initializeConfigDir(testDir);
+    const paths = resolveConfigPaths(testDir);
+    expect(statSync(paths.configFile).mode & 0o777).toBe(0o600);
+    expect(statSync(paths.masterPromptFile).mode & 0o777).toBe(0o600);
+    expect(statSync(paths.mcpServersFile).mode & 0o777).toBe(0o600);
+    expect(statSync(join(paths.personasDir, 'architect.md')).mode & 0o777).toBe(0o600);
   });
 
   it('does not overwrite existing config on re-init', () => {

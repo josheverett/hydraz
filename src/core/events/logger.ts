@@ -49,7 +49,7 @@ export function createEvent(
 
 export function appendEvent(repoRoot: string, event: HydrazEvent): void {
   const eventsFile = join(getSessionDir(repoRoot, event.sessionId), 'events.jsonl');
-  appendFileSync(eventsFile, JSON.stringify(event) + '\n');
+  appendFileSync(eventsFile, JSON.stringify(event) + '\n', { mode: 0o600 });
 }
 
 export function readEvents(repoRoot: string, sessionId: string): HydrazEvent[] {

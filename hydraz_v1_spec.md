@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 0-16 complete. 37 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
+**Status:** Phases 0-16 complete. 38 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
 
 **Next step:** Phase 17 (multi-executor backend support) is deferred until a second backend is needed. All v1 phases are complete.
 
@@ -1526,7 +1526,7 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 - backward compatibility or clean migration
 
 ## Phase 13: CI and PR checks [DONE]
-Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 272+ tests but no automation enforcing they pass before merge.
+Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 400+ tests but no automation enforcing they pass before merge.
 
 ### Needs
 - GitHub Actions workflow for PR checks

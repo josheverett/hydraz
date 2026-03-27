@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -8,6 +8,7 @@ import {
   saveMasterPrompt,
   resetMasterPrompt,
 } from './master-prompt.js';
+import { resolveConfigPaths } from './paths.js';
 
 let testDir: string;
 
@@ -52,6 +53,13 @@ describe('saveMasterPrompt', () => {
     saveMasterPrompt('My custom prompt', testDir);
     const loaded = loadMasterPrompt(testDir);
     expect(loaded).toBe('My custom prompt');
+  });
+
+  it('writes the file with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    saveMasterPrompt('Locked-down prompt', testDir);
+    const paths = resolveConfigPaths(testDir);
+    expect(statSync(paths.masterPromptFile).mode & 0o777).toBe(0o600);
   });
 });
 

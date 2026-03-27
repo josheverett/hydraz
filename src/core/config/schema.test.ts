@@ -123,6 +123,18 @@ describe('validateConfig', () => {
     );
   });
 
+  it('rejects defaultPersonas that are not valid persona names', () => {
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'BadName', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'a', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'foo/../bar', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
+  });
+
   it('rejects non-string fields', () => {
     expect(() => validateConfig({ version: 42 })).toThrow(ConfigValidationError);
   });

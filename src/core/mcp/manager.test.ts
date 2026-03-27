@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -14,6 +14,7 @@ import { addServer, createDefaultMcpConfig, type McpConfig } from './schema.js';
 import { initializeConfigDir } from '../config/init.js';
 import { initRepoState } from '../sessions/manager.js';
 import { resolveRepoDataPaths } from '../repo/paths.js';
+import { resolveConfigPaths } from '../config/paths.js';
 
 let configDir: string;
 let repoRoot: string;
@@ -48,6 +49,15 @@ describe('global MCP config', () => {
     expect(reloaded.servers).toHaveLength(1);
     expect(reloaded.servers[0].name).toBe('github');
   });
+
+  it('writes global MCP config with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    let config = loadGlobalMcpConfig(configDir);
+    config = addServer(config, { name: 'p', command: 'c', enabled: true });
+    saveGlobalMcpConfig(config, configDir);
+    const paths = resolveConfigPaths(configDir);
+    expect(statSync(paths.mcpServersFile).mode & 0o777).toBe(0o600);
+  });
 });
 
 describe('repo MCP config', () => {
@@ -64,6 +74,15 @@ describe('repo MCP config', () => {
     const reloaded = loadRepoMcpConfig(repoRoot);
     expect(reloaded.servers).toHaveLength(1);
     expect(reloaded.servers[0].name).toBe('postgres');
+  });
+
+  it('writes repo MCP config with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    let config = loadRepoMcpConfig(repoRoot);
+    config = addServer(config, { name: 'r', command: 'c', enabled: true });
+    saveRepoMcpConfig(repoRoot, config);
+    const paths = resolveRepoDataPaths(repoRoot);
+    expect(statSync(paths.repoMcpFile).mode & 0o777).toBe(0o600);
   });
 });
 

@@ -1,3 +1,5 @@
+import { isValidPersonaName } from '../personas/naming.js';
+
 export type ExecutionTarget = 'local' | 'local-container' | 'cloud';
 export type AuthMode = 'claude-ai-oauth' | 'api-key';
 export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
@@ -203,6 +205,13 @@ function expectPersonasTuple(
   }
   if (!val.every((v) => typeof v === 'string' && v.length > 0)) {
     throw new ConfigValidationError('"defaultPersonas" entries must be non-empty strings');
+  }
+  for (const p of val) {
+    if (typeof p === 'string' && !isValidPersonaName(p)) {
+      throw new ConfigValidationError(
+        '"defaultPersonas" entries must be valid persona names (lowercase letters, numbers, hyphens; 2-64 chars)',
+      );
+    }
   }
   return val as [string, string, string];
 }
