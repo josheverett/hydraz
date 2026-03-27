@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -57,6 +57,22 @@ describe('global MCP config', () => {
     expect(config.servers).toEqual([]);
   });
 
+  it('rejects symlinked global MCP config files on load', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-mcp-out-'));
+    const target = join(outside, 'servers.json');
+    writeFileSync(target, '{ "servers": [] }', { mode: 0o600 });
+    const paths = resolveConfigPaths(configDir);
+    rmSync(paths.mcpServersFile, { force: true });
+    symlinkSync(target, paths.mcpServersFile);
+
+    try {
+      expect(() => loadGlobalMcpConfig(configDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('writes global MCP config with restrictive permissions on POSIX', () => {
     if (process.platform === 'win32') return;
     let config = loadGlobalMcpConfig(configDir);
@@ -64,6 +80,22 @@ describe('global MCP config', () => {
     saveGlobalMcpConfig(config, configDir);
     const paths = resolveConfigPaths(configDir);
     expect(statSync(paths.mcpServersFile).mode & 0o777).toBe(0o600);
+  });
+
+  it('refuses to write through a symlinked global MCP config path', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-mcp-target-'));
+    const target = join(outside, 'servers.json');
+    writeFileSync(target, '{}', { mode: 0o600 });
+    const paths = resolveConfigPaths(configDir);
+    rmSync(paths.mcpServersFile, { force: true });
+    symlinkSync(target, paths.mcpServersFile);
+
+    try {
+      expect(() => saveGlobalMcpConfig(createDefaultMcpConfig(), configDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

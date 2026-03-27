@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -46,6 +46,19 @@ describe('loadMasterPrompt', () => {
     const prompt = loadMasterPrompt(testDir);
     expect(prompt).toBe('Custom prompt content');
   });
+
+  it('rejects symlinked master-prompt.md files', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-prompt-out-'));
+    writeFileSync(join(outside, 'secret.txt'), 'secret');
+    symlinkSync(join(outside, 'secret.txt'), join(testDir, 'master-prompt.md'));
+
+    try {
+      expect(() => loadMasterPrompt(testDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('saveMasterPrompt', () => {
@@ -60,6 +73,20 @@ describe('saveMasterPrompt', () => {
     saveMasterPrompt('Locked-down prompt', testDir);
     const paths = resolveConfigPaths(testDir);
     expect(statSync(paths.masterPromptFile).mode & 0o777).toBe(0o600);
+  });
+
+  it('refuses to write through a symlinked master-prompt.md path', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-prompt-target-'));
+    const target = join(outside, 'target.txt');
+    writeFileSync(target, 'original');
+    symlinkSync(target, join(testDir, 'master-prompt.md'));
+
+    try {
+      expect(() => saveMasterPrompt('new prompt', testDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

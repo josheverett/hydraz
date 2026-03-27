@@ -1850,6 +1850,7 @@ These should be enforced early.
 - secrets must not leak into repo-local session state
 - session should know which auth mode it used, without storing raw secrets
 - stored session metadata must be bound to its containing session directory and current repo; tampered `id` or `repoRoot` values are rejected
+- protected config files (`config.json`, `master-prompt.md`, MCP config, built-in persona seeds) must reject symlinked paths rather than reading from or writing through them
 
 ---
 

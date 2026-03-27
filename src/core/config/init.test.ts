@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -111,5 +111,18 @@ describe('initializeConfigDir', () => {
 
     const content = readFileSync(architectFile, 'utf-8');
     expect(content).toBe('Custom architect content');
+  });
+
+  it('rejects a symlinked personas directory during initialization', () => {
+    if (process.platform === 'win32') return;
+    const paths = resolveConfigPaths(testDir);
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-init-personas-out-'));
+    symlinkSync(outside, paths.personasDir);
+
+    try {
+      expect(() => initializeConfigDir(testDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
