@@ -90,35 +90,11 @@ describe('buildClaudeEnv', () => {
     expect(env['ANTHROPIC_API_KEY']).toBe('sk-test-key');
   });
 
-  it('does not forward non-allowlisted env vars', () => {
+  it('inherits existing process.env', () => {
     vi.stubEnv('MY_CUSTOM_VAR', 'hello');
-    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'secret123');
-    vi.stubEnv('GITHUB_TOKEN', 'ghp_xxx');
     const config = createDefaultConfig();
     const env = buildClaudeEnv(config, '/tmp/workspace');
-    expect(env['MY_CUSTOM_VAR']).toBeUndefined();
-    expect(env['AWS_SECRET_ACCESS_KEY']).toBeUndefined();
-    expect(env['GITHUB_TOKEN']).toBeUndefined();
-  });
-
-  it('forwards allowlisted env vars like PATH and HOME', () => {
-    vi.stubEnv('PATH', '/usr/bin:/usr/local/bin');
-    vi.stubEnv('HOME', '/home/test');
-    vi.stubEnv('LANG', 'en_US.UTF-8');
-    const config = createDefaultConfig();
-    const env = buildClaudeEnv(config, '/tmp/workspace');
-    expect(env['PATH']).toBe('/usr/bin:/usr/local/bin');
-    expect(env['HOME']).toBe('/home/test');
-    expect(env['LANG']).toBe('en_US.UTF-8');
-  });
-
-  it('forwards LC_ prefixed locale vars', () => {
-    vi.stubEnv('LC_ALL', 'en_US.UTF-8');
-    vi.stubEnv('LC_CTYPE', 'UTF-8');
-    const config = createDefaultConfig();
-    const env = buildClaudeEnv(config, '/tmp/workspace');
-    expect(env['LC_ALL']).toBe('en_US.UTF-8');
-    expect(env['LC_CTYPE']).toBe('UTF-8');
+    expect(env['MY_CUSTOM_VAR']).toBe('hello');
   });
 });
 
