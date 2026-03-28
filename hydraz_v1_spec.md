@@ -16,7 +16,7 @@
 - Always remind the human to rebuild (`npm run build`) before manual testing.
 - Stop after each atomic sub-phase so the human can run `npm test` and commit.
 - **Spec and README must stay current with every commit.** Any commit that changes behavior, adds commands, changes test counts, or modifies the public surface must include corresponding updates to both `hydraz_v1_spec.md` and `README.md`. When editing either document, perform multiple self-review passes to ensure all information is internally consistent — test counts, command lists, phase statuses, deliverable claims, and current-state summaries must all agree with each other and with the actual codebase.
-- **CRITICAL:** See Section 26b (Coding Standards) for prove-it-first methodology (the most important rule), TDD, type deduplication, and phase completion gate rules.
+- **CRITICAL:** See Section 26b (Coding Standards) for the prove-it-first methodology (the most important rule), especially the evidence taxonomy (`Runtime proof` vs `Source fact` vs `Hypothesis` vs `Unknown`), TDD, type deduplication, and phase completion gate rules.
 
 ## 1. Overview
 
@@ -1876,6 +1876,35 @@ When a module's behavior is ambiguous, writing the tests first is the mechanism 
 
 No assumption or hypothesis may be acted on until it is verified with evidence. This is a universal engineering discipline, not specific to any tool or domain.
 
+#### Evidence taxonomy
+
+Use these terms precisely:
+
+- **Runtime proof** — A claim established by a passing automated test or a manual run with explicit steps and observed results on the current branch.
+- **Source fact** — A claim established by directly inspecting the checked-in source code, config, or docs. This describes what the source currently says, not how the running system behaves.
+- **Hypothesis** — An inference drawn from source facts, blame/history, docs, issue threads, web research, or memory. A hypothesis is not proof.
+- **Unknown** — Use when runtime proof is required but has not yet been obtained.
+
+#### Language rules
+
+- The words **prove**, **proven**, **proof**, **verified behavior**, and **confirmed working** are reserved for **Runtime proof** only.
+- Reading code may establish a **Source fact**, but it does not prove runtime behavior.
+- Documentation, web search results, blame output, issue comments, and memory may support a **Hypothesis** but never count as proof by themselves.
+- If runtime proof cannot be obtained in the current environment, say so explicitly and present a proof plan instead of a conclusion.
+
+#### Required response discipline
+
+For any significant technical assertion, label it as one of:
+- **Runtime proof**
+- **Source fact**
+- **Hypothesis**
+- **Unknown**
+
+Example:
+- **Source fact:** `getProvider('cloud')` currently returns `CloudProvider` in `src/core/orchestration/controller.ts`.
+- **Hypothesis:** Cloud launch will fail at runtime on this branch.
+- **Runtime proof:** Pending automated test or explicit manual run.
+
 The rules:
 - **Never assume behavior — verify it.** Documentation, web searches, blog posts, and memory are hints, not facts. They may be outdated, wrong, or describe a different version/context. The only source of truth is running the thing and observing what happens.
 - **Isolate before diagnosing.** When something doesn't work, strip away layers until the problem is reproducible in the simplest possible form. Fix what is actually broken, not what you think might be broken.
@@ -1934,13 +1963,15 @@ This is the most important rule in this document. It applies to everything — n
 
 **Never assert something as fact without evidence.** If you say "X is the default behavior," prove it. If you say "Y caused the bug," prove it. If you say "Z is a community standard," prove it. If you say "the config validation is dropping the field," verify before coding a fix. Memory, intuition, and pattern-matching are starting points for investigation, not substitutes for verification.
 
+**Important distinction:** inspecting source can establish a **Source fact**, but it does not establish **Runtime proof**. Do not say "proved" or "proven" when you have only read the code. Use the evidence taxonomy defined above.
+
 Specific applications:
 - **External tool behavior:** CLI interfaces, APIs, env vars, file formats must be verified by actually running the tool. Never trust documentation or web search results alone.
 - **Bug diagnosis:** Verify the actual cause before writing a fix. Reproduce the bug, isolate the root cause, then fix what is actually broken.
 - **Community claims:** If you assert something is a standard, convention, or common practice, find evidence (docs, issues, implementations) or say "I don't know."
-- **Codebase state:** If you claim "this is already handled" or "this field is preserved," verify against the actual code, not your memory of the code.
+- **Codebase state:** If you claim "this is already handled" or "this field is preserved," verify against the actual code, not your memory of the code. That establishes a **Source fact** about the checked-in branch, not proof of runtime behavior.
 
-When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec. See Section 26 for the full prove-it-first policy with a real example of why it matters.
+When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec and label them as **Runtime proof**. See Section 26 for the full prove-it-first policy with a real example of why it matters.
 
 ### API-design-driven TDD
 The implementation order is strict: define interfaces/types → write tests that use them (tests fail) → implement until tests pass. This is not optional or aspirational — it is the required workflow.
