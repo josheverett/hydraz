@@ -45,7 +45,7 @@ function parseStoredSession(
     throw new SessionError(`Session "${expectedSessionId}" does not belong to this repo`);
   }
 
-  return data as SessionMetadata;
+  return data as unknown as SessionMetadata;
 }
 
 function assertSessionWriteContext(repoRoot: string, session: SessionMetadata): void {
