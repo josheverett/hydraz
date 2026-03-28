@@ -1,5 +1,6 @@
 import type { ParsedClaudeEvent } from './stream-parser.js';
 import type { DisplayVerbosity } from '../config/schema.js';
+import { sanitizeInlineTerminalText, sanitizeMultilineTerminalText } from '../display/sanitize.js';
 
 export function formatStreamEvent(
   event: ParsedClaudeEvent,
@@ -9,22 +10,22 @@ export function formatStreamEvent(
 
   switch (event.kind) {
     case 'init':
-      return `${ts}  claude.init      ${event.model ?? 'unknown model'}${event.tools ? ` (${event.tools.length} tools)` : ''}`;
+      return `${ts}  claude.init      ${sanitizeInlineTerminalText(event.model ?? 'unknown model')}${event.tools ? ` (${event.tools.length} tools)` : ''}`;
 
     case 'text': {
       if (verbosity === 'compact') {
-        const preview = truncate(singleLine(event.text ?? ''), 80);
+        const preview = truncate(sanitizeInlineTerminalText(event.text ?? ''), 80);
         return `${ts}  claude.text      ${preview}`;
       }
-      return `${ts}  claude.text      ${event.text}`;
+      return `${ts}  claude.text      ${sanitizeMultilineTerminalText(event.text ?? '')}`;
     }
 
     case 'tool_call':
-      return `${ts}  claude.tool      ${event.toolName}: ${event.toolInput ?? ''}`;
+      return `${ts}  claude.tool      ${sanitizeInlineTerminalText(event.toolName ?? 'tool')}: ${sanitizeInlineTerminalText(event.toolInput ?? '')}`;
 
     case 'tool_result': {
       if (verbosity === 'compact') return null;
-      const preview = truncate(singleLine(event.toolResult ?? ''), 100);
+      const preview = truncate(sanitizeInlineTerminalText(event.toolResult ?? ''), 100);
       return `${ts}  claude.result    → ${preview}`;
     }
 
@@ -40,7 +41,7 @@ export function formatStreamEvent(
     }
 
     case 'error':
-      return `${ts}  claude.error     ${event.error ?? 'Unknown error'}`;
+      return `${ts}  claude.error     ${sanitizeInlineTerminalText(event.error ?? 'Unknown error')}`;
 
     case 'unknown':
       return null;
@@ -49,10 +50,6 @@ export function formatStreamEvent(
 
 function formatTimestamp(iso: string): string {
   return iso.replace(/\.\d{3}Z$/, 'Z');
-}
-
-function singleLine(text: string): string {
-  return text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function truncate(text: string, maxLen: number): string {

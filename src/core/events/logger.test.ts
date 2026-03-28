@@ -110,4 +110,17 @@ describe('formatEvent', () => {
     const formatted = formatEvent(event);
     expect(formatted).toContain('[planning]');
   });
+
+  it('strips ANSI and control characters from formatted output', () => {
+    const event = {
+      ...createEvent(sessionId, 'session.created', 'Danger \u001b[31mred\u001b[0m\r\nnext\u0007line'),
+      type: 'session.created\u001b[2J',
+      state: 'plan\u0007ning',
+    };
+    const formatted = formatEvent(event);
+    expect(formatted).toContain('session.created [planning]  Danger red nextline');
+    expect(formatted).not.toContain('\u001b');
+    expect(formatted).not.toContain('\n');
+    expect(formatted).not.toContain('\u0007');
+  });
 });
