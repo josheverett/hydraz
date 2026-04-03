@@ -1595,7 +1595,7 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local-container' | 'cloud'`:
 - **`local`** — bare metal, current behavior (worktree + spawn `claude` on host)
 - **`local-container`** — Docker on your machine via DevPod with Docker provider (container + worktree inside container + exec `claude` inside container via SSH)
-- **`cloud`** — same container model, same `LocalContainerProvider`, remote host via DevPod with GCP provider. No separate `CloudProvider` needed — DevPod abstracts the infrastructure.
+- **`cloud`** — same container model and same `LocalContainerProvider` implementation, remote host via DevPod with GCP provider. A thin `CloudProvider` wrapper is acceptable if it delegates to the same implementation — DevPod abstracts the infrastructure.
 
 ### Git lifecycle: bare metal vs container (verified)
 Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
@@ -1685,7 +1685,7 @@ What was proven:
 - Auth injection via SSH works identically to local containers
 - Worktree at `/tmp/hydraz-worktrees/` works identically to local containers
 
-This means the `CloudProvider` stub can remain as-is or be removed. The `cloud` execution target in the CLI should route to the same `LocalContainerProvider` — the name is misleading, but the implementation is correct. The user selects local vs cloud by configuring which DevPod provider is active, not by changing Hydraz code.
+This means cloud must reuse the same `LocalContainerProvider` implementation as local-container. A thin `CloudProvider` wrapper is acceptable if it delegates to that implementation, but it must not introduce a separate runtime path. The user selects local vs cloud by configuring which DevPod provider is active, not by changing Hydraz code.
 
 ### Architecture
 Cloud execution reuses the container pipeline from Phase 14 exactly:

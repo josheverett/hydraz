@@ -21,7 +21,11 @@ import { CloudProvider } from '../providers/cloud.js';
 import { finalizeGitHubContainerDelivery } from '../github/delivery.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
 import { getGitHubAutomationReadiness } from '../github/requirements.js';
-import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
+import {
+  isContainerExecutionTarget,
+  type WorkspaceProvider,
+  type WorkspaceInfo,
+} from '../providers/provider.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -85,7 +89,7 @@ export async function startSession(
     return;
   }
 
-  if (session.executionTarget === 'local-container') {
+  if (isContainerExecutionTarget(session.executionTarget)) {
     const containerAuth = validateContainerAuth(config);
     if (!containerAuth.valid) {
       const msg = containerAuth.error ?? 'Container auth not configured';
@@ -144,7 +148,7 @@ export async function startSession(
   emitEvent('claude.ready', 'Claude Code launching');
 
   let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
-  if (session.executionTarget === 'local-container') {
+  if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const authEnv = prepareContainerAuthEnv(config);
     containerContext = {
@@ -186,7 +190,7 @@ export async function startSession(
   }
 
   let containerDelivery: Awaited<ReturnType<typeof finalizeGitHubContainerDelivery>> | null = null;
-  if (session.executionTarget === 'local-container' && config.github.token) {
+  if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
     try {
       containerDelivery = await finalizeGitHubContainerDelivery({
         session,
@@ -223,7 +227,7 @@ export async function startSession(
     }
   }
 
-  if (session.executionTarget === 'local-container' && containerDelivery) {
+  if (isContainerExecutionTarget(session.executionTarget) && containerDelivery) {
     if (containerDelivery.prUrl) {
       emitEvent('pull_request.created', `Pull request: ${containerDelivery.prUrl}`);
     }

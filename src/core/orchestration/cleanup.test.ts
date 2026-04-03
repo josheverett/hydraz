@@ -118,6 +118,18 @@ describe('findOrphanedWorkspaces', () => {
     expect(orphans[0]!.devpodStatus).toBe('Stopped');
   });
 
+  it('includes cloud sessions in the DevPod orphan scan', () => {
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'cloud-001', state: 'completed', executionTarget: 'cloud' }),
+    ]);
+    mockDevpodStatus.mockReturnValue('Running');
+
+    const orphans = findOrphanedWorkspaces('/fake/repo');
+
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.workspaceName).toBe('hydraz-cloud-001');
+  });
+
   it('checks all terminal states: completed, stopped, failed, blocked', () => {
     const sessions = [
       makeSession({ id: 's1', state: 'completed' }),

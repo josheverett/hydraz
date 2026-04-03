@@ -58,13 +58,13 @@ const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
 const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
-function makeSession(name: string = 'test-session') {
+function makeSession(name: string = 'test-session', executionTarget: 'local-container' | 'cloud' = 'local-container') {
   return createSession({
     name,
     repoRoot: '/fake/repo',
     branchName: `hydraz/${name}`,
     personas: ['architect', 'implementer', 'verifier'],
-    executionTarget: 'local-container',
+    executionTarget,
     task: 'Fix it',
   });
 }
@@ -196,6 +196,17 @@ describe('LocalContainerProvider', () => {
       expect(workspace.type).toBe('local-container');
       expect(workspace.directory).toBe('/tmp/hydraz-worktrees/abc');
       expect(workspace.sessionId).toBe(session.id);
+    });
+
+    it('returns a cloud workspace type when invoked for a cloud session', () => {
+      mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/cloud-abc');
+      const provider = new LocalContainerProvider();
+      const session = makeSession('cloud-session', 'cloud');
+      const config = makeConfig();
+
+      const workspace = provider.createWorkspace({ session, config });
+
+      expect(workspace.type).toBe('cloud');
     });
 
     it('tears down devpod if worktree creation inside container fails', () => {

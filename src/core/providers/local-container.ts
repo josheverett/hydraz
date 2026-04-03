@@ -104,7 +104,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     return {
       id: session.id,
-      type: 'local-container',
+      type: session.executionTarget,
       directory: worktreePath,
       branchName: session.branchName,
       sessionId: session.id,

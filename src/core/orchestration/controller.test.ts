@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getProvider, resumeSession } from './controller.js';
 import { LocalProvider } from '../providers/local.js';
-import { CloudProvider } from '../providers/cloud.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import {
   createNewSession,
@@ -22,8 +21,8 @@ describe('getProvider', () => {
     expect(getProvider('local-container')).toBeInstanceOf(LocalContainerProvider);
   });
 
-  it('returns CloudProvider for cloud target', () => {
-    expect(getProvider('cloud')).toBeInstanceOf(CloudProvider);
+  it('routes cloud to the container provider implementation', () => {
+    expect(getProvider('cloud')).toBeInstanceOf(LocalContainerProvider);
   });
 });
 
