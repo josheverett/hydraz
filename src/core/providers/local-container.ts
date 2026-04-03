@@ -6,6 +6,7 @@ import type {
   CreateWorkspaceParams,
   ProviderCheckResult,
 } from './provider.js';
+import type { ExecutionTarget } from '../config/schema.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -20,7 +21,7 @@ import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { getGitHubRepo, hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
-  readonly type = 'local-container' as const;
+  readonly type: ExecutionTarget = 'local-container';
 
   checkAvailability(): ProviderCheckResult {
     try {
