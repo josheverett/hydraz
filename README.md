@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="hydraz-logo.png" alt="Hydraz logo" width="300">
+  <img src="https://raw.githubusercontent.com/josheverett/hydraz/main/hydraz-logo.png" alt="Hydraz logo" width="300">
 </p>
 
 <h1 align="center">Hydraz</h1>
