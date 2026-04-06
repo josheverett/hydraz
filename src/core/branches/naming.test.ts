@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { suggestBranchName, isValidBranchName, isValidSessionName } from './naming.js';
 
@@ -45,6 +47,21 @@ describe('isValidBranchName', () => {
   it('rejects names with @{', () => {
     expect(isValidBranchName('branch@{0}')).toBe(false);
   });
+
+  it('rejects shell metacharacters', () => {
+    expect(isValidBranchName('branch;rm -rf /')).toBe(false);
+    expect(isValidBranchName('branch|cat /etc/passwd')).toBe(false);
+    expect(isValidBranchName('branch&bg')).toBe(false);
+    expect(isValidBranchName('branch$(whoami)')).toBe(false);
+    expect(isValidBranchName('branch`id`')).toBe(false);
+    expect(isValidBranchName("branch'inject")).toBe(false);
+    expect(isValidBranchName('branch"inject')).toBe(false);
+    expect(isValidBranchName('branch!history')).toBe(false);
+    expect(isValidBranchName('branch>file')).toBe(false);
+    expect(isValidBranchName('branch<file')).toBe(false);
+    expect(isValidBranchName('branch{a,b}')).toBe(false);
+    expect(isValidBranchName('branch#comment')).toBe(false);
+  });
 });
 
 describe('isValidSessionName', () => {
@@ -76,5 +93,13 @@ describe('isValidSessionName', () => {
 
   it('rejects names over 64 characters', () => {
     expect(isValidSessionName('a'.repeat(65))).toBe(false);
+  });
+});
+
+describe('session name validation in non-interactive CLI', () => {
+  const source = readFileSync(resolve('src/cli/commands/run.ts'), 'utf-8');
+
+  it('validates user-provided session names with isValidSessionName', () => {
+    expect(source).toContain('isValidSessionName');
   });
 });

@@ -5,6 +5,7 @@ export {
   type AuthMode,
   type BranchNamingConfig,
   type ClaudeAuthConfig,
+  type GitHubAuthConfig,
   type RetentionConfig,
   type DisplayVerbosity,
   BUILT_IN_PERSONAS,

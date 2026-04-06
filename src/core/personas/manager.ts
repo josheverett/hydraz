@@ -1,7 +1,19 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { resolveConfigPaths } from '../config/paths.js';
 import { BUILT_IN_PERSONAS } from '../config/schema.js';
+import { isValidPersonaName } from './naming.js';
+
+export { isValidPersonaName } from './naming.js';
 
 export interface PersonaInfo {
   name: string;
@@ -19,6 +31,48 @@ export function toDisplayName(name: string): string {
 
 export function isBuiltIn(name: string): boolean {
   return (BUILT_IN_PERSONAS as readonly string[]).includes(name);
+}
+
+function isResolvedFileInsideDir(dirReal: string, fileReal: string): boolean {
+  const rel = relative(resolve(dirReal), resolve(fileReal));
+  if (rel === '') {
+    return false;
+  }
+  if (rel.startsWith('..')) {
+    return false;
+  }
+  return !isAbsolute(rel);
+}
+
+/** Returns the joined path only if it resolves under the real personas directory (blocks symlink escape). */
+function resolveSafePersonaFilePath(name: string, configDir?: string): string | null {
+  if (!isValidPersonaName(name)) {
+    return null;
+  }
+  const paths = resolveConfigPaths(configDir);
+  if (!existsSync(paths.personasDir)) {
+    return null;
+  }
+  let personasDirReal: string;
+  try {
+    personasDirReal = realpathSync(paths.personasDir);
+  } catch {
+    return null;
+  }
+  const filePath = join(paths.personasDir, `${name}.md`);
+  if (!existsSync(filePath)) {
+    return null;
+  }
+  let fileReal: string;
+  try {
+    fileReal = realpathSync(filePath);
+  } catch {
+    return null;
+  }
+  if (!isResolvedFileInsideDir(personasDirReal, fileReal)) {
+    return null;
+  }
+  return filePath;
 }
 
 export function listPersonas(configDir?: string): PersonaInfo[] {
@@ -48,19 +102,15 @@ export function listPersonas(configDir?: string): PersonaInfo[] {
 }
 
 export function getPersonaContent(name: string, configDir?: string): string | null {
-  const paths = resolveConfigPaths(configDir);
-  const filePath = join(paths.personasDir, `${name}.md`);
-
-  if (!existsSync(filePath)) {
+  const filePath = resolveSafePersonaFilePath(name, configDir);
+  if (!filePath) {
     return null;
   }
-
   return readFileSync(filePath, 'utf-8');
 }
 
 export function personaExists(name: string, configDir?: string): boolean {
-  const paths = resolveConfigPaths(configDir);
-  return existsSync(join(paths.personasDir, `${name}.md`));
+  return resolveSafePersonaFilePath(name, configDir) !== null;
 }
 
 export function addCustomPersona(name: string, content: string, configDir?: string): void {
@@ -75,8 +125,21 @@ export function addCustomPersona(name: string, content: string, configDir?: stri
   }
 
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(paths.personasDir, { recursive: true });
-  writeFileSync(join(paths.personasDir, `${name}.md`), content);
+  mkdirSync(paths.personasDir, { recursive: true, mode: 0o700 });
+
+  const filePath = join(paths.personasDir, `${name}.md`);
+  if (existsSync(filePath)) {
+    try {
+      if (lstatSync(filePath).isSymbolicLink()) {
+        throw new PersonaError(`Refusing to write persona "${name}": target path is a symlink`);
+      }
+    } catch (err) {
+      if (err instanceof PersonaError) throw err;
+      throw new PersonaError(`Cannot verify persona file path for "${name}"`);
+    }
+  }
+
+  writeFileSync(filePath, content, { mode: 0o600 });
 }
 
 export function removeCustomPersona(name: string, configDir?: string): void {
@@ -84,18 +147,12 @@ export function removeCustomPersona(name: string, configDir?: string): void {
     throw new PersonaError(`"${name}" is a built-in persona and cannot be removed`);
   }
 
-  const paths = resolveConfigPaths(configDir);
-  const filePath = join(paths.personasDir, `${name}.md`);
-
-  if (!existsSync(filePath)) {
+  const safePath = resolveSafePersonaFilePath(name, configDir);
+  if (!safePath) {
     throw new PersonaError(`Persona "${name}" does not exist`);
   }
 
-  unlinkSync(filePath);
-}
-
-export function isValidPersonaName(name: string): boolean {
-  return /^[a-z][a-z0-9-]*[a-z0-9]$/.test(name) && name.length >= 2 && name.length <= 64;
+  unlinkSync(safePath);
 }
 
 export class PersonaError extends Error {

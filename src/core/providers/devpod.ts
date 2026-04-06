@@ -1,6 +1,7 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
+import { shellEscape } from '../claude/ssh.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -82,7 +83,7 @@ export function createWorktreeInContainer(
   sessionId: string,
 ): string {
   const worktreePath = `/tmp/hydraz-worktrees/${sessionId}`;
-  const command = `mkdir -p /tmp/hydraz-worktrees && cd ${containerRepoPath} && git worktree add -b ${branchName} ${worktreePath}`;
+  const command = `mkdir -p /tmp/hydraz-worktrees && cd ${shellEscape(containerRepoPath)} && git worktree add -b ${shellEscape(branchName)} ${shellEscape(worktreePath)}`;
   execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
   return worktreePath;
 }
@@ -91,32 +92,20 @@ export function copyWorktreeIncludesInContainer(
   workspaceName: string,
   containerRepoPath: string,
   containerWorktreePath: string,
+  files: string[],
 ): void {
-  const command = [
-    `cd ${containerRepoPath}`,
-    `if [ -f .worktreeinclude ]; then`,
-    `  while IFS= read -r line || [ -n "$line" ]; do`,
-    `    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')`,
-    `    [ -z "$line" ] && continue`,
-    `    echo "$line" | grep -q '^#' && continue`,
-    `    if [ -f "$line" ]; then`,
-    `      mkdir -p "${containerWorktreePath}/$(dirname "$line")"`,
-    `      cp "$line" "${containerWorktreePath}/$line"`,
-    `    fi`,
-    `  done < .worktreeinclude`,
-    `fi`,
-  ].join('\n');
-  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
-}
-
-export function setupContainerGitSsh(workspaceName: string): void {
-  try {
-    execFileSync('ssh', [`${workspaceName}.devpod`,
-      'mkdir -p ~/.ssh && ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts 2>/dev/null',
-    ], EXEC_OPTIONS);
-  } catch {
-    // Non-fatal — push may still work via HTTPS or the repo may not use GitHub
+  if (files.length === 0) {
+    return;
   }
+
+  const command = [`cd ${shellEscape(containerRepoPath)}`];
+  for (const file of files) {
+    const destDir = `${containerWorktreePath}/${posix.dirname(file)}`;
+    const destFile = `${containerWorktreePath}/${file}`;
+    command.push(`mkdir -p ${shellEscape(destDir)}`);
+    command.push(`cp ${shellEscape(file)} ${shellEscape(destFile)}`);
+  }
+  execFileSync('ssh', [`${workspaceName}.devpod`, command.join('\n')], EXEC_OPTIONS);
 }
 
 export function verifyBranchPushed(
@@ -127,7 +116,7 @@ export function verifyBranchPushed(
   try {
     const output = execFileSync('ssh', [
       `${workspaceName}.devpod`,
-      `cd ${worktreePath} && git ls-remote --heads origin ${branchName}`,
+      `cd ${shellEscape(worktreePath)} && git ls-remote --heads origin ${shellEscape(branchName)}`,
     ], { ...EXEC_OPTIONS, encoding: 'utf-8' });
     return output.trim().length > 0;
   } catch {

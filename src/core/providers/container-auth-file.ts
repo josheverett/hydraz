@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { shellEscape } from '../claude/ssh.js';
 
@@ -12,8 +12,7 @@ export function writeAuthFile(worktreeDir: string, env: Record<string, string>):
     .map(([key, value]) => `${key}=${shellEscape(value)}\n`)
     .join('');
 
-  writeFileSync(filePath, content);
-  chmodSync(filePath, 0o600);
+  writeFileSync(filePath, content, { mode: 0o600 });
 }
 
 export function cleanupAuthFile(worktreeDir: string): void {

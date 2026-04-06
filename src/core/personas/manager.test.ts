@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -14,6 +14,7 @@ import {
   PersonaError,
 } from './manager.js';
 import { initializeConfigDir } from '../config/init.js';
+import { resolveConfigPaths } from '../config/paths.js';
 
 let testDir: string;
 
@@ -117,6 +118,29 @@ describe('getPersonaContent', () => {
   it('returns null for a non-existent persona', () => {
     expect(getPersonaContent('does-not-exist', testDir)).toBeNull();
   });
+
+  it('returns null for names that are not valid persona path segments', () => {
+    expect(getPersonaContent('../../../etc/passwd', testDir)).toBeNull();
+  });
+
+  it('returns null when the persona file is a symlink outside the personas directory', () => {
+    if (process.platform === 'win32') return;
+
+    const paths = resolveConfigPaths(testDir);
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-persona-out-'));
+    const targetFile = join(outside, 'secret.md');
+    writeFileSync(targetFile, 'leaked', { mode: 0o600 });
+    const architectPath = join(paths.personasDir, 'architect.md');
+    rmSync(architectPath);
+    symlinkSync(targetFile, architectPath);
+
+    try {
+      expect(getPersonaContent('architect', testDir)).toBeNull();
+      expect(personaExists('architect', testDir)).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('personaExists', () => {
@@ -148,6 +172,32 @@ describe('addCustomPersona', () => {
     addCustomPersona('custom-one', '# Custom', testDir);
     const names = listPersonas(testDir).map((p) => p.name);
     expect(names).toContain('custom-one');
+  });
+
+  it('writes the persona file with restrictive permissions on POSIX', () => {
+    if (process.platform === 'win32') return;
+    addCustomPersona('mode-check', '# X', testDir);
+    const paths = resolveConfigPaths(testDir);
+    expect(statSync(join(paths.personasDir, 'mode-check.md')).mode & 0o777).toBe(0o600);
+  });
+
+  it('refuses to write through a symlink pointing outside the personas directory', () => {
+    if (process.platform === 'win32') return;
+
+    const paths = resolveConfigPaths(testDir);
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-persona-target-'));
+    const targetFile = join(outside, 'target.txt');
+    writeFileSync(targetFile, 'original-content', { mode: 0o600 });
+
+    const symlinkPath = join(paths.personasDir, 'evil-agent.md');
+    symlinkSync(targetFile, symlinkPath);
+
+    try {
+      expect(() => addCustomPersona('evil-agent', 'hijacked', testDir)).toThrow(PersonaError);
+      expect(readFileSync(targetFile, 'utf-8')).toBe('original-content');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

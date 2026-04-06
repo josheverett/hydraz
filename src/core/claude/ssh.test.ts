@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shellEscape, buildSshClaudeArgs, buildAuthLoadPrefix } from './ssh.js';
+import { shellEscape, buildSshClaudeArgs } from './ssh.js';
 
 describe('shellEscape', () => {
   it('wraps simple strings in single quotes', () => {
@@ -45,83 +45,88 @@ describe('buildSshClaudeArgs', () => {
     expect(result.args[0]).toBe('my-workspace.devpod');
   });
 
-  it('builds a single shell command string with claude and escaped args', () => {
+  it('launches a remote shell that reads the script from stdin', () => {
+    const result = buildSshClaudeArgs('ws', ['--print']);
+    expect(result.args).toEqual(['ws.devpod', 'sh', '-s']);
+  });
+
+  it('builds a shell script with claude and escaped args', () => {
     const result = buildSshClaudeArgs('ws', ['--print', '--output-format', 'stream-json', 'fix the bug']);
-    const commandString = result.args[1];
-    expect(commandString).toContain('claude');
-    expect(commandString).toContain('--print');
-    expect(commandString).toContain('stream-json');
-    expect(commandString).toContain("'fix the bug'");
+    const script = result.stdinScript ?? '';
+    expect(script).toContain('exec claude');
+    expect(script).toContain("'--print'");
+    expect(script).toContain("'stream-json'");
+    expect(script).toContain("'fix the bug'");
   });
 
   it('escapes special characters in prompt text', () => {
     const result = buildSshClaudeArgs('ws', ['--print', "it's $HOME \"quoted\""]);
-    const commandString = result.args[1];
+    const script = result.stdinScript ?? '';
     // $HOME appears inside single quotes, so the remote shell won't expand it
-    expect(commandString).toContain("$HOME");
+    expect(script).toContain("$HOME");
     // Single quote in "it's" is properly escaped
-    expect(commandString).toContain("'\\''");
+    expect(script).toContain("'\\''");
   });
 
   it('does not escape flag arguments that are safe', () => {
     const result = buildSshClaudeArgs('ws', ['--print', '--verbose']);
-    const commandString = result.args[1];
-    expect(commandString).toContain("'--print'");
-    expect(commandString).toContain("'--verbose'");
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("'--print'");
+    expect(script).toContain("'--verbose'");
   });
 
-  it('prepends auth load prefix when authFilePath is provided', () => {
-    const result = buildSshClaudeArgs('ws', ['--print', 'do stuff'], '/workspaces/ws/.hydraz-auth');
-    const commandString = result.args[1];
-    expect(commandString).toContain('set -a');
-    expect(commandString).toContain('.hydraz-auth');
-    expect(commandString).toContain('claude');
+  it('exports auth env values inline in the stdin script', () => {
+    const result = buildSshClaudeArgs('ws', ['--print', 'do stuff'], {
+      CLAUDE_CODE_OAUTH_TOKEN: 'secret-token',
+    });
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("export CLAUDE_CODE_OAUTH_TOKEN='secret-token'");
+    expect(script).toContain('exec claude');
   });
 
-  it('does not include auth prefix when authFilePath is undefined', () => {
+  it('does not reference an auth temp file', () => {
+    const result = buildSshClaudeArgs('ws', ['--print'], {
+      CLAUDE_CODE_OAUTH_TOKEN: 'secret-token',
+    });
+    const script = result.stdinScript ?? '';
+    expect(script).not.toContain('.hydraz-auth');
+  });
+
+  it('still builds a stdin script when no auth env is provided', () => {
     const result = buildSshClaudeArgs('ws', ['--print']);
-    const commandString = result.args[1];
-    expect(commandString).toMatch(/^claude /);
+    expect(result.stdinScript).toContain('exec claude');
   });
 
   it('prepends cd to working directory when provided', () => {
     const result = buildSshClaudeArgs('ws', ['--print'], undefined, '/workspaces/ws/worktrees/s1');
-    const commandString = result.args[1];
-    expect(commandString).toMatch(/^cd '\/workspaces\/ws\/worktrees\/s1' && claude/);
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("cd '/workspaces/ws/worktrees/s1'");
   });
 
-  it('combines cd, auth, and claude in the correct order', () => {
-    const result = buildSshClaudeArgs('ws', ['--print'], '/ws/.hydraz-auth', '/ws/worktrees/s1');
-    const commandString = result.args[1];
-    const cdIdx = commandString.indexOf('cd ');
-    const authIdx = commandString.indexOf('set -a');
-    const claudeIdx = commandString.indexOf('claude');
-    expect(cdIdx).toBeLessThan(authIdx);
-    expect(authIdx).toBeLessThan(claudeIdx);
+  it('rejects env var keys with shell metacharacters', () => {
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { 'FOO$(whoami)': 'val' }),
+    ).toThrow();
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { 'NAME WITH SPACES': 'val' }),
+    ).toThrow();
+    expect(() =>
+      buildSshClaudeArgs('ws', ['--print'], { '': 'val' }),
+    ).toThrow();
   });
 
-  it('deletes auth file after reading in the remote command', () => {
-    const result = buildSshClaudeArgs('ws', ['--print'], '/workspaces/ws/.hydraz-auth');
-    const commandString = result.args[1];
-    expect(commandString).toContain('rm -f');
-    expect(commandString).toContain('.hydraz-auth');
-  });
-});
-
-describe('buildAuthLoadPrefix', () => {
-  it('sources the auth file with auto-export enabled', () => {
-    const prefix = buildAuthLoadPrefix('/path/.hydraz-auth');
-    expect(prefix).toContain('set -a');
-    expect(prefix).toContain('/path/.hydraz-auth');
-  });
-
-  it('removes the auth file after reading', () => {
-    const prefix = buildAuthLoadPrefix('/path/.hydraz-auth');
-    expect(prefix).toContain('rm -f');
-  });
-
-  it('uses the correct file path', () => {
-    const prefix = buildAuthLoadPrefix('/workspaces/myrepo/.hydraz-auth');
-    expect(prefix).toContain('/workspaces/myrepo/.hydraz-auth');
+  it('combines cd, auth exports, and claude in the correct order', () => {
+    const result = buildSshClaudeArgs(
+      'ws',
+      ['--print'],
+      { CLAUDE_CODE_OAUTH_TOKEN: 'secret-token' },
+      '/ws/worktrees/s1',
+    );
+    const script = result.stdinScript ?? '';
+    const cdIdx = script.indexOf('cd ');
+    const exportIdx = script.indexOf('export CLAUDE_CODE_OAUTH_TOKEN');
+    const claudeIdx = script.indexOf('exec claude');
+    expect(cdIdx).toBeLessThan(exportIdx);
+    expect(exportIdx).toBeLessThan(claudeIdx);
   });
 });

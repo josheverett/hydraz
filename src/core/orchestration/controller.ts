@@ -3,6 +3,7 @@ import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
 import { launchClaude, mapExitToSessionState, type ExecutorHandle } from '../claude/executor.js';
 import { assemblePrompt } from '../prompts/builder.js';
 import { createEvent, appendEvent } from '../events/index.js';
+import { persistToolInputForEvent } from '../events/tool-input-persist.js';
 import { formatStreamEvent } from '../claude/stream-display.js';
 import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
 import type { DisplayVerbosity, ExecutionTarget } from '../config/schema.js';
@@ -11,16 +12,20 @@ import {
   saveSession,
   transitionState,
   isTerminalState,
+  RESUMABLE_STATES,
   type SessionMetadata,
 } from '../sessions/index.js';
 import { LocalProvider } from '../providers/local.js';
 import { LocalContainerProvider } from '../providers/local-container.js';
 import { CloudProvider } from '../providers/cloud.js';
+import { finalizeGitHubContainerDelivery } from '../github/delivery.js';
 import { prepareContainerAuthEnv, validateContainerAuth } from '../providers/container-auth.js';
-import { cleanupAuthFile, AUTH_FILE_NAME } from '../providers/container-auth-file.js';
-import { sshExec, verifyBranchPushed } from '../providers/devpod.js';
-import { shellEscape } from '../claude/ssh.js';
-import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
+import { getGitHubAutomationReadiness } from '../github/requirements.js';
+import {
+  isContainerExecutionTarget,
+  type WorkspaceProvider,
+  type WorkspaceInfo,
+} from '../providers/provider.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -36,36 +41,6 @@ export interface RunningSession {
 }
 
 const activeSessions = new Map<string, RunningSession>();
-
-export interface ContainerCleanupResult {
-  action: 'destroyed' | 'preserved';
-  message: string;
-}
-
-export function cleanupContainerWorkspace(
-  sessionId: string,
-  workspace: WorkspaceInfo,
-  branchName: string,
-  repoRoot: string,
-  provider: WorkspaceProvider,
-): ContainerCleanupResult {
-  const workspaceName = `hydraz-${sessionId}`;
-  const pushed = verifyBranchPushed(workspaceName, workspace.directory, branchName);
-
-  if (pushed) {
-    provider.destroyWorkspace(repoRoot, workspace);
-    return {
-      action: 'destroyed',
-      message: 'Workspace cleaned up after verified push',
-    };
-  }
-
-  return {
-    action: 'preserved',
-    message: `Branch "${branchName}" not found on remote. ` +
-      `Workspace preserved for recovery: devpod ssh ${workspaceName}`,
-  };
-}
 
 export function getProvider(target: ExecutionTarget): WorkspaceProvider {
   switch (target) {
@@ -114,10 +89,20 @@ export async function startSession(
     return;
   }
 
-  if (session.executionTarget === 'local-container') {
+  if (isContainerExecutionTarget(session.executionTarget)) {
     const containerAuth = validateContainerAuth(config);
     if (!containerAuth.valid) {
       const msg = containerAuth.error ?? 'Container auth not configured';
+      transitionState(repoRoot, sessionId, 'blocked', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.blocked', msg);
+      callbacks.onError?.(msg);
+      return;
+    }
+
+    const gitHubAutomation = getGitHubAutomationReadiness(config, repoRoot);
+    if (!gitHubAutomation.ok) {
+      const msg = gitHubAutomation.error ?? 'GitHub automation is not configured';
       transitionState(repoRoot, sessionId, 'blocked', msg);
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.blocked', msg);
@@ -162,20 +147,13 @@ export async function startSession(
   const prompt = assemblePrompt(session);
   emitEvent('claude.ready', 'Claude Code launching');
 
-  let containerContext: { workspaceName: string; authFilePath?: string; workingDirectory?: string } | undefined;
-  if (session.executionTarget === 'local-container') {
+  let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
+  if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const authEnv = prepareContainerAuthEnv(config);
-    const authFilePath = `/tmp/${AUTH_FILE_NAME}`;
-    if (Object.keys(authEnv).length > 0) {
-      const content = Object.entries(authEnv)
-        .map(([key, value]) => `${key}=${shellEscape(value)}`)
-        .join('\n');
-      sshExec(workspaceName, `echo ${shellEscape(content)} > ${authFilePath} && chmod 600 ${authFilePath}`);
-    }
     containerContext = {
       workspaceName,
-      authFilePath: Object.keys(authEnv).length > 0 ? authFilePath : undefined,
+      authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
       workingDirectory: workspace.directory,
     };
   }
@@ -192,8 +170,9 @@ export async function startSession(
       }
 
       if (event.kind === 'tool_call') {
+        const persistedInput = persistToolInputForEvent(event.toolName, event.toolInput);
         appendEvent(repoRoot, createEvent(sessionId, 'swarm.phase_changed',
-          `${event.toolName}: ${event.toolInput ?? ''}`,
+          `${event.toolName}: ${persistedInput}`,
         ));
       }
     },
@@ -204,13 +183,40 @@ export async function startSession(
   const result = await executor.waitForExit();
   activeSessions.delete(sessionId);
 
-  if (session.executionTarget === 'local-container') {
-    cleanupAuthFile(repoRoot);
+  const currentSession = loadSession(repoRoot, sessionId);
+  let stateMapping: ReturnType<typeof mapExitToSessionState> | null = null;
+  if (!isTerminalState(currentSession.state)) {
+    stateMapping = mapExitToSessionState(result);
   }
 
-  const currentSession = loadSession(repoRoot, sessionId);
-  if (!isTerminalState(currentSession.state)) {
-    const stateMapping = mapExitToSessionState(result);
+  let containerDelivery: Awaited<ReturnType<typeof finalizeGitHubContainerDelivery>> | null = null;
+  if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
+    try {
+      containerDelivery = await finalizeGitHubContainerDelivery({
+        session,
+        workspace,
+        repoRoot,
+        provider,
+        token: config.github.token,
+        createPullRequest: stateMapping?.state === 'completed',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      containerDelivery = {
+        action: 'preserved',
+        message: `Workspace preserved after GitHub delivery failure: ${message}`,
+      };
+    }
+
+    if (stateMapping?.state === 'completed' && containerDelivery.action !== 'destroyed') {
+      stateMapping = {
+        state: 'failed',
+        message: containerDelivery.message,
+      };
+    }
+  }
+
+  if (stateMapping) {
     transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
     callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
 
@@ -221,19 +227,18 @@ export async function startSession(
     }
   }
 
-  if (session.executionTarget === 'local-container') {
-    const cleanup = cleanupContainerWorkspace(
-      session.id, workspace, session.branchName, repoRoot, provider,
-    );
+  if (isContainerExecutionTarget(session.executionTarget) && containerDelivery) {
+    if (containerDelivery.prUrl) {
+      emitEvent('pull_request.created', `Pull request: ${containerDelivery.prUrl}`);
+    }
 
-    if (cleanup.action === 'destroyed') {
-      emitEvent('workspace.destroyed', cleanup.message);
+    if (containerDelivery.action === 'destroyed') {
+      emitEvent('workspace.destroyed', containerDelivery.message);
     } else {
-      emitEvent('workspace.preserved', cleanup.message);
+      emitEvent('workspace.preserved', containerDelivery.message);
       callbacks.onError?.(
-        `Warning: Branch "${session.branchName}" was not found on the remote. ` +
-        `The DevPod workspace has been preserved.\n` +
-        `To access and manually push: devpod ssh hydraz-${session.id}`);
+        `${containerDelivery.message}\n` +
+        `To access and manually recover: devpod ssh hydraz-${session.id}`);
     }
   }
 }
@@ -267,10 +272,15 @@ export async function resumeSession(
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
 ): Promise<void> {
+  if (isSessionRunning(sessionId)) {
+    callbacks.onError?.('Cannot resume: session is currently running.');
+    return;
+  }
+
   const session = loadSession(repoRoot, sessionId);
 
-  if (['completed'].includes(session.state)) {
-    callbacks.onError?.('Cannot resume a completed session.');
+  if (!(RESUMABLE_STATES as readonly string[]).includes(session.state)) {
+    callbacks.onError?.(`Cannot resume a session in "${session.state}" state.`);
     return;
   }
 
@@ -278,9 +288,7 @@ export async function resumeSession(
   appendEvent(repoRoot, event);
   callbacks.onEvent?.('session.attached', `Resuming session "${session.name}"`);
 
-  session.state = 'created';
-  session.updatedAt = new Date().toISOString();
-  saveSession(repoRoot, session);
+  transitionState(repoRoot, sessionId, 'created');
 
   await startSession(sessionId, repoRoot, callbacks);
 }

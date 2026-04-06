@@ -1,8 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
-import { parseWorktreeInclude, copyWorktreeIncludes } from './worktree-include.js';
+import {
+  parseWorktreeInclude,
+  listCopyableWorktreeIncludes,
+  copyWorktreeIncludes,
+} from './worktree-include.js';
 
 let repoRoot: string;
 let worktreeDir: string;
@@ -45,6 +49,18 @@ describe('parseWorktreeInclude', () => {
 });
 
 describe('copyWorktreeIncludes', () => {
+  it('lists only safe, existing entries for a destination root', () => {
+    mkdirSync(join(repoRoot, 'agent'), { recursive: true });
+    writeFileSync(join(repoRoot, 'agent', '.env'), 'API_KEY=secret123');
+    writeFileSync(
+      join(repoRoot, '.worktreeinclude'),
+      'agent/.env\n../../etc/passwd\n../escape\nnonexistent/.env\n',
+    );
+
+    const files = listCopyableWorktreeIncludes(repoRoot, join(worktreeDir, 'placeholder'));
+    expect(files).toEqual(['agent/.env']);
+  });
+
   it('returns empty array when no .worktreeinclude exists', () => {
     expect(copyWorktreeIncludes(repoRoot, worktreeDir)).toEqual([]);
   });
@@ -85,5 +101,32 @@ describe('copyWorktreeIncludes', () => {
     expect(copied).toHaveLength(2);
     expect(copied).toContain('agent/.env');
     expect(copied).toContain('ui/.env');
+  });
+
+  it('skips entries that traverse outside the repo root', () => {
+    writeFileSync(join(repoRoot, '.worktreeinclude'), '../../etc/passwd\n');
+    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
+    expect(copied).toEqual([]);
+  });
+
+  it('skips entries that would write outside the worktree', () => {
+    mkdirSync(join(repoRoot, 'legit'), { recursive: true });
+    writeFileSync(join(repoRoot, 'legit', 'file'), 'ok');
+    writeFileSync(join(repoRoot, '.worktreeinclude'), '../escape\n');
+    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
+    expect(copied).toEqual([]);
+  });
+
+  it('rejects symlink entries even when they point inside the repo', () => {
+    if (process.platform === 'win32') return;
+
+    mkdirSync(join(repoRoot, 'agent'), { recursive: true });
+    writeFileSync(join(repoRoot, 'agent', 'source.env'), 'A=1');
+    symlinkSync(join(repoRoot, 'agent', 'source.env'), join(repoRoot, 'agent', '.env'));
+    writeFileSync(join(repoRoot, '.worktreeinclude'), 'agent/.env\n');
+
+    expect(() => listCopyableWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/symlink/i);
+    expect(() => copyWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/symlink/i);
+    expect(existsSync(join(worktreeDir, 'agent', '.env'))).toBe(false);
   });
 });

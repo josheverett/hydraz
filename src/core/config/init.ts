@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveConfigPaths } from './paths.js';
+import { assertConfigPathNotSymlink } from './protected-path.js';
 import { configExists, saveConfig } from './loader.js';
 import { createDefaultConfig, BUILT_IN_PERSONAS } from './schema.js';
 import { getDefaultMasterPrompt } from './master-prompt.js';
@@ -65,32 +66,42 @@ You are the Performance & Reliability Engineer persona. Your role is to:
 export function initializeConfigDir(configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
 
-  mkdirSync(paths.configDir, { recursive: true });
-  mkdirSync(paths.personasDir, { recursive: true });
-  mkdirSync(paths.mcpDir, { recursive: true });
+  assertConfigPathNotSymlink(paths.configDir, 'Hydraz config directory');
+  assertConfigPathNotSymlink(paths.personasDir, 'personas directory');
+  assertConfigPathNotSymlink(paths.mcpDir, 'MCP directory');
+  mkdirSync(paths.configDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.personasDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.mcpDir, { recursive: true, mode: 0o700 });
 
+  assertConfigPathNotSymlink(paths.configFile, 'config.json');
   if (!configExists(configDir)) {
     saveConfig(createDefaultConfig(), configDir);
   }
 
+  assertConfigPathNotSymlink(paths.masterPromptFile, 'master-prompt.md');
   if (!existsSync(paths.masterPromptFile)) {
-    writeFileSync(paths.masterPromptFile, getDefaultMasterPrompt());
+    writeFileSync(paths.masterPromptFile, getDefaultMasterPrompt(), { mode: 0o600 });
   }
 
+  assertConfigPathNotSymlink(paths.mcpServersFile, 'global MCP config');
   if (!existsSync(paths.mcpServersFile)) {
-    writeFileSync(paths.mcpServersFile, JSON.stringify({ servers: [] }, null, 2) + '\n');
+    writeFileSync(paths.mcpServersFile, JSON.stringify({ servers: [] }, null, 2) + '\n', {
+      mode: 0o600,
+    });
   }
 
   seedBuiltInPersonas(paths.personasDir);
 }
 
 function seedBuiltInPersonas(personasDir: string): void {
+  assertConfigPathNotSymlink(personasDir, 'personas directory');
   for (const name of BUILT_IN_PERSONAS) {
     const filePath = join(personasDir, `${name}.md`);
+    assertConfigPathNotSymlink(filePath, `${name}.md`);
     if (!existsSync(filePath)) {
       const content = BUILT_IN_PERSONA_CONTENT[name];
       if (content) {
-        writeFileSync(filePath, content);
+        writeFileSync(filePath, content, { mode: 0o600 });
       }
     }
   }

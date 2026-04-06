@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolveConfigPaths } from './paths.js';
+import { assertConfigPathNotSymlink } from './protected-path.js';
 import { createDefaultConfig, validateConfig, type HydrazConfig } from './schema.js';
 
 export function configExists(configDir?: string): boolean {
@@ -9,6 +10,8 @@ export function configExists(configDir?: string): boolean {
 
 export function loadConfig(configDir?: string): HydrazConfig {
   const paths = resolveConfigPaths(configDir);
+  assertConfigPathNotSymlink(paths.configDir, 'Hydraz config directory');
+  assertConfigPathNotSymlink(paths.configFile, 'config.json');
 
   if (!existsSync(paths.configFile)) {
     return createDefaultConfig();
@@ -21,7 +24,8 @@ export function loadConfig(configDir?: string): HydrazConfig {
 
 export function saveConfig(config: HydrazConfig, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(paths.configDir, { recursive: true });
-  writeFileSync(paths.configFile, JSON.stringify(config, null, 2) + '\n');
-  chmodSync(paths.configFile, 0o600);
+  assertConfigPathNotSymlink(paths.configDir, 'Hydraz config directory');
+  mkdirSync(paths.configDir, { recursive: true, mode: 0o700 });
+  assertConfigPathNotSymlink(paths.configFile, 'config.json');
+  writeFileSync(paths.configFile, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 }

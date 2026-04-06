@@ -1,10 +1,12 @@
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import type {
   WorkspaceProvider,
   WorkspaceInfo,
   CreateWorkspaceParams,
   ProviderCheckResult,
 } from './provider.js';
+import type { ExecutionTarget } from '../config/schema.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -14,12 +16,12 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
-  setupContainerGitSsh,
 } from './devpod.js';
-import { hasGitRemote } from '../repo/detect.js';
+import { listCopyableWorktreeIncludes } from './worktree-include.js';
+import { getGitHubRepo, hasGitRemote } from '../repo/detect.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
-  readonly type = 'local-container' as const;
+  readonly type: ExecutionTarget = 'local-container';
 
   checkAvailability(): ProviderCheckResult {
     try {
@@ -42,6 +44,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
   createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo {
     const { session } = params;
+    const includeDestinationRoot = join(session.repoRoot, '.hydraz-container-worktree');
 
     if (!hasDevcontainerJson(session.repoRoot)) {
       throw new Error(
@@ -55,6 +58,18 @@ export class LocalContainerProvider implements WorkspaceProvider {
       );
     }
 
+    if (!params.config.github.token) {
+      throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
+    }
+
+    if (!getGitHubRepo(session.repoRoot)) {
+      throw new Error(
+        'Container mode beta automation is currently GitHub-only. Configure `origin` to point at github.com and try again.',
+      );
+    }
+
+    listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
+
     const workspaceName = `hydraz-${session.id}`;
 
     try {
@@ -63,8 +78,6 @@ export class LocalContainerProvider implements WorkspaceProvider {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
-
-    setupContainerGitSsh(workspaceName);
 
     const claudeCheck = verifyClaudeInContainer(workspaceName);
     if (!claudeCheck.available) {
@@ -82,7 +95,8 @@ export class LocalContainerProvider implements WorkspaceProvider {
         session.branchName,
         session.id,
       );
-      copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath);
+      const safeIncludes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
+      copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {
       devpodDelete(workspaceName);
       const message = err instanceof Error ? err.message : String(err);
@@ -91,7 +105,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     return {
       id: session.id,
-      type: 'local-container',
+      type: session.executionTarget,
       directory: worktreePath,
       branchName: session.branchName,
       sessionId: session.id,

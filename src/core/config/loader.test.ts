@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -40,6 +40,19 @@ describe('loadConfig', () => {
     const loaded = loadConfig(testDir);
     expect(loaded.executionTarget).toBe('cloud');
   });
+
+  it('rejects symlinked config.json files', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-config-out-'));
+    writeFileSync(join(outside, 'config.json'), JSON.stringify(createDefaultConfig()));
+    symlinkSync(join(outside, 'config.json'), join(testDir, 'config.json'));
+
+    try {
+      expect(() => loadConfig(testDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('saveConfig', () => {
@@ -71,5 +84,19 @@ describe('saveConfig', () => {
     const stats = statSync(join(testDir, 'config.json'));
     const mode = (stats.mode & 0o777).toString(8);
     expect(mode).toBe('600');
+  });
+
+  it('refuses to write through a symlinked config.json path', () => {
+    if (process.platform === 'win32') return;
+    const outside = mkdtempSync(join(tmpdir(), 'hydraz-config-target-'));
+    const target = join(outside, 'config.json');
+    writeFileSync(target, '{}');
+    symlinkSync(target, join(testDir, 'config.json'));
+
+    try {
+      expect(() => saveConfig(createDefaultConfig(), testDir)).toThrow(/symlink/i);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

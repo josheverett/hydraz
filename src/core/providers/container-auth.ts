@@ -1,4 +1,5 @@
 import type { HydrazConfig } from '../config/schema.js';
+import { buildGitHubGitEnv } from '../github/git-env.js';
 
 export function prepareContainerAuthEnv(config: HydrazConfig): Record<string, string> {
   const env: Record<string, string> = {};
@@ -9,6 +10,10 @@ export function prepareContainerAuthEnv(config: HydrazConfig): Record<string, st
 
   if (config.claudeAuth.mode === 'api-key' && config.claudeAuth.apiKey) {
     env['ANTHROPIC_API_KEY'] = config.claudeAuth.apiKey;
+  }
+
+  if (config.github.token) {
+    Object.assign(env, buildGitHubGitEnv(config.github.token));
   }
 
   return env;

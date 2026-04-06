@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -66,6 +66,14 @@ describe('appendEvent + readEvents', () => {
     expect(events[1].type).toBe('session.state_changed');
   });
 
+  it('keeps events.jsonl restrictive on POSIX when appending creates or replaces lines', () => {
+    if (process.platform === 'win32') return;
+    const eventsFile = join(getSessionDir(repoRoot, sessionId), 'events.jsonl');
+    expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
+    appendEvent(repoRoot, createEvent(sessionId, 'claude.ready', 'ok'));
+    expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
+  });
+
   it('preserves event data through serialization', () => {
     const event = createEvent(sessionId, 'artifact.created', 'Plan written', {
       metadata: { file: 'plan.md' },
@@ -101,5 +109,18 @@ describe('formatEvent', () => {
     });
     const formatted = formatEvent(event);
     expect(formatted).toContain('[planning]');
+  });
+
+  it('strips ANSI and control characters from formatted output', () => {
+    const event = {
+      ...createEvent(sessionId, 'session.created', 'Danger \u001b[31mred\u001b[0m\r\nnext\u0007line'),
+      type: 'session.created\u001b[2J',
+      state: 'plan\u0007ning',
+    };
+    const formatted = formatEvent(event);
+    expect(formatted).toContain('session.created [planning]  Danger red nextline');
+    expect(formatted).not.toContain('\u001b');
+    expect(formatted).not.toContain('\n');
+    expect(formatted).not.toContain('\u0007');
   });
 });

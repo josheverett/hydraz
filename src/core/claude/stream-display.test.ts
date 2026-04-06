@@ -129,4 +129,27 @@ describe('formatStreamEvent', () => {
     const output = formatStreamEvent(event, 'compact')!;
     expect(output).not.toContain('\n');
   });
+
+  it('strips ANSI escape sequences from full text output', () => {
+    const event = makeEvent({
+      kind: 'text',
+      text: 'Hello \u001b[31mred\u001b[0m world',
+    });
+    const output = formatStreamEvent(event, 'full')!;
+    expect(output).toContain('Hello red world');
+    expect(output).not.toContain('\u001b');
+  });
+
+  it('strips control characters from inline tool call output', () => {
+    const event = makeEvent({
+      kind: 'tool_call',
+      toolName: 'Bash\u0007',
+      toolInput: 'echo hi\r\nnext\tstep',
+    });
+    const output = formatStreamEvent(event)!;
+    expect(output).toContain('Bash: echo hi next step');
+    expect(output).not.toContain('\r');
+    expect(output).not.toContain('\n');
+    expect(output).not.toContain('\u0007');
+  });
 });

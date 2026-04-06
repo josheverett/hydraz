@@ -40,12 +40,15 @@ hydraz run --container "refactor the database connection pool"
 
 ### Container setup (one-time)
 
-Container mode runs the swarm in an isolated Docker container (locally or on any cloud provider via DevPod). Requires a `.devcontainer/devcontainer.json` in the target repo with Claude Code CLI included, and a git remote configured.
+Container mode runs the swarm in an isolated Docker container (locally or on any cloud provider via DevPod). Requires a `.devcontainer/devcontainer.json` in the target repo with Claude Code CLI included, and a git remote configured. For the initial beta, automated push/PR delivery in container mode is GitHub-only.
 
 ```bash
 # Configure container auth (portable OAuth token for headless Claude Code)
 claude setup-token
 hydraz config                               # → Claude Code auth → Set OAuth token
+
+# Configure GitHub delivery auth (beta container push/PR automation)
+hydraz config                               # → GitHub push/PR auth → Set GitHub token
 
 # For local containers
 devpod provider add docker
@@ -143,7 +146,7 @@ Global config lives at `~/.config/hydraz/`. Session data and worktrees live at `
 
 ```bash
 npm install
-npm test               # 384 tests
+npm test               # Vitest
 npm run test:watch     # watch mode
 npm run build          # compile TypeScript
 npm run typecheck      # type-check without emitting

@@ -9,7 +9,8 @@ export function isValidBranchName(name: string): boolean {
   if (name.includes('^') || name.includes(':') || name.includes('\\')) return false;
   if (name.includes('?') || name.includes('*') || name.includes('[')) return false;
   if (name.includes('@{')) return false;
-  return /^[\x20-\x7E]+$/.test(name);
+  if (/[;|&$`()"'!<>{}#]/.test(name)) return false;
+  return /^[\x21-\x7E]+$/.test(name);
 }
 
 export function isValidSessionName(name: string): boolean {

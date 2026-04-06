@@ -1,5 +1,6 @@
 import { listSessions, isTerminalState, type SessionState } from '../sessions/index.js';
 import { devpodStatus, devpodDelete } from '../providers/devpod.js';
+import { isContainerExecutionTarget } from '../providers/provider.js';
 
 export interface OrphanedWorkspace {
   sessionId: string;
@@ -16,7 +17,7 @@ export function findOrphanedWorkspaces(repoRoot: string): OrphanedWorkspace[] {
 
   for (const session of sessions) {
     if (!isTerminalState(session.state)) continue;
-    if (session.executionTarget !== 'local-container') continue;
+    if (!isContainerExecutionTarget(session.executionTarget)) continue;
 
     const workspaceName = `hydraz-${session.id}`;
     const status = devpodStatus(workspaceName);

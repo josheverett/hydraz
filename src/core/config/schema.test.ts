@@ -79,11 +79,23 @@ describe('validateConfig', () => {
     expect(result.claudeAuth.apiKey).toBe('sk-ant-api-test');
   });
 
+  it('preserves github token when configured', () => {
+    const result = validateConfig({
+      github: { token: 'github_pat_test' },
+    });
+    expect(result.github.token).toBe('github_pat_test');
+  });
+
   it('leaves oauthToken undefined when not provided', () => {
     const result = validateConfig({
       claudeAuth: { mode: 'claude-ai-oauth' },
     });
     expect(result.claudeAuth.oauthToken).toBeUndefined();
+  });
+
+  it('leaves github token undefined when not provided', () => {
+    const result = validateConfig({});
+    expect(result.github.token).toBeUndefined();
   });
 
   it('rejects non-object input', () => {
@@ -121,6 +133,18 @@ describe('validateConfig', () => {
     expect(() => validateConfig({ defaultPersonas: ['a', '', 'c'] })).toThrow(
       ConfigValidationError,
     );
+  });
+
+  it('rejects defaultPersonas that are not valid persona names', () => {
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'BadName', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'a', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
+    expect(() =>
+      validateConfig({ defaultPersonas: ['architect', 'foo/../bar', 'verifier'] }),
+    ).toThrow(ConfigValidationError);
   });
 
   it('rejects non-string fields', () => {

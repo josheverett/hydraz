@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 0-16 complete. 37 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
+**Status:** Phases 0-16 complete. 38 test files. The full pipeline works end-to-end: local bare-metal, local containers (Docker via DevPod), and cloud containers (GCP via DevPod, proven with zero code changes from local). Container workspaces are automatically cleaned up after verified push; orphans can be cleaned manually with `hydraz clean`.
 
 **Next step:** Phase 17 (multi-executor backend support) is deferred until a second backend is needed. All v1 phases are complete.
 
@@ -16,7 +16,7 @@
 - Always remind the human to rebuild (`npm run build`) before manual testing.
 - Stop after each atomic sub-phase so the human can run `npm test` and commit.
 - **Spec and README must stay current with every commit.** Any commit that changes behavior, adds commands, changes test counts, or modifies the public surface must include corresponding updates to both `hydraz_v1_spec.md` and `README.md`. When editing either document, perform multiple self-review passes to ensure all information is internally consistent — test counts, command lists, phase statuses, deliverable claims, and current-state summaries must all agree with each other and with the actual codebase.
-- **CRITICAL:** See Section 26b (Coding Standards) for prove-it-first methodology (the most important rule), TDD, type deduplication, and phase completion gate rules.
+- **CRITICAL:** See Section 26b (Coding Standards) for the prove-it-first methodology (the most important rule), especially the evidence taxonomy (`Runtime proof` vs `Source fact` vs `Hypothesis` vs `Unknown`), TDD, type deduplication, and phase completion gate rules.
 
 ## 1. Overview
 
@@ -569,6 +569,8 @@ The v1 state machine:
 - `failed` (crash/error)
 
 `queued` was dropped for v1 (no queue system). `paused` was dropped — interrupted sessions stay in their last active state and `hydraz resume` picks up.
+
+Terminal states `stopped`, `blocked`, and `failed` have a single valid transition back to `created` (used by `hydraz resume`). `completed` has no outgoing transitions. `resumeSession` uses `transitionState` (not direct mutation), checks `RESUMABLE_STATES`, and rejects active or completed sessions.
 
 The CLI exposes these through `status` and `events`.
 
@@ -1526,7 +1528,7 @@ Move all Hydraz-generated state (sessions, worktrees, events, artifacts) out of 
 - backward compatibility or clean migration
 
 ## Phase 13: CI and PR checks [DONE]
-Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 272+ tests but no automation enforcing they pass before merge.
+Add GitHub Actions CI so tests and type-checking run automatically on every PR and push to `main`/`dev`. The codebase has 419+ tests but no automation enforcing they pass before merge.
 
 ### Needs
 - GitHub Actions workflow for PR checks
@@ -1561,6 +1563,8 @@ Hydraz supports the `.worktreeinclude` convention — a community standard used 
 
 Hydraz implements this independently because Hydraz creates worktrees itself (via `git worktree add`), so Claude Code's native `.worktreeinclude` handling never fires. Hydraz's `copyWorktreeIncludes` runs during worktree creation and copies listed files from the main checkout into the new worktree.
 
+For security, Hydraz treats `.worktreeinclude` as a fail-closed allowlist of regular files. If any listed entry resolves to a symlink, Hydraz aborts worktree setup rather than dereferencing it into the new worktree.
+
 This is critical for container mode: the worktree is mounted into the DevPod container, so files copied by `.worktreeinclude` (e.g. `.env` files) are available inside the container at `/workspaces/<name>/`. Without this, the agent would have no access to repo env files inside the container.
 
 ### Docker access inside containers
@@ -1582,7 +1586,7 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 - **`devpod up <local-dir> --ide none`** — creates and starts a workspace from a local directory's devcontainer.json. First run ~30s (image build + feature install). Subsequent runs faster (cached image).
 - **Repo files mounted at `/workspaces/<workspace-name>/`** — DevPod copies/mounts the repo contents into the container at this path automatically.
 - **devcontainer features** — standard features (e.g. `ghcr.io/devcontainers/features/node`, `ghcr.io/devcontainers/features/git`) install correctly during image build.
-- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. (Auth injection uses SSH-based file writing instead, for cloud compatibility.)
+- **`containerEnv` in devcontainer.json** — environment variables defined in `containerEnv` are available inside the container. (Auth injection uses an SSH stdin launch script instead, for cloud compatibility and to avoid temp auth files.)
 - **`ssh <workspace>.devpod "command"`** — executes a command inside the container via SSH. Clean exit, proper stdout. This is the programmatic exec interface Hydraz will use.
 - **`devpod ssh --command`** — also works but produces a spurious "Error tunneling to container" message on exit. Use raw SSH instead.
 - **`devpod delete <workspace>`** — clean teardown, removes container.
@@ -1591,7 +1595,7 @@ The following were verified manually against DevPod v0.6.15 with Docker provider
 The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local-container' | 'cloud'`:
 - **`local`** — bare metal, current behavior (worktree + spawn `claude` on host)
 - **`local-container`** — Docker on your machine via DevPod with Docker provider (container + worktree inside container + exec `claude` inside container via SSH)
-- **`cloud`** — same container model, same `LocalContainerProvider`, remote host via DevPod with GCP provider. No separate `CloudProvider` needed — DevPod abstracts the infrastructure.
+- **`cloud`** — same container model and same `LocalContainerProvider` implementation, remote host via DevPod with GCP provider. A thin `CloudProvider` wrapper is acceptable if it delegates to the same implementation — DevPod abstracts the infrastructure.
 
 ### Git lifecycle: bare metal vs container (verified)
 Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
@@ -1607,13 +1611,14 @@ This divergence is correct and intentional. Container mode (both local-container
 A `LocalContainerProvider` implements the existing `WorkspaceProvider` interface:
 1. Starts a DevPod workspace with the **main repo root** as the source (`devpod up <repo-root> --ide none`)
 2. SSHs into the container and creates the git worktree (`git worktree add -b <branch> <path>`)
-3. SSHs into the container and copies `.worktreeinclude` files from the mounted repo root into the worktree
-4. Returns a `WorkspaceInfo` with the container-internal worktree path
-5. `destroyWorkspace` removes the worktree inside the container (via SSH), then calls `devpod delete`
+3. Host-side prevalidates `.worktreeinclude` entries, rejecting symlinks before any container-side copy
+4. SSHs into the container and copies `.worktreeinclude` files from the mounted repo root into the worktree
+5. Returns a `WorkspaceInfo` with the container-internal worktree path
+6. `destroyWorkspace` removes the worktree inside the container (via SSH), then calls `devpod delete`
 
 ### Architecture: how Claude executes inside the container
 The executor spawns Claude Code CLI inside the container via SSH rather than on the host:
-- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod "cd <worktree-path> && claude <args>"` (or equivalent spawn with SSH)
+- Instead of `spawn('claude', args, { cwd: workingDirectory })`, the executor runs `ssh <workspace>.devpod sh -s` and streams a short launch script over SSH stdin that `cd`s into the worktree, exports any auth env vars in-memory, and `exec`s `claude <args>`
 - The controller passes an execution context to the executor indicating whether to run locally or via SSH
 - Streaming output works the same way — stdout from the SSH process is the stream-json output from Claude
 
@@ -1622,7 +1627,7 @@ Claude Code CLI respects the **`CLAUDE_CODE_OAUTH_TOKEN`** environment variable 
 
 1. **One-time setup (on a machine with a browser):** user runs `claude setup-token` to generate a long-lived OAuth token (valid 1 year, requires Claude Pro or Max subscription)
 2. **Hydraz config:** user provides the token to `hydraz config`, which stores it securely
-3. **Container launch:** Hydraz writes the token to a temp file (`/tmp/.hydraz-auth`) inside the container via SSH. The SSH command that launches Claude sources the file, exports the token, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem.
+3. **Container launch:** Hydraz streams a shell script to the container over SSH stdin. That script exports `CLAUDE_CODE_OAUTH_TOKEN` in-memory and immediately `exec`s Claude in the target worktree. No temp auth file is created inside the container, and the token never appears on the host filesystem.
 4. **Onboarding bypass:** the container also needs a `~/.claude.json` with `"hasCompletedOnboarding": true` to skip the interactive onboarding wizard. Hydraz handles this as a post-launch setup step.
 
 Note: there are known upstream issues with OAuth in headless/container environments (claude-code issues #29983, #30096). These are Claude Code bugs, not a Hydraz design problem, but worth monitoring.
@@ -1634,16 +1639,16 @@ Hydraz v1 hardcodes `--model claude-opus-4-6` for all Claude Code sessions. This
 - Docker (or OrbStack) running on the host
 - DevPod CLI installed (`devpod version` to verify)
 - Target repo has a `.devcontainer/devcontainer.json`
-- Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. This matches every major cloud coding agent (Devin, Copilot Coding Agent, Claude Code Web, Kilo).
+- Target repo has a git remote configured — container mode delivers work via push to remote. Repos without a remote are rejected with a clear error. For the initial beta, automated push/PR delivery is GitHub-only: `origin` must point at `github.com`.
 - Claude Code CLI available inside the container (repo's devcontainer responsibility)
+- A GitHub token configured in Hydraz for beta automated push/PR delivery
 
 ### Container setup steps (automatic)
 After launching the DevPod workspace, Hydraz automatically:
-1. Adds GitHub's SSH host key to `~/.ssh/known_hosts` inside the container (via `ssh-keyscan`) — required because DevPod does not copy `known_hosts` from the host
-2. Verifies Claude Code CLI is callable inside the container
-3. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
-4. Copies `.worktreeinclude` files into the worktree
-5. Injects OAuth token via SSH for Claude Code auth
+1. Verifies Claude Code CLI is callable inside the container
+2. Creates a git worktree at `/tmp/hydraz-worktrees/<session-id>`
+3. Revalidates and copies `.worktreeinclude` files into the worktree (symlink entries fail setup)
+4. Injects Claude auth and ephemeral GitHub HTTPS git auth into the remote `claude` invocation
 
 ### Needs
 - `LocalContainerProvider` implementing `WorkspaceProvider`
@@ -1680,7 +1685,7 @@ What was proven:
 - Auth injection via SSH works identically to local containers
 - Worktree at `/tmp/hydraz-worktrees/` works identically to local containers
 
-This means the `CloudProvider` stub can remain as-is or be removed. The `cloud` execution target in the CLI should route to the same `LocalContainerProvider` — the name is misleading, but the implementation is correct. The user selects local vs cloud by configuring which DevPod provider is active, not by changing Hydraz code.
+This means cloud must reuse the same `LocalContainerProvider` implementation as local-container. A thin `CloudProvider` wrapper is acceptable if it delegates to that implementation, but it must not introduce a separate runtime path. The user selects local vs cloud by configuring which DevPod provider is active, not by changing Hydraz code.
 
 ### Architecture
 Cloud execution reuses the container pipeline from Phase 14 exactly:
@@ -1688,7 +1693,7 @@ Cloud execution reuses the container pipeline from Phase 14 exactly:
 - Same `devcontainer.json` per repo
 - Same worktree-inside-container strategy (at `/tmp/hydraz-worktrees/`)
 - Same SSH-based command execution
-- Same auth token injection via SSH (`sshExec` to write `.hydraz-auth` inside the container)
+- Same auth token injection via SSH stdin (no temp auth file inside the container)
 
 DevPod handles VM provisioning, Docker installation, file sync, and SSH tunneling. Hydraz talks to DevPod; DevPod talks to the infrastructure.
 
@@ -1844,6 +1849,8 @@ These should be enforced early.
 - auth source must be explicit
 - secrets must not leak into repo-local session state
 - session should know which auth mode it used, without storing raw secrets
+- stored session metadata must be bound to its containing session directory and current repo; tampered `id` or `repoRoot` values are rejected
+- protected config files (`config.json`, `master-prompt.md`, MCP config, built-in persona seeds) must reject symlinked paths rather than reading from or writing through them
 
 ---
 
@@ -1868,6 +1875,35 @@ When a module's behavior is ambiguous, writing the tests first is the mechanism 
 ### Prove-it-first methodology
 
 No assumption or hypothesis may be acted on until it is verified with evidence. This is a universal engineering discipline, not specific to any tool or domain.
+
+#### Evidence taxonomy
+
+Use these terms precisely:
+
+- **Runtime proof** — A claim established by a passing automated test or a manual run with explicit steps and observed results on the current branch.
+- **Source fact** — A claim established by directly inspecting the checked-in source code, config, or docs. This describes what the source currently says, not how the running system behaves.
+- **Hypothesis** — An inference drawn from source facts, blame/history, docs, issue threads, web research, or memory. A hypothesis is not proof.
+- **Unknown** — Use when runtime proof is required but has not yet been obtained.
+
+#### Language rules
+
+- The words **prove**, **proven**, **proof**, **verified behavior**, and **confirmed working** are reserved for **Runtime proof** only.
+- Reading code may establish a **Source fact**, but it does not prove runtime behavior.
+- Documentation, web search results, blame output, issue comments, and memory may support a **Hypothesis** but never count as proof by themselves.
+- If runtime proof cannot be obtained in the current environment, say so explicitly and present a proof plan instead of a conclusion.
+
+#### Required response discipline
+
+For any significant technical assertion, label it as one of:
+- **Runtime proof**
+- **Source fact**
+- **Hypothesis**
+- **Unknown**
+
+Example:
+- **Source fact:** `getProvider('cloud')` currently returns `CloudProvider` in `src/core/orchestration/controller.ts`.
+- **Hypothesis:** Cloud launch will fail at runtime on this branch.
+- **Runtime proof:** Pending automated test or explicit manual run.
 
 The rules:
 - **Never assume behavior — verify it.** Documentation, web searches, blog posts, and memory are hints, not facts. They may be outdated, wrong, or describe a different version/context. The only source of truth is running the thing and observing what happens.
@@ -1927,13 +1963,15 @@ This is the most important rule in this document. It applies to everything — n
 
 **Never assert something as fact without evidence.** If you say "X is the default behavior," prove it. If you say "Y caused the bug," prove it. If you say "Z is a community standard," prove it. If you say "the config validation is dropping the field," verify before coding a fix. Memory, intuition, and pattern-matching are starting points for investigation, not substitutes for verification.
 
+**Important distinction:** inspecting source can establish a **Source fact**, but it does not establish **Runtime proof**. Do not say "proved" or "proven" when you have only read the code. Use the evidence taxonomy defined above.
+
 Specific applications:
 - **External tool behavior:** CLI interfaces, APIs, env vars, file formats must be verified by actually running the tool. Never trust documentation or web search results alone.
 - **Bug diagnosis:** Verify the actual cause before writing a fix. Reproduce the bug, isolate the root cause, then fix what is actually broken.
 - **Community claims:** If you assert something is a standard, convention, or common practice, find evidence (docs, issues, implementations) or say "I don't know."
-- **Codebase state:** If you claim "this is already handled" or "this field is preserved," verify against the actual code, not your memory of the code.
+- **Codebase state:** If you claim "this is already handled" or "this field is preserved," verify against the actual code, not your memory of the code. That establishes a **Source fact** about the checked-in branch, not proof of runtime behavior.
 
-When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec. See Section 26 for the full prove-it-first policy with a real example of why it matters.
+When repo tests are insufficient, manual human verification is acceptable. Document verified findings in the spec and label them as **Runtime proof**. See Section 26 for the full prove-it-first policy with a real example of why it matters.
 
 ### API-design-driven TDD
 The implementation order is strict: define interfaces/types → write tests that use them (tests fail) → implement until tests pass. This is not optional or aspirational — it is the required workflow.
@@ -1992,7 +2030,7 @@ Each question below is annotated with the phase where it becomes blocking. It mu
    **Resolved:** For bare-metal local mode, v1 keeps worktrees on disk for review. For container mode, DevPod workspaces are destroyed after session completion once push is verified (Phase 16). Session metadata and events always persist regardless of execution mode. `hydraz clean` provides manual orphan cleanup for DevPod workspaces that weren't automatically destroyed (implemented in Phase 16).
 
 5. ~~**What is the exact secure storage and injection strategy for Claude Max OAuth tokens across local and cloud providers?**~~
-   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz writes the token to a temp file (`.hydraz-auth`, `0600` permissions) inside the container via SSH, and the SSH command sources it, exports `CLAUDE_CODE_OAUTH_TOKEN`, deletes the file, then runs Claude. The token never appears in `ps` output or on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
+   **Resolved:** For local bare-metal execution, Claude Code manages its own auth state. For container execution (local-container and cloud), users generate a long-lived token via `claude setup-token` and store it in Hydraz config (`claudeAuth.oauthToken`). At container launch, Hydraz streams a short shell script over SSH stdin that exports `CLAUDE_CODE_OAUTH_TOKEN` in-memory and immediately `exec`s Claude in the target worktree. No temp auth file is created inside the container, and the token never appears on the host filesystem. Config file is `0600`. Implemented in Phase 14, verified on GCP in Phase 15.
 
 6. ~~**How should Hydraz detect and report auth precedence conflicts cleanly?**~~
    **Resolved:** v1 reports the configured auth mode and validates prerequisites (e.g. `ANTHROPIC_API_KEY` is set for api-key mode). Claude Code handles its own auth precedence. Hydraz surfaces the active mode in status and review outputs.

@@ -44,6 +44,7 @@ export async function configMenu(): Promise<void> {
       { name: 'Set default personas', value: 'personas' as const },
       { name: 'Master prompt', value: 'master-prompt' as const },
       { name: 'Claude Code auth', value: 'auth' as const },
+      { name: 'GitHub push/PR auth', value: 'github-auth' as const },
       { name: 'Check Claude Code availability', value: 'claude-check' as const },
       { name: 'Exit', value: 'exit' as const },
     ],
@@ -65,6 +66,9 @@ export async function configMenu(): Promise<void> {
     case 'auth':
       await setAuthMode();
       break;
+    case 'github-auth':
+      await setGitHubAuth();
+      break;
     case 'claude-check':
       claudeCheck();
       break;
@@ -84,6 +88,7 @@ function viewConfig(): void {
   console.log(`  Auth mode:         ${config.claudeAuth.mode}`);
   console.log(`  OAuth token:       ${config.claudeAuth.oauthToken ? 'configured' : 'not set'}`);
   console.log(`  API key:           ${config.claudeAuth.apiKey ? 'configured' : 'not set'}`);
+  console.log(`  GitHub token:      ${config.github.token ? 'configured' : 'not set'}`);
   console.log(`  Keep transcripts:  ${config.retention.keepTranscripts}`);
   console.log(`  Keep test logs:    ${config.retention.keepTestLogs}`);
   console.log(`  Display verbosity: ${config.displayVerbosity}`);
@@ -203,6 +208,47 @@ async function setAuthMode(): Promise<void> {
         delete config.claudeAuth.apiKey;
         saveConfig(config);
         console.log('\nCredentials cleared.\n');
+      }
+      break;
+    }
+    case 'back':
+      return;
+  }
+}
+
+async function setGitHubAuth(): Promise<void> {
+  const config = loadConfig();
+  const action = await select({
+    message: 'GitHub push/PR auth',
+    choices: [
+      { name: `Set GitHub token ${config.github.token ? '(configured)' : '(not set)'}`, value: 'token' as const },
+      { name: 'Clear stored GitHub token', value: 'clear' as const },
+      { name: 'Back', value: 'back' as const },
+    ],
+  });
+
+  switch (action) {
+    case 'token': {
+      const token = await password({
+        message: 'Enter GitHub token',
+        mask: '*',
+      });
+      if (token.trim()) {
+        config.github.token = token.trim();
+        saveConfig(config);
+        console.log('\nGitHub token saved.\n');
+      }
+      break;
+    }
+    case 'clear': {
+      const shouldClear = await confirm({
+        message: 'Clear stored GitHub token?',
+        default: false,
+      });
+      if (shouldClear) {
+        delete config.github.token;
+        saveConfig(config);
+        console.log('\nGitHub token cleared.\n');
       }
       break;
     }

@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { sanitizeInlineTerminalText } from '../display/sanitize.js';
 import { getSessionDir } from '../sessions/manager.js';
 
 export interface HydrazEvent {
@@ -28,6 +29,7 @@ export type EventType =
   | 'artifact.created'
   | 'verification.passed'
   | 'verification.failed'
+  | 'pull_request.created'
   | 'workspace.destroyed'
   | 'workspace.preserved';
 
@@ -49,7 +51,7 @@ export function createEvent(
 
 export function appendEvent(repoRoot: string, event: HydrazEvent): void {
   const eventsFile = join(getSessionDir(repoRoot, event.sessionId), 'events.jsonl');
-  appendFileSync(eventsFile, JSON.stringify(event) + '\n');
+  appendFileSync(eventsFile, JSON.stringify(event) + '\n', { mode: 0o600 });
 }
 
 export function readEvents(repoRoot: string, sessionId: string): HydrazEvent[] {
@@ -76,7 +78,9 @@ export function readEvents(repoRoot: string, sessionId: string): HydrazEvent[] {
 }
 
 export function formatEvent(event: HydrazEvent): string {
-  const time = event.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z');
-  const state = event.state ? ` [${event.state}]` : '';
-  return `${time}  ${event.type}${state}  ${event.message}`;
+  const time = sanitizeInlineTerminalText(event.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z'));
+  const type = sanitizeInlineTerminalText(event.type);
+  const state = event.state ? ` [${sanitizeInlineTerminalText(event.state)}]` : '';
+  const message = sanitizeInlineTerminalText(event.message);
+  return `${time}  ${type}${state}  ${message}`;
 }

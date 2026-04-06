@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { resolveConfigPaths } from './paths.js';
+import { assertConfigPathNotSymlink } from './protected-path.js';
 
 export function getDefaultMasterPrompt(): string {
   return `# Hydraz Swarm System Prompt
@@ -82,6 +83,7 @@ Do not loop indefinitely. If a problem persists after reasonable attempts, docum
 
 export function loadMasterPrompt(configDir?: string): string {
   const paths = resolveConfigPaths(configDir);
+  assertConfigPathNotSymlink(paths.masterPromptFile, 'master-prompt.md');
 
   if (!existsSync(paths.masterPromptFile)) {
     return getDefaultMasterPrompt();
@@ -92,8 +94,10 @@ export function loadMasterPrompt(configDir?: string): string {
 
 export function saveMasterPrompt(content: string, configDir?: string): void {
   const paths = resolveConfigPaths(configDir);
-  mkdirSync(dirname(paths.masterPromptFile), { recursive: true });
-  writeFileSync(paths.masterPromptFile, content);
+  assertConfigPathNotSymlink(paths.configDir, 'Hydraz config directory');
+  mkdirSync(dirname(paths.masterPromptFile), { recursive: true, mode: 0o700 });
+  assertConfigPathNotSymlink(paths.masterPromptFile, 'master-prompt.md');
+  writeFileSync(paths.masterPromptFile, content, { mode: 0o600 });
 }
 
 export function resetMasterPrompt(configDir?: string): void {

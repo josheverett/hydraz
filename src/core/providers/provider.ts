@@ -27,6 +27,10 @@ export interface WorkspaceProvider {
   checkAvailability(): ProviderCheckResult;
 }
 
+export function isContainerExecutionTarget(target: ExecutionTarget): boolean {
+  return target === 'local-container' || target === 'cloud';
+}
+
 export function getWorkspaceDir(repoRoot: string, sessionId: string): string {
   return resolveWorkspaceDir(repoRoot, sessionId);
 }

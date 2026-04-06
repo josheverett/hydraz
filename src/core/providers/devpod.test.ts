@@ -12,7 +12,6 @@ import {
   sshExec,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
-  setupContainerGitSsh,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -113,7 +112,7 @@ describe('verifyBranchPushed', () => {
     verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/s1', 'hydraz/fix-bug');
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining('git ls-remote --heads origin hydraz/fix-bug')],
+      ['my-ws.devpod', expect.stringContaining("git ls-remote --heads origin 'hydraz/fix-bug'")],
       expect.any(Object),
     );
   });
@@ -122,7 +121,7 @@ describe('verifyBranchPushed', () => {
     mockExecFileSync.mockReturnValue('' as never);
     verifyBranchPushed('my-ws', '/tmp/hydraz-worktrees/session-abc', 'hydraz/test');
     const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(command).toContain('cd /tmp/hydraz-worktrees/session-abc');
+    expect(command).toContain("cd '/tmp/hydraz-worktrees/session-abc'");
   });
 
   it('returns false on whitespace-only output', () => {
@@ -214,42 +213,24 @@ describe('createWorktreeInContainer', () => {
 });
 
 describe('copyWorktreeIncludesInContainer', () => {
-  it('runs the copy command via SSH', () => {
+  it('runs the copy command via SSH for provided safe files', () => {
     mockExecFileSync.mockReturnValue('' as never);
-    copyWorktreeIncludesInContainer('my-ws', '/workspaces/my-ws', '/workspaces/my-ws/worktrees/s1');
+    copyWorktreeIncludesInContainer(
+      'my-ws',
+      '/workspaces/my-ws',
+      '/workspaces/my-ws/worktrees/s1',
+      ['agent/.env', 'deep/nested/.env'],
+    );
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining('.worktreeinclude')],
+      ['my-ws.devpod', expect.stringContaining("cp 'agent/.env'")],
       expect.any(Object),
     );
   });
 
-  it('does not throw if .worktreeinclude does not exist', () => {
+  it('does not invoke SSH when there are no files to copy', () => {
     mockExecFileSync.mockReturnValue('' as never);
-    expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt')).not.toThrow();
-  });
-});
-
-describe('setupContainerGitSsh', () => {
-  it('adds GitHub host key to known_hosts inside the container', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    setupContainerGitSsh('my-ws');
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      'ssh',
-      ['my-ws.devpod', expect.stringContaining('ssh-keyscan')],
-      expect.any(Object),
-    );
-  });
-
-  it('includes github.com in the ssh-keyscan command', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    setupContainerGitSsh('my-ws');
-    const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(command).toContain('github.com');
-  });
-
-  it('does not throw on failure', () => {
-    mockExecFileSync.mockImplementation(() => { throw new Error('keyscan failed'); });
-    expect(() => setupContainerGitSsh('my-ws')).not.toThrow();
+    expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 });

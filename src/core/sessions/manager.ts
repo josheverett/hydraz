@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   resolveRepoDataPaths,
   getSessionDir as resolveSessionDir,
@@ -11,6 +11,7 @@ import {
   createSession,
   isValidTransition,
   isActiveState,
+  isValidSessionId,
   SessionError,
   ARTIFACT_FILES,
 } from './schema.js';
@@ -27,10 +28,39 @@ export function getSessionDir(repoRoot: string, sessionId: string): string {
   return resolveSessionDir(repoRoot, sessionId);
 }
 
+function parseStoredSession(
+  raw: unknown,
+  repoRoot: string,
+  expectedSessionId: string,
+): SessionMetadata {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new SessionError(`Session "${expectedSessionId}" is invalid`);
+  }
+
+  const data = raw as Record<string, unknown>;
+  if (typeof data['id'] !== 'string' || data['id'] !== expectedSessionId || !isValidSessionId(data['id'])) {
+    throw new SessionError(`Session "${expectedSessionId}" failed integrity validation`);
+  }
+  if (typeof data['repoRoot'] !== 'string' || resolve(data['repoRoot']) !== resolve(repoRoot)) {
+    throw new SessionError(`Session "${expectedSessionId}" does not belong to this repo`);
+  }
+
+  return data as unknown as SessionMetadata;
+}
+
+function assertSessionWriteContext(repoRoot: string, session: SessionMetadata): void {
+  if (typeof session.id !== 'string' || !isValidSessionId(session.id)) {
+    throw new SessionError(`Invalid session id: "${session.id}"`);
+  }
+  if (typeof session.repoRoot !== 'string' || resolve(session.repoRoot) !== resolve(repoRoot)) {
+    throw new SessionError(`Refusing to save session "${session.id}" under a different repo`);
+  }
+}
+
 export function initRepoState(repoRoot: string): void {
   const paths = resolveRepoDataPaths(repoRoot);
-  mkdirSync(paths.sessionsDir, { recursive: true });
-  mkdirSync(paths.workspacesDir, { recursive: true });
+  mkdirSync(paths.sessionsDir, { recursive: true, mode: 0o700 });
+  mkdirSync(paths.workspacesDir, { recursive: true, mode: 0o700 });
 }
 
 export function createNewSession(params: {
@@ -48,10 +78,12 @@ export function createNewSession(params: {
 
   const session = createSession(params);
   const sessionDir = getSessionDir(params.repoRoot, session.id);
-  mkdirSync(sessionDir, { recursive: true });
-  mkdirSync(join(sessionDir, 'artifacts'), { recursive: true });
-  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session, null, 2) + '\n');
-  writeFileSync(join(sessionDir, 'events.jsonl'), '');
+  mkdirSync(sessionDir, { recursive: true, mode: 0o700 });
+  mkdirSync(join(sessionDir, 'artifacts'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session, null, 2) + '\n', {
+    mode: 0o600,
+  });
+  writeFileSync(join(sessionDir, 'events.jsonl'), '', { mode: 0o600 });
 
   return session;
 }
@@ -63,12 +95,13 @@ export function loadSession(repoRoot: string, sessionId: string): SessionMetadat
     throw new SessionError(`Session "${sessionId}" not found`);
   }
 
-  return JSON.parse(readFileSync(sessionFile, 'utf-8')) as SessionMetadata;
+  return parseStoredSession(JSON.parse(readFileSync(sessionFile, 'utf-8')), repoRoot, sessionId);
 }
 
 export function saveSession(repoRoot: string, session: SessionMetadata): void {
+  assertSessionWriteContext(repoRoot, session);
   const sessionFile = join(getSessionDir(repoRoot, session.id), 'session.json');
-  writeFileSync(sessionFile, JSON.stringify(session, null, 2) + '\n');
+  writeFileSync(sessionFile, JSON.stringify(session, null, 2) + '\n', { mode: 0o600 });
 }
 
 export function transitionState(
@@ -111,11 +144,16 @@ export function listSessions(repoRoot: string): SessionMetadata[] {
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+    if (!isValidSessionId(entry.name)) continue;
     const sessionFile = join(sessionsDir, entry.name, 'session.json');
     if (!existsSync(sessionFile)) continue;
 
     try {
-      const data = JSON.parse(readFileSync(sessionFile, 'utf-8')) as SessionMetadata;
+      const data = parseStoredSession(
+        JSON.parse(readFileSync(sessionFile, 'utf-8')),
+        repoRoot,
+        entry.name,
+      );
       sessions.push(data);
     } catch {
       // skip corrupt session files

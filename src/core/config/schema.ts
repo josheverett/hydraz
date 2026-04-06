@@ -1,3 +1,5 @@
+import { isValidPersonaName } from '../personas/naming.js';
+
 export type ExecutionTarget = 'local' | 'local-container' | 'cloud';
 export type AuthMode = 'claude-ai-oauth' | 'api-key';
 export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
@@ -12,6 +14,10 @@ export interface ClaudeAuthConfig {
   apiKey?: string;
 }
 
+export interface GitHubAuthConfig {
+  token?: string;
+}
+
 export interface RetentionConfig {
   keepTranscripts: boolean;
   keepTestLogs: boolean;
@@ -23,6 +29,7 @@ export interface HydrazConfig {
   defaultPersonas: [string, string, string];
   branchNaming: BranchNamingConfig;
   claudeAuth: ClaudeAuthConfig;
+  github: GitHubAuthConfig;
   retention: RetentionConfig;
   displayVerbosity: DisplayVerbosity;
 }
@@ -55,6 +62,7 @@ export function createDefaultConfig(): HydrazConfig {
     claudeAuth: {
       mode: 'claude-ai-oauth',
     },
+    github: {},
     retention: {
       keepTranscripts: false,
       keepTestLogs: false,
@@ -97,6 +105,10 @@ export function validateConfig(data: unknown): HydrazConfig {
     apiKey: expectOptionalString(val as Record<string, unknown>, 'apiKey'),
   }));
 
+  const github = expectObject(obj, 'github', defaults.github, (val) => ({
+    token: expectOptionalString(val as Record<string, unknown>, 'token'),
+  }));
+
   const retention = expectObject(obj, 'retention', defaults.retention, (val) => ({
     keepTranscripts: expectBoolean(
       val as Record<string, unknown>,
@@ -117,7 +129,16 @@ export function validateConfig(data: unknown): HydrazConfig {
     defaults.displayVerbosity,
   );
 
-  return { version, executionTarget, defaultPersonas, branchNaming, claudeAuth, retention, displayVerbosity };
+  return {
+    version,
+    executionTarget,
+    defaultPersonas,
+    branchNaming,
+    claudeAuth,
+    github,
+    retention,
+    displayVerbosity,
+  };
 }
 
 export class ConfigValidationError extends Error {
@@ -203,6 +224,16 @@ function expectPersonasTuple(
   }
   if (!val.every((v) => typeof v === 'string' && v.length > 0)) {
     throw new ConfigValidationError('"defaultPersonas" entries must be non-empty strings');
+  }
+  for (const p of val) {
+    if (typeof p === 'string' && !isValidPersonaName(p)) {
+      throw new ConfigValidationError(
+        '"defaultPersonas" entries must be valid persona names (lowercase letters, numbers, hyphens; 2-64 chars)',
+      );
+    }
+  }
+  if (new Set(val).size !== 3) {
+    throw new ConfigValidationError('"defaultPersonas" must contain 3 distinct personas');
   }
   return val as [string, string, string];
 }

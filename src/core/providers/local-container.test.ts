@@ -5,6 +5,17 @@ import { createDefaultConfig } from '../config/schema.js';
 
 vi.mock('../repo/detect.js', () => ({
   hasGitRemote: vi.fn(() => true),
+  getGitHubRepo: vi.fn(() => ({
+    remoteName: 'origin',
+    remoteUrl: 'git@github.com:octocat/hello-world.git',
+    owner: 'octocat',
+    repo: 'hello-world',
+    httpsUrl: 'https://github.com/octocat/hello-world.git',
+  })),
+}));
+
+vi.mock('./worktree-include.js', () => ({
+  listCopyableWorktreeIncludes: vi.fn(() => ['agent/.env']),
 }));
 
 vi.mock('./devpod.js', () => ({
@@ -20,7 +31,7 @@ vi.mock('./devpod.js', () => ({
   sshExec: vi.fn(),
 }));
 
-import { hasGitRemote } from '../repo/detect.js';
+import { hasGitRemote, getGitHubRepo } from '../repo/detect.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -32,6 +43,7 @@ import {
   copyWorktreeIncludesInContainer,
   sshExec,
 } from './devpod.js';
+import { listCopyableWorktreeIncludes } from './worktree-include.js';
 
 const mockCheckDevPod = vi.mocked(checkDevPodAvailability);
 const mockCheckDocker = vi.mocked(checkDockerAvailability);
@@ -43,16 +55,26 @@ const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
+const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
+const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
-function makeSession(name: string = 'test-session') {
+function makeSession(name: string = 'test-session', executionTarget: 'local-container' | 'cloud' = 'local-container') {
   return createSession({
     name,
     repoRoot: '/fake/repo',
     branchName: `hydraz/${name}`,
     personas: ['architect', 'implementer', 'verifier'],
-    executionTarget: 'local-container',
+    executionTarget,
     task: 'Fix it',
   });
+}
+
+function makeConfig(withGitHubToken: boolean = true) {
+  const config = createDefaultConfig();
+  if (withGitHubToken) {
+    config.github.token = 'github_pat_test';
+  }
+  return config;
 }
 
 beforeEach(() => {
@@ -61,8 +83,16 @@ beforeEach(() => {
   mockCheckDocker.mockReturnValue(true);
   mockHasDevcontainer.mockReturnValue(true);
   mockHasGitRemote.mockReturnValue(true);
+  mockGetGitHubRepo.mockReturnValue({
+    remoteName: 'origin',
+    remoteUrl: 'git@github.com:octocat/hello-world.git',
+    owner: 'octocat',
+    repo: 'hello-world',
+    httpsUrl: 'https://github.com/octocat/hello-world.git',
+  });
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
+  mockListCopyableIncludes.mockReturnValue(['agent/.env']);
 });
 
 describe('LocalContainerProvider', () => {
@@ -99,7 +129,7 @@ describe('LocalContainerProvider', () => {
     it('launches devpod with the main repo root, not a worktree', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
@@ -110,7 +140,7 @@ describe('LocalContainerProvider', () => {
     it('creates worktree inside the container via SSH', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
@@ -125,18 +155,41 @@ describe('LocalContainerProvider', () => {
     it('copies .worktreeinclude files inside the container', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
-      expect(mockCopyIncludes).toHaveBeenCalled();
+      expect(mockListCopyableIncludes).toHaveBeenCalledWith(
+        '/fake/repo',
+        '/fake/repo/.hydraz-container-worktree',
+      );
+      expect(mockCopyIncludes).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('/workspaces/'),
+        expect.stringContaining('/tmp/hydraz-worktrees/'),
+        ['agent/.env'],
+      );
+    });
+
+    it('fails before launching devpod when .worktreeinclude validation rejects a symlink', () => {
+      mockListCopyableIncludes.mockImplementation(() => {
+        throw new Error('Refusing to copy symlink entry from .worktreeinclude: agent/.env');
+      });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/symlink/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockVerifyClaude).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
     it('returns container-internal worktree path as directory', () => {
       mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/abc');
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       const workspace = provider.createWorkspace({ session, config });
 
@@ -145,11 +198,22 @@ describe('LocalContainerProvider', () => {
       expect(workspace.sessionId).toBe(session.id);
     });
 
+    it('returns a cloud workspace type when invoked for a cloud session', () => {
+      mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/cloud-abc');
+      const provider = new LocalContainerProvider();
+      const session = makeSession('cloud-session', 'cloud');
+      const config = makeConfig();
+
+      const workspace = provider.createWorkspace({ session, config });
+
+      expect(workspace.type).toBe('cloud');
+    });
+
     it('tears down devpod if worktree creation inside container fails', () => {
       mockCreateWorktreeInContainer.mockImplementation(() => { throw new Error('git failed'); });
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('git failed');
       expect(mockDevpodDelete).toHaveBeenCalled();
@@ -159,7 +223,7 @@ describe('LocalContainerProvider', () => {
       mockHasDevcontainer.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('devcontainer');
     });
@@ -168,16 +232,37 @@ describe('LocalContainerProvider', () => {
       mockHasGitRemote.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('remote');
+    });
+
+    it('fails early when the repo remote is not supported for GitHub-only beta automation', () => {
+      mockGetGitHubRepo.mockReturnValue(null);
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub-only/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
+    });
+
+    it('fails early when GitHub auth is not configured', () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig(false);
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub token/i);
+      expect(mockDevpodUp).not.toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
     it('tears down workspace if Claude Code is not found in the container', () => {
       mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
       const provider = new LocalContainerProvider();
       const session = makeSession();
-      const config = createDefaultConfig();
+      const config = makeConfig();
 
       expect(() => provider.createWorkspace({ session, config })).toThrow('Claude Code');
       expect(mockDevpodDelete).toHaveBeenCalled();
