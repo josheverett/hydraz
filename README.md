@@ -1,3 +1,5 @@
+> **EXPERIMENTAL: USE WITH CAUTION** - This CLI is a half-baked exploration of running opinionated swarms in the cloud.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/josheverett/hydraz/main/hydraz-logo.png" alt="Hydraz logo" width="300">
 </p>
