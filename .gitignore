@@ -138,6 +138,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# SEA build artifacts
+dist/hydraz-sea.cjs
+dist/sea-prep.blob
+/hydraz
+hydraz-*.tar.gz
+
 # Hydraz session data (local working state)
 .hydraz/sessions/
 .hydraz/workspaces/
