@@ -17,6 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:sea": "bash scripts/build-sea.sh",
+    "release:github": "bash scripts/release-github.sh",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -46,6 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.27.7",
     "typescript": "^6.0.2",
     "vitest": "^4.1.0"
   }

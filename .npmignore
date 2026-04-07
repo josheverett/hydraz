@@ -3,6 +3,9 @@ src/
 *.test.js
 vitest.config.ts
 tsconfig.json
+tsconfig.build.json
+sea-config.json
+scripts/
 hydraz_v1_spec.md
 .hydraz/
 .git/
