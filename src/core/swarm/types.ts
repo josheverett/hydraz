@@ -99,6 +99,17 @@ export interface ReviewAggregate {
   reviews: ReviewResult[];
 }
 
+export interface ExecutionContext {
+  repoRoot: string;
+  sessionId: string;
+  sessionName: string;
+  task: string;
+  workingDirectory: string;
+  config: import('../config/schema.js').HydrazConfig;
+  swarmDir: string;
+  containerContext?: import('../claude/executor.js').ContainerContext;
+}
+
 export interface SwarmConfig {
   defaultWorkerCount: number;
   defaultReviewers: string[];

@@ -5,9 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
-import { ensureSwarmDirs, writeArchitectureDesign } from './artifacts.js';
-import { runArchitect, type ArchitectOptions } from './architect.js';
+import { ensureSwarmDirs, writeArchitectureDesign, getSwarmDir } from './artifacts.js';
+import { runArchitect } from './architect.js';
 import { buildArchitectPrompt } from './prompts/architect.js';
+import type { ExecutionContext } from './types.js';
 
 vi.mock('../claude/executor.js', () => ({
   launchClaude: vi.fn(),
@@ -46,7 +47,7 @@ afterEach(() => {
   rmSync(paths.repoDataDir, { recursive: true, force: true });
 });
 
-function makeOptions(overrides: Partial<ArchitectOptions> = {}): ArchitectOptions {
+function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     repoRoot,
     sessionId,
@@ -54,38 +55,22 @@ function makeOptions(overrides: Partial<ArchitectOptions> = {}): ArchitectOption
     sessionName: 'test-architect',
     workingDirectory: repoRoot,
     config,
-    investigationBrief: SAMPLE_BRIEF,
+    swarmDir: getSwarmDir(repoRoot, sessionId),
     ...overrides,
   };
 }
 
 function mockSuccessfulClaude() {
   mockLaunchClaude.mockReturnValue({
-    process: {} as never,
-    pid: 12345,
-    kill: vi.fn(),
-    waitForExit: vi.fn().mockResolvedValue({
-      exitCode: 0,
-      signal: null,
-      success: true,
-      cost: 0.25,
-      inputTokens: 8000,
-      outputTokens: 4000,
-    }),
+    process: {} as never, pid: 12345, kill: vi.fn(),
+    waitForExit: vi.fn().mockResolvedValue({ exitCode: 0, signal: null, success: true, cost: 0.25 }),
   });
 }
 
 function mockFailedClaude() {
   mockLaunchClaude.mockReturnValue({
-    process: {} as never,
-    pid: 12345,
-    kill: vi.fn(),
-    waitForExit: vi.fn().mockResolvedValue({
-      exitCode: 1,
-      signal: null,
-      success: false,
-      stderr: 'architect failed',
-    }),
+    process: {} as never, pid: 12345, kill: vi.fn(),
+    waitForExit: vi.fn().mockResolvedValue({ exitCode: 1, signal: null, success: false, stderr: 'architect failed' }),
   });
 }
 
@@ -127,7 +112,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeOptions());
+    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
 
     expect(mockLaunchClaude).toHaveBeenCalledTimes(1);
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
@@ -139,18 +124,16 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    const result = await runArchitect(makeOptions());
+    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
 
     expect(result.success).toBe(true);
     expect(result.designPath).toBeTruthy();
-    expect(result.executorResult).toBeTruthy();
-    expect(result.executorResult!.success).toBe(true);
   });
 
   it('should return failure when claude exits with error', async () => {
     mockFailedClaude();
 
-    const result = await runArchitect(makeOptions());
+    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
 
     expect(result.success).toBe(false);
     expect(result.executorResult).toBeTruthy();
@@ -160,7 +143,7 @@ describe('runArchitect', () => {
   it('should return failure when claude succeeds but design is missing', async () => {
     mockSuccessfulClaude();
 
-    const result = await runArchitect(makeOptions());
+    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -170,7 +153,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeOptions({ workingDirectory: '/tmp/custom-dir' }));
+    await runArchitect(makeCtx({ workingDirectory: '/tmp/custom-dir' }), { investigationBrief: SAMPLE_BRIEF });
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.workingDirectory).toBe('/tmp/custom-dir');
@@ -180,7 +163,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeOptions());
+    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);

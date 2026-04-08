@@ -1,6 +1,6 @@
-import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
-import { readInvestigationBrief } from './artifacts.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import type { ExecutionContext } from './types.js';
+import { readInvestigationBrief, getSwarmDir } from './artifacts.js';
 import { buildInvestigatorPrompt } from './prompts/investigator.js';
 
 export interface InvestigationResult {
@@ -10,25 +10,14 @@ export interface InvestigationResult {
   error?: string;
 }
 
-export interface InvestigatorOptions {
-  repoRoot: string;
-  sessionId: string;
-  task: string;
-  sessionName: string;
-  workingDirectory: string;
-  config: HydrazConfig;
-  swarmDir?: string;
-  containerContext?: ContainerContext;
-}
-
-export async function runInvestigation(options: InvestigatorOptions): Promise<InvestigationResult> {
-  const prompt = buildInvestigatorPrompt(options.task, options.sessionName, options.swarmDir);
+export async function runInvestigation(ctx: ExecutionContext): Promise<InvestigationResult> {
+  const prompt = buildInvestigatorPrompt(ctx.task, ctx.sessionName, ctx.swarmDir);
 
   const executor = launchClaude({
-    workingDirectory: options.workingDirectory,
+    workingDirectory: ctx.workingDirectory,
     prompt,
-    config: options.config,
-    containerContext: options.containerContext,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
@@ -42,7 +31,7 @@ export async function runInvestigation(options: InvestigatorOptions): Promise<In
     };
   }
 
-  const brief = readInvestigationBrief(options.repoRoot, options.sessionId);
+  const brief = readInvestigationBrief(ctx.repoRoot, ctx.sessionId);
   if (!brief) {
     return {
       success: false,
@@ -52,8 +41,7 @@ export async function runInvestigation(options: InvestigatorOptions): Promise<In
     };
   }
 
-  const { getSwarmDir } = await import('./artifacts.js');
-  const briefPath = `${getSwarmDir(options.repoRoot, options.sessionId)}/investigation/brief.md`;
+  const briefPath = `${getSwarmDir(ctx.repoRoot, ctx.sessionId)}/investigation/brief.md`;
 
   return {
     success: true,

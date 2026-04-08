@@ -1,5 +1,5 @@
-import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import type { ExecutionContext } from './types.js';
 import { buildReviewerPrompt } from './prompts/reviewer.js';
 
 export interface SingleReviewResult {
@@ -16,38 +16,31 @@ export interface ReviewPanelResult {
 }
 
 export interface ReviewPanelOptions {
-  repoRoot: string;
-  sessionId: string;
-  sessionName: string;
-  task: string;
-  workingDirectory: string;
-  config: HydrazConfig;
   planContent: string;
   architectureDesign: string;
   reviewerPersonas: Array<{ name: string; persona: string }>;
-  swarmDir?: string;
-  containerContext?: ContainerContext;
 }
 
 async function runSingleReviewer(
   reviewerInfo: { name: string; persona: string },
-  options: ReviewPanelOptions,
+  ctx: ExecutionContext,
+  opts: ReviewPanelOptions,
 ): Promise<SingleReviewResult> {
   const prompt = buildReviewerPrompt(
-    options.task,
-    options.sessionName,
-    options.planContent,
-    options.architectureDesign,
+    ctx.task,
+    ctx.sessionName,
+    opts.planContent,
+    opts.architectureDesign,
     reviewerInfo.persona,
     reviewerInfo.name,
-    options.swarmDir,
+    ctx.swarmDir,
   );
 
   const executor = launchClaude({
-    workingDirectory: options.workingDirectory,
+    workingDirectory: ctx.workingDirectory,
     prompt,
-    config: options.config,
-    containerContext: options.containerContext,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
@@ -60,9 +53,9 @@ async function runSingleReviewer(
   };
 }
 
-export async function runReviewPanel(options: ReviewPanelOptions): Promise<ReviewPanelResult> {
-  const reviewPromises = options.reviewerPersonas.map(persona =>
-    runSingleReviewer(persona, options),
+export async function runReviewPanel(ctx: ExecutionContext, opts: ReviewPanelOptions): Promise<ReviewPanelResult> {
+  const reviewPromises = opts.reviewerPersonas.map(persona =>
+    runSingleReviewer(persona, ctx, opts),
   );
 
   const reviews = await Promise.all(reviewPromises);

@@ -1,6 +1,5 @@
 import { launchClaude, type ExecutorResult } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
-import type { TaskLedger, OwnershipMap } from './types.js';
+import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { readTaskLedger, readOwnershipMap } from './artifacts.js';
 import { buildPlannerPrompt } from './prompts/planner.js';
 
@@ -13,30 +12,26 @@ export interface PlannerResult {
 }
 
 export interface PlannerOptions {
-  repoRoot: string;
-  sessionId: string;
-  task: string;
-  sessionName: string;
-  workingDirectory: string;
-  config: HydrazConfig;
   investigationBrief: string;
   architectureDesign: string;
   workerCount: number;
 }
 
-export async function runPlanner(options: PlannerOptions): Promise<PlannerResult> {
+export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): Promise<PlannerResult> {
   const prompt = buildPlannerPrompt(
-    options.task,
-    options.sessionName,
-    options.investigationBrief,
-    options.architectureDesign,
-    options.workerCount,
+    ctx.task,
+    ctx.sessionName,
+    opts.investigationBrief,
+    opts.architectureDesign,
+    opts.workerCount,
+    ctx.swarmDir,
   );
 
   const executor = launchClaude({
-    workingDirectory: options.workingDirectory,
+    workingDirectory: ctx.workingDirectory,
     prompt,
-    config: options.config,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
@@ -51,7 +46,7 @@ export async function runPlanner(options: PlannerOptions): Promise<PlannerResult
     };
   }
 
-  const ledger = readTaskLedger(options.repoRoot, options.sessionId);
+  const ledger = readTaskLedger(ctx.repoRoot, ctx.sessionId);
   if (!ledger) {
     return {
       success: false,
@@ -62,7 +57,7 @@ export async function runPlanner(options: PlannerOptions): Promise<PlannerResult
     };
   }
 
-  const ownership = readOwnershipMap(options.repoRoot, options.sessionId);
+  const ownership = readOwnershipMap(ctx.repoRoot, ctx.sessionId);
   if (!ownership) {
     return {
       success: false,

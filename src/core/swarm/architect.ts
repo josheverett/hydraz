@@ -1,5 +1,5 @@
-import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import type { ExecutionContext } from './types.js';
 import { readArchitectureDesign, getSwarmDir } from './artifacts.js';
 import { buildArchitectPrompt } from './prompts/architect.js';
 
@@ -11,25 +11,17 @@ export interface ArchitectResult {
 }
 
 export interface ArchitectOptions {
-  repoRoot: string;
-  sessionId: string;
-  task: string;
-  sessionName: string;
-  workingDirectory: string;
-  config: HydrazConfig;
   investigationBrief: string;
-  swarmDir?: string;
-  containerContext?: ContainerContext;
 }
 
-export async function runArchitect(options: ArchitectOptions): Promise<ArchitectResult> {
-  const prompt = buildArchitectPrompt(options.task, options.sessionName, options.investigationBrief, options.swarmDir);
+export async function runArchitect(ctx: ExecutionContext, opts: ArchitectOptions): Promise<ArchitectResult> {
+  const prompt = buildArchitectPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, ctx.swarmDir);
 
   const executor = launchClaude({
-    workingDirectory: options.workingDirectory,
+    workingDirectory: ctx.workingDirectory,
     prompt,
-    config: options.config,
-    containerContext: options.containerContext,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
@@ -43,7 +35,7 @@ export async function runArchitect(options: ArchitectOptions): Promise<Architect
     };
   }
 
-  const design = readArchitectureDesign(options.repoRoot, options.sessionId);
+  const design = readArchitectureDesign(ctx.repoRoot, ctx.sessionId);
   if (!design) {
     return {
       success: false,
@@ -53,7 +45,7 @@ export async function runArchitect(options: ArchitectOptions): Promise<Architect
     };
   }
 
-  const designPath = `${getSwarmDir(options.repoRoot, options.sessionId)}/architecture/design.md`;
+  const designPath = `${getSwarmDir(ctx.repoRoot, ctx.sessionId)}/architecture/design.md`;
 
   return {
     success: true,

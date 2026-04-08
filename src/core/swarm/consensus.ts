@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
-import type { TaskLedger, OwnershipMap } from './types.js';
+import { launchClaude } from '../claude/executor.js';
+import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { CONSENSUS_MAX_ROUNDS } from './state.js';
 import { readTaskLedger, readOwnershipMap, readPlan, getSwarmDir } from './artifacts.js';
 import { buildPlannerPrompt } from './prompts/planner.js';
@@ -18,17 +17,9 @@ export interface ConsensusResult {
 }
 
 export interface ConsensusOptions {
-  repoRoot: string;
-  sessionId: string;
-  task: string;
-  sessionName: string;
-  workingDirectory: string;
-  config: HydrazConfig;
   investigationBrief: string;
   architectureDesign: string;
   workerCount: number;
-  swarmDir?: string;
-  containerContext?: ContainerContext;
 }
 
 function readFeedback(repoRoot: string, sessionId: string, round: number): string | null {
@@ -42,21 +33,21 @@ function isApproved(feedback: string): boolean {
   return firstLine.startsWith('APPROVED');
 }
 
-export async function runConsensus(options: ConsensusOptions): Promise<ConsensusResult> {
-  let currentDesign = options.architectureDesign;
+export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions): Promise<ConsensusResult> {
+  let currentDesign = opts.architectureDesign;
   let previousFeedback: string | null = null;
 
   for (let round = 1; round <= CONSENSUS_MAX_ROUNDS; round++) {
     const plannerPrompt = previousFeedback
-      ? buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount, options.swarmDir)
+      ? buildPlannerPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, currentDesign, opts.workerCount, ctx.swarmDir)
         + `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
-      : buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount, options.swarmDir);
+      : buildPlannerPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, currentDesign, opts.workerCount, ctx.swarmDir);
 
     const plannerExecutor = launchClaude({
-      workingDirectory: options.workingDirectory,
+      workingDirectory: ctx.workingDirectory,
       prompt: plannerPrompt,
-      config: options.config,
-      containerContext: options.containerContext,
+      config: ctx.config,
+      containerContext: ctx.containerContext,
     });
 
     const plannerResult = await plannerExecutor.waitForExit();
@@ -72,9 +63,9 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
       };
     }
 
-    const ledger = readTaskLedger(options.repoRoot, options.sessionId);
-    const ownership = readOwnershipMap(options.repoRoot, options.sessionId);
-    const plan = readPlan(options.repoRoot, options.sessionId);
+    const ledger = readTaskLedger(ctx.repoRoot, ctx.sessionId);
+    const ownership = readOwnershipMap(ctx.repoRoot, ctx.sessionId);
+    const plan = readPlan(ctx.repoRoot, ctx.sessionId);
 
     if (!ledger || !ownership || !plan) {
       return {
@@ -98,19 +89,19 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
     }
 
     const reviewPrompt = buildArchitectPlanReviewPrompt(
-      options.task,
-      options.sessionName,
+      ctx.task,
+      ctx.sessionName,
       currentDesign,
       plan!,
       round,
-      options.swarmDir,
+      ctx.swarmDir,
     );
 
     const reviewExecutor = launchClaude({
-      workingDirectory: options.workingDirectory,
+      workingDirectory: ctx.workingDirectory,
       prompt: reviewPrompt,
-      config: options.config,
-      containerContext: options.containerContext,
+      config: ctx.config,
+      containerContext: ctx.containerContext,
     });
 
     const reviewResult = await reviewExecutor.waitForExit();
@@ -126,7 +117,7 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
       };
     }
 
-    const feedback = readFeedback(options.repoRoot, options.sessionId, round);
+    const feedback = readFeedback(ctx.repoRoot, ctx.sessionId, round);
 
     if (!feedback) {
       return {

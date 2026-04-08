@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -6,8 +6,9 @@ import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
 import { ensureSwarmDirs, writeInvestigationBrief, getSwarmDir } from './artifacts.js';
-import { runInvestigation, type InvestigatorOptions } from './investigator.js';
+import { runInvestigation } from './investigator.js';
 import { buildInvestigatorPrompt } from './prompts/investigator.js';
+import type { ExecutionContext } from './types.js';
 
 vi.mock('../claude/executor.js', () => ({
   launchClaude: vi.fn(),
@@ -44,7 +45,7 @@ afterEach(() => {
   rmSync(paths.repoDataDir, { recursive: true, force: true });
 });
 
-function makeOptions(overrides: Partial<InvestigatorOptions> = {}): InvestigatorOptions {
+function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     repoRoot,
     sessionId,
@@ -52,6 +53,7 @@ function makeOptions(overrides: Partial<InvestigatorOptions> = {}): Investigator
     sessionName: 'test-investigate',
     workingDirectory: repoRoot,
     config,
+    swarmDir: getSwarmDir(repoRoot, sessionId),
     ...overrides,
   };
 }
@@ -124,7 +126,7 @@ describe('runInvestigation', () => {
     mockSuccessfulClaude();
     writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings here.');
 
-    await runInvestigation(makeOptions());
+    await runInvestigation(makeCtx());
 
     expect(mockLaunchClaude).toHaveBeenCalledTimes(1);
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
@@ -135,7 +137,7 @@ describe('runInvestigation', () => {
     mockSuccessfulClaude();
     writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings here.');
 
-    const result = await runInvestigation(makeOptions());
+    const result = await runInvestigation(makeCtx());
 
     expect(result.success).toBe(true);
     expect(result.briefPath).toBeTruthy();
@@ -146,7 +148,7 @@ describe('runInvestigation', () => {
   it('should return failure when claude exits with error', async () => {
     mockFailedClaude();
 
-    const result = await runInvestigation(makeOptions());
+    const result = await runInvestigation(makeCtx());
 
     expect(result.success).toBe(false);
     expect(result.executorResult).toBeTruthy();
@@ -156,7 +158,7 @@ describe('runInvestigation', () => {
   it('should return failure when claude succeeds but brief is missing', async () => {
     mockSuccessfulClaude();
 
-    const result = await runInvestigation(makeOptions());
+    const result = await runInvestigation(makeCtx());
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -166,7 +168,7 @@ describe('runInvestigation', () => {
     mockSuccessfulClaude();
     writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings.');
 
-    await runInvestigation(makeOptions({ workingDirectory: '/tmp/custom-dir' }));
+    await runInvestigation(makeCtx({ workingDirectory: '/tmp/custom-dir' }));
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.workingDirectory).toBe('/tmp/custom-dir');
@@ -176,7 +178,7 @@ describe('runInvestigation', () => {
     mockSuccessfulClaude();
     writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings.');
 
-    await runInvestigation(makeOptions());
+    await runInvestigation(makeCtx());
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
@@ -191,7 +193,7 @@ describe('runInvestigation', () => {
       authEnv: { CLAUDE_CODE_OAUTH_TOKEN: 'test-token' },
       workingDirectory: '/tmp/hydraz-worktrees/test',
     };
-    await runInvestigation(makeOptions({ containerContext }));
+    await runInvestigation(makeCtx({ containerContext }));
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.containerContext).toEqual(containerContext);

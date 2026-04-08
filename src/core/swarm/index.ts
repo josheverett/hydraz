@@ -16,6 +16,7 @@ export type {
   ReviewResult,
   ReviewAggregate,
   SwarmConfig,
+  ExecutionContext,
 } from './types.js';
 export { DEFAULT_SWARM_CONFIG } from './types.js';
 export {
@@ -53,7 +54,6 @@ export {
 } from './artifacts.js';
 export {
   type InvestigationResult,
-  type InvestigatorOptions,
   runInvestigation,
 } from './investigator.js';
 export {

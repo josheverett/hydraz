@@ -5,16 +5,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
-import { ensureSwarmDirs } from './artifacts.js';
-import { runReviewPanel, type ReviewPanelOptions } from './reviewer.js';
+import { ensureSwarmDirs, getSwarmDir } from './artifacts.js';
+import { runReviewPanel } from './reviewer.js';
 import { buildReviewerPrompt } from './prompts/reviewer.js';
+import type { ExecutionContext } from './types.js';
 
-vi.mock('../claude/executor.js', () => ({
-  launchClaude: vi.fn(),
-}));
-
+vi.mock('../claude/executor.js', () => ({ launchClaude: vi.fn() }));
 import { launchClaude } from '../claude/executor.js';
-
 const mockLaunchClaude = vi.mocked(launchClaude);
 
 let repoRoot: string;
@@ -30,137 +27,52 @@ const DEFAULT_PERSONAS = [
 beforeEach(() => {
   repoRoot = mkdtempSync(join(tmpdir(), 'hydraz-reviewer-test-'));
   initRepoState(repoRoot);
-  const session = createNewSession({
-    name: 'test-review',
-    repoRoot,
-    branchName: 'hydraz/test-review',
-    personas: ['architect', 'implementer', 'verifier'],
-    executionTarget: 'local',
-    task: 'Build the system',
-  });
+  const session = createNewSession({ name: 'test-review', repoRoot, branchName: 'hydraz/test-review', personas: ['architect', 'implementer', 'verifier'], executionTarget: 'local', task: 'Build the system' });
   sessionId = session.id;
   config = createDefaultConfig();
   ensureSwarmDirs(repoRoot, sessionId);
 });
 
-afterEach(() => {
-  vi.clearAllMocks();
-  rmSync(repoRoot, { recursive: true, force: true });
-  const paths = resolveRepoDataPaths(repoRoot);
-  rmSync(paths.repoDataDir, { recursive: true, force: true });
-});
+afterEach(() => { vi.clearAllMocks(); rmSync(repoRoot, { recursive: true, force: true }); const paths = resolveRepoDataPaths(repoRoot); rmSync(paths.repoDataDir, { recursive: true, force: true }); });
 
-function makeOptions(overrides: Partial<ReviewPanelOptions> = {}): ReviewPanelOptions {
-  return {
-    repoRoot,
-    sessionId,
-    sessionName: 'test-review',
-    task: 'Build the system',
-    workingDirectory: repoRoot,
-    config,
-    planContent: '# Plan\nDo the thing.',
-    architectureDesign: '# Architecture\nMiddleware pattern.',
-    reviewerPersonas: DEFAULT_PERSONAS,
-    ...overrides,
-  };
+function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
+  return { repoRoot, sessionId, sessionName: 'test-review', task: 'Build the system', workingDirectory: repoRoot, config, swarmDir: getSwarmDir(repoRoot, sessionId), ...overrides };
 }
 
 function mockAllReviewersSucceed() {
-  mockLaunchClaude.mockReturnValue({
-    process: {} as never,
-    pid: 12345,
-    kill: vi.fn(),
-    waitForExit: vi.fn().mockResolvedValue({
-      exitCode: 0,
-      signal: null,
-      success: true,
-      cost: 0.20,
-    }),
-  });
+  mockLaunchClaude.mockReturnValue({ process: {} as never, pid: 12345, kill: vi.fn(), waitForExit: vi.fn().mockResolvedValue({ exitCode: 0, signal: null, success: true, cost: 0.20 }) });
 }
 
 function mockReviewerFailure() {
   let callIndex = 0;
   mockLaunchClaude.mockImplementation(() => {
-    const shouldFail = callIndex === 1;
-    callIndex++;
-    return {
-      process: {} as never,
-      pid: 12345,
-      kill: vi.fn(),
-      waitForExit: vi.fn().mockResolvedValue({
-        exitCode: shouldFail ? 1 : 0,
-        signal: null,
-        success: !shouldFail,
-        cost: 0.20,
-      }),
-    };
+    const shouldFail = callIndex === 1; callIndex++;
+    return { process: {} as never, pid: 12345, kill: vi.fn(), waitForExit: vi.fn().mockResolvedValue({ exitCode: shouldFail ? 1 : 0, signal: null, success: !shouldFail, cost: 0.20 }) };
   });
 }
 
 describe('buildReviewerPrompt', () => {
-  it('should include the task description', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'You are Carmack.', 'carmack');
-    expect(prompt).toContain('Build auth');
-  });
-
-  it('should include the reviewer persona', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'You are Carmack. Focus on correctness.', 'carmack');
-    expect(prompt).toContain('Focus on correctness');
-  });
-
-  it('should include the reviewer name', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona text.', 'carmack');
-    expect(prompt).toContain('carmack');
-  });
-
-  it('should include the plan content', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan\nDetailed steps.', '# Arch', 'Persona.', 'carmack');
-    expect(prompt).toContain('Detailed steps');
-  });
-
-  it('should include the architecture design', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch\nMiddleware pattern.', 'Persona.', 'carmack');
-    expect(prompt).toContain('Middleware pattern');
-  });
-
-  it('should instruct categorizing findings as architectural or implementation', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack');
-    expect(prompt).toContain('architectural');
-    expect(prompt).toContain('implementation');
-  });
-
-  it('should instruct writing review to reviews/<name>.md', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack');
-    expect(prompt).toContain('carmack.md');
-  });
-
-  it('should include evidence discipline principles', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack');
-    expect(prompt).toContain('Verified facts');
-    expect(prompt).toContain('Assumptions');
-  });
-
-  it('should include the absolute swarm directory path when provided', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack', '/tmp/swarm');
-    expect(prompt).toContain('/tmp/swarm');
-  });
+  it('should include the task description', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'You are Carmack.', 'carmack')).toContain('Build auth'); });
+  it('should include the reviewer persona', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'You are Carmack. Focus on correctness.', 'carmack')).toContain('Focus on correctness'); });
+  it('should include the reviewer name', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona text.', 'carmack')).toContain('carmack'); });
+  it('should include the plan content', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan\nDetailed steps.', '# Arch', 'Persona.', 'carmack')).toContain('Detailed steps'); });
+  it('should include the architecture design', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch\nMiddleware pattern.', 'Persona.', 'carmack')).toContain('Middleware pattern'); });
+  it('should instruct categorizing findings as architectural or implementation', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack'); expect(p).toContain('architectural'); expect(p).toContain('implementation'); });
+  it('should instruct writing review to reviews/<name>.md', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack')).toContain('carmack.md'); });
+  it('should include evidence discipline principles', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack'); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
+  it('should include the absolute swarm directory path when provided', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack', '/tmp/swarm')).toContain('/tmp/swarm'); });
 });
 
 describe('runReviewPanel', () => {
   it('should launch claude once per reviewer', async () => {
     mockAllReviewersSucceed();
-
-    await runReviewPanel(makeOptions());
-
+    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
   });
 
   it('should return success when all reviewers complete', async () => {
     mockAllReviewersSucceed();
-
-    const result = await runReviewPanel(makeOptions());
-
+    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     expect(result.success).toBe(true);
     expect(result.reviews).toHaveLength(3);
     expect(result.reviews.every(r => r.success)).toBe(true);
@@ -168,27 +80,21 @@ describe('runReviewPanel', () => {
 
   it('should include reviewer names in results', async () => {
     mockAllReviewersSucceed();
-
-    const result = await runReviewPanel(makeOptions());
-
+    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     const names = result.reviews.map(r => r.reviewerName).sort();
     expect(names).toEqual(['carmack', 'metz', 'torvalds']);
   });
 
   it('should return failure when any reviewer fails', async () => {
     mockReviewerFailure();
-
-    const result = await runReviewPanel(makeOptions());
-
+    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     expect(result.success).toBe(false);
     expect(result.reviews.some(r => !r.success)).toBe(true);
   });
 
   it('should pass reviewer-specific prompts containing each persona', async () => {
     mockAllReviewersSucceed();
-
-    await runReviewPanel(makeOptions());
-
+    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts.some(p => p.includes('correctness'))).toBe(true);
     expect(prompts.some(p => p.includes('design quality'))).toBe(true);

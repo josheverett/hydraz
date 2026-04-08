@@ -1,6 +1,6 @@
-import type { HydrazConfig } from '../config/schema.js';
+import type { SwarmPhase, TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import type { ContainerContext } from '../claude/executor.js';
-import type { SwarmPhase, TaskLedger, OwnershipMap } from './types.js';
+import type { HydrazConfig } from '../config/schema.js';
 import { runInvestigation } from './investigator.js';
 import { runArchitect } from './architect.js';
 import { runConsensus } from './consensus.js';
@@ -56,6 +56,19 @@ function emitEvent(options: PipelineOptions, type: string, message: string): voi
   options.callbacks?.onEvent?.(type, message);
 }
 
+function buildContext(options: PipelineOptions, swarmDir: string): ExecutionContext {
+  return {
+    repoRoot: options.repoRoot,
+    sessionId: options.sessionId,
+    sessionName: options.sessionName,
+    task: options.task,
+    workingDirectory: options.workingDirectory,
+    config: options.config,
+    swarmDir,
+    containerContext: options.containerContext,
+  };
+}
+
 export async function runSwarmPipeline(options: PipelineOptions): Promise<PipelineResult> {
   let investigationBrief: string;
   let architectureDesign: string;
@@ -65,20 +78,12 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   let totalConsensusRounds = 0;
   let workerWorktrees: Record<string, string> | undefined;
   const swarmDir = getSwarmDir(options.repoRoot, options.sessionId);
+  const ctx = buildContext(options, swarmDir);
 
   emitPhase(options, 'investigating');
   emitEvent(options, 'swarm.investigate_started', 'Investigation starting');
 
-  const investigationResult = await runInvestigation({
-    repoRoot: options.repoRoot,
-    sessionId: options.sessionId,
-    task: options.task,
-    sessionName: options.sessionName,
-    workingDirectory: options.workingDirectory,
-    config: options.config,
-    swarmDir,
-    containerContext: options.containerContext,
-  });
+  const investigationResult = await runInvestigation(ctx);
 
   if (!investigationResult.success) {
     return {
@@ -97,17 +102,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   emitPhase(options, 'architecting');
   emitEvent(options, 'swarm.architect_started', 'Architecture starting');
 
-  const architectResult = await runArchitect({
-    repoRoot: options.repoRoot,
-    sessionId: options.sessionId,
-    task: options.task,
-    sessionName: options.sessionName,
-    workingDirectory: options.workingDirectory,
-    config: options.config,
-    investigationBrief,
-    swarmDir,
-    containerContext: options.containerContext,
-  });
+  const architectResult = await runArchitect(ctx, { investigationBrief });
 
   if (!architectResult.success) {
     return {
@@ -127,18 +122,10 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     emitPhase(options, 'planning');
     emitEvent(options, 'swarm.plan_started', `Planning (outer loop ${outerLoop + 1})`);
 
-    const consensusResult = await runConsensus({
-      repoRoot: options.repoRoot,
-      sessionId: options.sessionId,
-      task: options.task,
-      sessionName: options.sessionName,
-      workingDirectory: options.workingDirectory,
-      config: options.config,
+    const consensusResult = await runConsensus(ctx, {
       investigationBrief,
       architectureDesign,
       workerCount: options.workerCount,
-      swarmDir,
-      containerContext: options.containerContext,
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;
@@ -163,19 +150,11 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     emitPhase(options, 'fanning-out');
     emitEvent(options, 'swarm.worker_launched', `Launching ${options.workerCount} workers`);
 
-    const workerResult = await runWorkerFanout({
-      repoRoot: options.repoRoot,
-      sessionId: options.sessionId,
-      sessionName: options.sessionName,
-      task: options.task,
-      workingDirectory: options.workingDirectory,
-      config: options.config,
+    const workerResult = await runWorkerFanout(ctx, {
       ledger,
       ownership,
       planContent,
-      swarmDir,
       existingWorktrees: workerWorktrees,
-      containerContext: options.containerContext,
     });
 
     if (!workerWorktrees) {
@@ -225,18 +204,10 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     emitPhase(options, 'reviewing');
     emitEvent(options, 'swarm.review_started', 'Review panel starting');
 
-    const reviewResult = await runReviewPanel({
-      repoRoot: options.repoRoot,
-      sessionId: options.sessionId,
-      sessionName: options.sessionName,
-      task: options.task,
-      workingDirectory: options.workingDirectory,
-      config: options.config,
+    const reviewResult = await runReviewPanel(ctx, {
       planContent,
       architectureDesign,
       reviewerPersonas: options.reviewerPersonas,
-      swarmDir,
-      containerContext: options.containerContext,
     });
 
     if (!reviewResult.success) {

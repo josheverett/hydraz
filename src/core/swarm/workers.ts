@@ -1,6 +1,5 @@
-import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
-import type { HydrazConfig } from '../config/schema.js';
-import type { TaskLedger, OwnershipMap } from './types.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { readWorkerBrief } from './artifacts.js';
 import { createWorktree } from '../providers/worktree.js';
 import { buildWorkerPrompt } from './prompts/worker.js';
@@ -19,56 +18,49 @@ export interface FanoutResult {
 }
 
 export interface FanoutOptions {
-  repoRoot: string;
-  sessionId: string;
-  sessionName: string;
-  task: string;
-  workingDirectory: string;
-  config: HydrazConfig;
   ledger: TaskLedger;
   ownership: OwnershipMap;
   planContent: string;
-  swarmDir?: string;
   existingWorktrees?: Record<string, string>;
-  containerContext?: ContainerContext;
 }
 
 async function runSingleWorker(
   workerId: string,
-  options: FanoutOptions,
+  ctx: ExecutionContext,
+  opts: FanoutOptions,
 ): Promise<WorkerResult> {
-  const workerInfo = options.ledger.workers[workerId];
+  const workerInfo = opts.ledger.workers[workerId];
   if (!workerInfo) {
     return { workerId, success: false, executorResult: null, error: `Worker ${workerId} not found in ledger` };
   }
 
-  const brief = readWorkerBrief(options.repoRoot, options.sessionId, workerId);
+  const brief = readWorkerBrief(ctx.repoRoot, ctx.sessionId, workerId);
   if (!brief) {
     return { workerId, success: false, executorResult: null, error: `No brief found for ${workerId}` };
   }
 
   let workingDirectory: string;
-  if (options.existingWorktrees?.[workerId]) {
-    workingDirectory = options.existingWorktrees[workerId];
+  if (opts.existingWorktrees?.[workerId]) {
+    workingDirectory = opts.existingWorktrees[workerId];
   } else {
-    const worktree = createWorktree(options.repoRoot, `${options.sessionId}-${workerId}`, workerInfo.branch);
+    const worktree = createWorktree(ctx.repoRoot, `${ctx.sessionId}-${workerId}`, workerInfo.branch);
     workingDirectory = worktree.directory;
   }
 
   const prompt = buildWorkerPrompt(
-    options.task,
-    options.sessionName,
+    ctx.task,
+    ctx.sessionName,
     brief,
-    options.planContent,
+    opts.planContent,
     workerId,
-    options.swarmDir,
+    ctx.swarmDir,
   );
 
   const executor = launchClaude({
     workingDirectory,
     prompt,
-    config: options.config,
-    containerContext: options.containerContext,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
@@ -81,10 +73,10 @@ async function runSingleWorker(
   };
 }
 
-export async function runWorkerFanout(options: FanoutOptions): Promise<FanoutResult> {
-  const workerIds = Object.keys(options.ledger.workers);
+export async function runWorkerFanout(ctx: ExecutionContext, opts: FanoutOptions): Promise<FanoutResult> {
+  const workerIds = Object.keys(opts.ledger.workers);
 
-  const workerPromises = workerIds.map(workerId => runSingleWorker(workerId, options));
+  const workerPromises = workerIds.map(workerId => runSingleWorker(workerId, ctx, opts));
   const workerResults = await Promise.all(workerPromises);
 
   const allSucceeded = workerResults.every(r => r.success);
