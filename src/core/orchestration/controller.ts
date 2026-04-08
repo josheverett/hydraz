@@ -149,6 +149,17 @@ export async function startSession(
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
 
+  let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
+  if (isContainerExecutionTarget(session.executionTarget)) {
+    const workspaceName = `hydraz-${session.id}`;
+    const authEnv = prepareContainerAuthEnv(config);
+    containerContext = {
+      workspaceName,
+      authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
+      workingDirectory: workspace.directory,
+    };
+  }
+
   const pipelineResult = await runSwarmPipeline({
     repoRoot,
     sessionId,
@@ -163,6 +174,7 @@ export async function startSession(
     })),
     maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
     maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+    containerContext,
     callbacks: {
       onPhaseChange: (phase) => {
         try {

@@ -1,4 +1,4 @@
-import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { buildReviewerPrompt } from './prompts/reviewer.js';
 
@@ -26,6 +26,7 @@ export interface ReviewPanelOptions {
   architectureDesign: string;
   reviewerPersonas: Array<{ name: string; persona: string }>;
   swarmDir?: string;
+  containerContext?: ContainerContext;
 }
 
 async function runSingleReviewer(
@@ -46,6 +47,7 @@ async function runSingleReviewer(
     workingDirectory: options.workingDirectory,
     prompt,
     config: options.config,
+    containerContext: options.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

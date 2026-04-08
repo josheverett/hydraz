@@ -28,6 +28,7 @@ export async function runInvestigation(options: InvestigatorOptions): Promise<In
     workingDirectory: options.workingDirectory,
     prompt,
     config: options.config,
+    containerContext: options.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

@@ -1,4 +1,4 @@
-import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import type { TaskLedger, OwnershipMap } from './types.js';
 import { readWorkerBrief } from './artifacts.js';
@@ -30,6 +30,7 @@ export interface FanoutOptions {
   planContent: string;
   swarmDir?: string;
   existingWorktrees?: Record<string, string>;
+  containerContext?: ContainerContext;
 }
 
 async function runSingleWorker(
@@ -67,6 +68,7 @@ async function runSingleWorker(
     workingDirectory,
     prompt,
     config: options.config,
+    containerContext: options.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

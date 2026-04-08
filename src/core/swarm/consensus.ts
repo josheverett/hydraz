@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import type { TaskLedger, OwnershipMap } from './types.js';
 import { CONSENSUS_MAX_ROUNDS } from './state.js';
@@ -28,6 +28,7 @@ export interface ConsensusOptions {
   architectureDesign: string;
   workerCount: number;
   swarmDir?: string;
+  containerContext?: ContainerContext;
 }
 
 function readFeedback(repoRoot: string, sessionId: string, round: number): string | null {
@@ -55,6 +56,7 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
       workingDirectory: options.workingDirectory,
       prompt: plannerPrompt,
       config: options.config,
+      containerContext: options.containerContext,
     });
 
     const plannerResult = await plannerExecutor.waitForExit();
@@ -108,6 +110,7 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
       workingDirectory: options.workingDirectory,
       prompt: reviewPrompt,
       config: options.config,
+      containerContext: options.containerContext,
     });
 
     const reviewResult = await reviewExecutor.waitForExit();

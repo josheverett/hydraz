@@ -1,4 +1,5 @@
 import type { HydrazConfig } from '../config/schema.js';
+import type { ContainerContext } from '../claude/executor.js';
 import type { SwarmPhase, TaskLedger, OwnershipMap } from './types.js';
 import { runInvestigation } from './investigator.js';
 import { runArchitect } from './architect.js';
@@ -43,6 +44,7 @@ export interface PipelineOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
   maxOuterLoops: number;
   maxConsensusRounds: number;
+  containerContext?: ContainerContext;
   callbacks?: PipelineCallbacks;
 }
 
@@ -75,6 +77,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     workingDirectory: options.workingDirectory,
     config: options.config,
     swarmDir,
+    containerContext: options.containerContext,
   });
 
   if (!investigationResult.success) {
@@ -103,6 +106,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     config: options.config,
     investigationBrief,
     swarmDir,
+    containerContext: options.containerContext,
   });
 
   if (!architectResult.success) {
@@ -134,6 +138,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       architectureDesign,
       workerCount: options.workerCount,
       swarmDir,
+      containerContext: options.containerContext,
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;
@@ -170,6 +175,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       planContent,
       swarmDir,
       existingWorktrees: workerWorktrees,
+      containerContext: options.containerContext,
     });
 
     if (!workerWorktrees) {
@@ -230,6 +236,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       architectureDesign,
       reviewerPersonas: options.reviewerPersonas,
       swarmDir,
+      containerContext: options.containerContext,
     });
 
     if (!reviewResult.success) {

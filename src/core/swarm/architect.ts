@@ -1,4 +1,4 @@
-import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { readArchitectureDesign, getSwarmDir } from './artifacts.js';
 import { buildArchitectPrompt } from './prompts/architect.js';
@@ -19,6 +19,7 @@ export interface ArchitectOptions {
   config: HydrazConfig;
   investigationBrief: string;
   swarmDir?: string;
+  containerContext?: ContainerContext;
 }
 
 export async function runArchitect(options: ArchitectOptions): Promise<ArchitectResult> {
@@ -28,6 +29,7 @@ export async function runArchitect(options: ArchitectOptions): Promise<Architect
     workingDirectory: options.workingDirectory,
     prompt,
     config: options.config,
+    containerContext: options.containerContext,
   });
 
   const executorResult = await executor.waitForExit();
