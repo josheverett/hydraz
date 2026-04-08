@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** All 10 implementation phases complete. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container/cloud mode blocked by a fundamental architecture issue (see below).
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container/cloud mode blocked by a fundamental architecture issue (see below).
 
 **Critical open item: container-side orchestration.** The swarm pipeline currently runs on the host. For container/cloud mode, the pipeline must run INSIDE the container so Claude invocations and artifact I/O are all container-local. This requires copying Hydraz dist into the container and executing a pipeline runner script via SSH. This is the next implementation task. See plan for details.
 
@@ -86,7 +86,7 @@ v2 makes the "many heads" meaning literal.
 
 An engineer can:
 1. `cd` into a repo
-2. Run `hydraz` (or `hydraz run --swarm "<task>"`)
+2. Run `hydraz` (or `hydraz run "<task>"`)
 3. Name the session and branch
 4. Choose local or cloud execution
 5. Specify worker count and reviewer panel (or accept defaults)
@@ -818,7 +818,7 @@ Worst case with all bounds hit: significant. Per-stage cost tracking is essentia
 
 ## 20. Summary of the Intended Experience
 
-An engineer stands in a repo, runs `hydraz run --swarm "build the user auth system"`, and walks away. Behind the scenes:
+An engineer stands in a repo, runs `hydraz run "build the user auth system"`, and walks away. Behind the scenes:
 
 1. An investigator reads the codebase and documents what it finds
 2. An architect designs the solution based on the investigation

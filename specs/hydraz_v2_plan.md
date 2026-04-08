@@ -18,7 +18,7 @@
 All of the following were discussed and confirmed with the project owner:
 
 - **Orchestrator model**: Hydraz TypeScript code is the deterministic supervisor. Claude Code is used only as stateless workers in distinct roles. No persistent Claude orchestrator process.
-- **Swarm mode**: Opt-in via `--swarm` flag initially. Non-swarm mode is removed (v2 is a clean break, no backward compatibility with v1 single-process sessions).
+- **Swarm mode**: Always active. `--swarm` flag exists but is a no-op (swarm pipeline always runs). No backward compatibility with v1 single-process sessions.
 - **Worker count**: User-controlled via `--workers N`, default 3.
 - **Backward compatibility**: None. Major version bump, breaking changes expected.
 - **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
@@ -35,7 +35,7 @@ All of the following were discussed and confirmed with the project owner:
 Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt theater:
 
 - The master prompt (`src/core/config/master-prompt.ts`) describes a 3-persona workflow but it all runs in a single Claude process.
-- The prompt builder (`src/core/prompts/builder.ts`) stacks master prompt + 3 persona files + task into one `fullText` string passed as a single argument to `claude --print`.
+- The v1 prompt builder (`src/core/prompts/builder.ts`) was removed. v2 stages each have their own prompt templates in `src/core/swarm/prompts/`.
 - The controller (`src/core/orchestration/controller.ts`) now drives `runSwarmPipeline` which transitions through all `SwarmPhase` states. The v1 states `implementing` and `verifying` no longer exist -- replaced by `SwarmPhase` (investigating, architecting, planning, etc.).
 - `--dangerously-skip-permissions` is hardcoded in the executor.
 
