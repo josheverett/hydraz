@@ -154,6 +154,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     planContent = readPlan(options.repoRoot, options.sessionId) ?? '';
     emitEvent(options, 'swarm.plan_completed', `Consensus reached in ${consensusResult.roundsUsed} rounds`);
 
+    emitPhase(options, 'architect-reviewing');
     emitPhase(options, 'fanning-out');
     emitEvent(options, 'swarm.worker_launched', `Launching ${options.workerCount} workers`);
 
@@ -177,6 +178,8 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
         workerWorktrees[wr.workerId] = getWorkspaceDir(options.repoRoot, `${options.sessionId}-${wr.workerId}`);
       }
     }
+
+    emitPhase(options, 'syncing');
 
     if (!workerResult.success) {
       return {
