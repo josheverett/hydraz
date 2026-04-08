@@ -12,6 +12,7 @@ import {
   readInvestigationBrief,
   readArchitectureDesign,
   readPlan,
+  readReviewFile,
   getSwarmDir,
 } from './artifacts.js';
 
@@ -231,7 +232,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
 
     const reviewContents = reviewResult.reviews.map(r => ({
       reviewerName: r.reviewerName,
-      content: '',
+      content: readReviewFile(options.repoRoot, options.sessionId, r.reviewerName) ?? '',
     }));
     const aggregate = aggregateReviews(reviewContents);
     emitEvent(options, 'swarm.review_completed', `Review complete: ${aggregate.approved ? 'approved' : 'changes requested'}`);
