@@ -181,7 +181,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: All prior phases
 **Risks**: State machine complexity with multiple loop-back targets. Mitigate with clear state tracking in `task-ledger.json`.
 
-### Phase 9: Controller integration, CLI surface, delivery
+### Phase 9: Controller integration, CLI surface, delivery [DONE]
 
 **Goal**: Wire the full pipeline into the controller and CLI. Replace v1 controller entirely.
 
