@@ -95,7 +95,7 @@ Three independent reviewers evaluate the integrated result, each embodying a cel
 
 Reviewers categorize their findings as **architectural** (routes back to the architect for redesign) or **implementation** (routes back to the affected workers for targeted fixes). The orchestrator automatically determines the feedback route.
 
-Configurable via `--reviewers` or global config.
+Configurable per-session via `--reviewers`.
 
 ## Artifacts
 

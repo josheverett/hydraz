@@ -676,7 +676,7 @@ v2 builds on top of v1 infrastructure rather than replacing it:
 | `launchClaude()` / `ExecutorHandle` | Simplified: `prompt` changed from `AssembledPrompt` to `string`. Added SIGKILL fallback after SIGTERM timeout. Called once per pipeline stage, multiple concurrent calls for workers/reviewers. |
 | Event system (`appendEvent`, `readEvents`) | Extended with new swarm event types. JSONL format unchanged. |
 | Session model (`SessionMetadata`, state machine) | `SessionState` replaced with `SwarmPhase` (type alias). All v1 states replaced with v2 pipeline phases. Session creation/persistence unchanged. |
-| GitHub delivery | Reused for PR creation from integration branch (container mode only). |
+| GitHub delivery | Reused for PR creation from integration branch (container/cloud mode only). |
 | Config system | Unchanged on disk. Swarm defaults live in `DEFAULT_SWARM_CONFIG` in code, not in `HydrazConfig`. |
 | Auth resolution | Unchanged. Each Claude invocation uses the same auth. |
 | DevPod / container providers | Used for session workspace. Container-side orchestration (pipeline runs inside container) is the next implementation task. |

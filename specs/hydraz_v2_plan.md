@@ -191,7 +191,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - CLI `run` command: added `--swarm` (no-op), `--workers N`, `--reviewers` flags
 - Note: `status`, `review`, `sessions` commands NOT updated for swarm-aware display (still show v1-level detail). Swarm-aware display is future work.
 - Note: `interactive.ts` does not pass `swarmOptions` to `startSession` (no interactive worker/reviewer override). Future work.
-- PR creation from integration branch after review approval (container mode only)
+- PR creation from integration branch after review approval (container/cloud mode only)
 
 **Why ninth**: Integration and UX. Wires together all phases.
 **Dependencies**: All prior phases

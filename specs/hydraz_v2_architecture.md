@@ -205,7 +205,7 @@ Three parallel reviewers, each embodying a famous/celebrated software engineer. 
 
 These three create a triangle of coverage: Carmack finds bugs, Metz finds design debt, Torvalds finds bloat. Their perspectives are well-documented enough for Claude to reliably embody.
 
-The panel is user-configurable via `--reviewers` or config. Users can substitute any well-known engineers.
+The panel is user-configurable per-session via `--reviewers`. Global config for reviewers is not yet implemented.
 
 **Review output format:**
 
@@ -591,4 +591,4 @@ Focus: code organization, naming, abstraction quality, coupling, changeability, 
 ### Linus Torvalds
 Focus: unnecessary complexity, over-engineering, bloated abstractions, whether the code does what it needs to and nothing more. Known for simplicity, directness, and rejecting anything that doesn't carry its weight.
 
-These three form a triangle: Carmack finds bugs, Metz finds design debt, Torvalds finds bloat. User can substitute any well-known engineer via config or `--reviewers`.
+These three form a triangle: Carmack finds bugs, Metz finds design debt, Torvalds finds bloat. User can substitute any well-known engineer per-session via `--reviewers`.
