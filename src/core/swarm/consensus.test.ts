@@ -107,4 +107,20 @@ describe('runConsensus', () => {
     const result = await runConsensus(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
     expect(result.success).toBe(false);
   });
+
+  it('should respect custom maxRounds when provided', async () => {
+    mockClaudeSequence([
+      { success: true, writePlanArtifacts: true },
+      { success: true, writeFeedback: true, feedbackRound: 1 },
+      { success: true, writePlanArtifacts: true },
+    ]);
+    const result = await runConsensus(makeCtx(), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+      maxRounds: 2,
+    });
+    expect(result.architectFinalSay).toBe(true);
+    expect(result.roundsUsed).toBe(2);
+  });
 });

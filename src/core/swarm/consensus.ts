@@ -21,6 +21,7 @@ export interface ConsensusOptions {
   investigationBrief: string;
   architectureDesign: string;
   workerCount: number;
+  maxRounds?: number;
 }
 
 function readFeedback(repoRoot: string, sessionId: string, round: number): string | null {
