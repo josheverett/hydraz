@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** v2 development is in progress. Phases 1-9 are complete (types, state machine, artifacts, investigator, architect, planner, consensus loop, worker fan-out, merge fan-in, review panel, review aggregator, feedback routing, controller integration, CLI flags). Phase 10 (resume and checkpoint support) is next. The implementation plan is in `specs/hydraz_v2_plan.md`.
+**Status:** All 10 implementation phases are complete. Remaining work: update the barrel file (`src/core/swarm/index.ts`) to export new modules, README overhaul, dead code audit. The implementation plan is in `specs/hydraz_v2_plan.md`.
 
 **What v2 changes from v1:** v1 ran a single Claude Code process per session and simulated a "swarm" by stacking 3 persona prompts into one context window. v2 replaces this with a real multi-process pipeline: a TypeScript orchestrator drives a sequence of independent Claude Code invocations (investigator, architect, planner, parallel workers, parallel reviewers) with explicit artifact handoffs between each stage.
 

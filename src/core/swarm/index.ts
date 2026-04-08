@@ -51,3 +51,63 @@ export {
   writePlan,
   readPlan,
 } from './artifacts.js';
+export {
+  type InvestigationResult,
+  type InvestigatorOptions,
+  runInvestigation,
+} from './investigator.js';
+export {
+  type ArchitectResult,
+  type ArchitectOptions,
+  runArchitect,
+} from './architect.js';
+export {
+  type PlannerResult,
+  type PlannerOptions,
+  runPlanner,
+} from './planner.js';
+export {
+  type ConsensusResult,
+  type ConsensusOptions,
+  runConsensus,
+} from './consensus.js';
+export {
+  type WorkerResult,
+  type FanoutResult,
+  type FanoutOptions,
+  runWorkerFanout,
+} from './workers.js';
+export {
+  type MergeOutcome,
+  type WorkerMergeResult,
+  type FanInResult,
+  type FanInOptions,
+  runFanIn,
+} from './merge.js';
+export {
+  type SingleReviewResult,
+  type ReviewPanelResult,
+  type ReviewPanelOptions,
+  runReviewPanel,
+} from './reviewer.js';
+export {
+  parseReviewVerdict,
+  parseReviewFindings,
+  aggregateReviews,
+} from './review-aggregate.js';
+export {
+  type FeedbackRoute,
+  type OrchestratorResult,
+  type OrchestratorOptions,
+  determineFeedbackRoute,
+} from './orchestrator.js';
+export {
+  type PipelineCallbacks,
+  type PipelineResult,
+  type PipelineOptions,
+  runSwarmPipeline,
+} from './pipeline.js';
+export {
+  type ResumePoint,
+  determineResumePoint,
+} from './resume.js';

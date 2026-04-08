@@ -195,7 +195,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: All prior phases
 **Risks**: Breaking the existing CLI surface. Mitigate with thorough testing.
 
-### Phase 10: Resume and checkpoint support
+### Phase 10: Resume and checkpoint support [DONE]
 
 **Goal**: Make swarm sessions resumable from any stage.
 
