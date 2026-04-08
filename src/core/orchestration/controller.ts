@@ -22,8 +22,7 @@ import {
   type WorkspaceInfo,
 } from '../providers/provider.js';
 import { runSwarmPipeline } from '../swarm/pipeline.js';
-import { ensureSwarmDirs } from '../swarm/artifacts.js';
-import { DEFAULT_SWARM_CONFIG } from '../swarm/types.js';
+import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;

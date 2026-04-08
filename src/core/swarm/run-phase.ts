@@ -1,4 +1,4 @@
-import type { ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { ExecutionContext } from './types.js';
 
 export interface PhaseResult {
@@ -7,12 +7,21 @@ export interface PhaseResult {
 }
 
 export async function runClaudePhase(
-  _ctx: ExecutionContext,
-  _prompt: string,
-  _workingDirectoryOverride?: string,
+  ctx: ExecutionContext,
+  prompt: string,
+  workingDirectoryOverride?: string,
 ): Promise<PhaseResult> {
+  const executor = launchClaude({
+    workingDirectory: workingDirectoryOverride ?? ctx.workingDirectory,
+    prompt,
+    config: ctx.config,
+    containerContext: ctx.containerContext,
+  });
+
+  const executorResult = await executor.waitForExit();
+
   return {
-    success: false,
-    executorResult: { exitCode: 1, signal: null, success: false },
+    success: executorResult.success,
+    executorResult,
   };
 }

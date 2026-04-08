@@ -3,9 +3,10 @@ import { join } from 'node:path';
 import { launchClaude } from '../claude/executor.js';
 import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { CONSENSUS_MAX_ROUNDS } from './state.js';
-import { readTaskLedger, readOwnershipMap, readPlan, getSwarmDir } from './artifacts.js';
-import { buildPlannerPrompt } from './prompts/planner.js';
+import { readPlan, getSwarmDir } from './artifacts.js';
+import { runPlanner } from './planner.js';
 import { buildArchitectPlanReviewPrompt } from './prompts/architect-review.js';
+import { parseReviewVerdict } from './review-aggregate.js';
 
 export interface ConsensusResult {
   success: boolean;
@@ -28,29 +29,18 @@ function readFeedback(repoRoot: string, sessionId: string, round: number): strin
   return readFileSync(feedbackPath, 'utf-8');
 }
 
-function isApproved(feedback: string): boolean {
-  const firstLine = feedback.split('\n')[0]?.trim().toUpperCase() ?? '';
-  return firstLine.startsWith('APPROVED');
-}
-
 export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions): Promise<ConsensusResult> {
   let currentDesign = opts.architectureDesign;
   let previousFeedback: string | null = null;
 
   for (let round = 1; round <= CONSENSUS_MAX_ROUNDS; round++) {
-    const plannerPrompt = previousFeedback
-      ? buildPlannerPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, currentDesign, opts.workerCount, ctx.swarmDir)
-        + `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
-      : buildPlannerPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, currentDesign, opts.workerCount, ctx.swarmDir);
-
-    const plannerExecutor = launchClaude({
-      workingDirectory: ctx.workingDirectory,
-      prompt: plannerPrompt,
-      config: ctx.config,
-      containerContext: ctx.containerContext,
+    const plannerResult = await runPlanner(ctx, {
+      investigationBrief: opts.investigationBrief,
+      architectureDesign: currentDesign + (previousFeedback
+        ? `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
+        : ''),
+      workerCount: opts.workerCount,
     });
-
-    const plannerResult = await plannerExecutor.waitForExit();
 
     if (!plannerResult.success) {
       return {
@@ -59,24 +49,13 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         finalLedger: null,
         finalOwnership: null,
         architectFinalSay: false,
-        error: `Planner failed in round ${round}: exit code ${plannerResult.exitCode}`,
+        error: `Planner failed in round ${round}: ${plannerResult.error}`,
       };
     }
 
-    const ledger = readTaskLedger(ctx.repoRoot, ctx.sessionId);
-    const ownership = readOwnershipMap(ctx.repoRoot, ctx.sessionId);
+    const ledger = plannerResult.ledger!;
+    const ownership = plannerResult.ownership!;
     const plan = readPlan(ctx.repoRoot, ctx.sessionId);
-
-    if (!ledger || !ownership || !plan) {
-      return {
-        success: false,
-        roundsUsed: round,
-        finalLedger: ledger,
-        finalOwnership: ownership,
-        architectFinalSay: false,
-        error: `Planner in round ${round} did not produce all required artifacts`,
-      };
-    }
 
     if (round === CONSENSUS_MAX_ROUNDS) {
       return {
@@ -119,17 +98,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
 
     const feedback = readFeedback(ctx.repoRoot, ctx.sessionId, round);
 
-    if (!feedback) {
-      return {
-        success: true,
-        roundsUsed: round,
-        finalLedger: ledger,
-        finalOwnership: ownership,
-        architectFinalSay: false,
-      };
-    }
-
-    if (isApproved(feedback)) {
+    if (!feedback || parseReviewVerdict(feedback) === 'approve') {
       return {
         success: true,
         roundsUsed: round,

@@ -97,8 +97,6 @@ export {
 } from './review-aggregate.js';
 export {
   type FeedbackRoute,
-  type OrchestratorResult,
-  type OrchestratorOptions,
   determineFeedbackRoute,
 } from './orchestrator.js';
 export {

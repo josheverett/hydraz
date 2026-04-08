@@ -1,4 +1,5 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { artifactPath } from './paths.js';
 
 export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string, swarmDir?: string): string {
   return `# Hydraz Architect
@@ -23,7 +24,7 @@ ${EVIDENCE_DISCIPLINE}
 
 ## What to Produce
 
-Write your design to \`${swarmDir ? swarmDir + '/architecture/design.md' : 'swarm/architecture/design.md'}\`. Your document should cover:
+Write your design to \`${artifactPath(swarmDir, 'architecture', 'design.md')}\`. Your document should cover:
 
 1. **Approach**: What is the recommended approach and why?
 2. **Component design**: What components, modules, or abstractions should be created or modified?

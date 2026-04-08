@@ -1,4 +1,5 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { artifactPath } from './paths.js';
 
 export function buildPlannerPrompt(
   task: string,
@@ -36,12 +37,12 @@ ${EVIDENCE_DISCIPLINE}
 
 ## What to Produce
 
-You must produce all of the following artifacts${swarmDir ? ` in \`${swarmDir}/\`` : ' in the session\'s `swarm/` directory'}:
+You must produce all of the following artifacts in \`${artifactPath(swarmDir)}/\`:
 
-### 1. \`${swarmDir ? swarmDir + '/plan/plan.md' : 'swarm/plan/plan.md'}\`
+### 1. \`${artifactPath(swarmDir, 'plan', 'plan.md')}\`
 A human-readable execution plan describing the overall approach, task decomposition rationale, and how the ${workerCount} workers will divide the work.
 
-### 2. \`${swarmDir ? swarmDir + '/task-ledger.json' : 'swarm/task-ledger.json'}\`
+### 2. \`${artifactPath(swarmDir, 'task-ledger.json')}\`
 A JSON file with the following structure:
 
 \`\`\`json
@@ -69,7 +70,7 @@ A JSON file with the following structure:
 }
 \`\`\`
 
-### 3. \`${swarmDir ? swarmDir + '/ownership.json' : 'swarm/ownership.json'}\`
+### 3. \`${artifactPath(swarmDir, 'ownership.json')}\`
 A JSON file mapping each worker to its owned files/directories:
 
 \`\`\`json
@@ -84,7 +85,7 @@ A JSON file mapping each worker to its owned files/directories:
 File ownership must be disjoint -- no two workers should have exclusive ownership of the same path. Files that multiple workers may need to touch go in the \`shared\` list.
 
 ### 4. Worker briefs
-For each worker, write a brief at \`${swarmDir ? swarmDir + '/workers/<worker-id>/brief.md' : 'swarm/workers/<worker-id>/brief.md'}\` containing:
+For each worker, write a brief at \`${artifactPath(swarmDir, 'workers', '<worker-id>', 'brief.md')}\` containing:
 - The worker's assigned tasks
 - Its owned files/paths
 - Interface contracts it must implement

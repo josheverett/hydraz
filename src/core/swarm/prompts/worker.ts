@@ -1,4 +1,5 @@
 import { PROVE_IT_METHODOLOGY, STRICT_TDD_METHODOLOGY } from './core-principles.js';
+import { artifactPath } from './paths.js';
 
 export function buildWorkerPrompt(
   task: string,
@@ -34,7 +35,7 @@ You may ONLY modify files within your owned paths as specified in your assignmen
 
 ## Progress Reporting
 
-When your work is complete, write a progress file to \`${swarmDir ? swarmDir + `/workers/${workerId}/progress.md` : `swarm/workers/${workerId}/progress.md`}\` documenting:
+When your work is complete, write a progress file to \`${artifactPath(swarmDir, 'workers', workerId, 'progress.md')}\` documenting:
 - What was implemented
 - What tests were written and their results (with Runtime proof -- actual test output)
 - What interface contracts were implemented
