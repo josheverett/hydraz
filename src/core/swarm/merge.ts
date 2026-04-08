@@ -10,7 +10,6 @@ export interface WorkerMergeResult {
   workerId: string;
   branch: string;
   outcome: MergeOutcome;
-  conflictFiles?: string[];
   error?: string;
 }
 
