@@ -184,7 +184,9 @@ describe('runSwarmPipeline', () => {
     expect(phases).toContain('investigating');
     expect(phases).toContain('architecting');
     expect(phases).toContain('planning');
+    expect(phases).toContain('architect-reviewing');
     expect(phases).toContain('fanning-out');
+    expect(phases).toContain('syncing');
     expect(phases).toContain('merging');
     expect(phases).toContain('reviewing');
   });
