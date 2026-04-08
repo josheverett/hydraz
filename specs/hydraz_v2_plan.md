@@ -166,9 +166,10 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: Phase 6
 **Risks**: Getting reviewers to produce consistently structured, categorized output. Mitigate with clear output format instructions and parsing fallbacks.
 
-### Phase 8: Categorized feedback loops (outer loop)
+### Phase 8: Categorized feedback loops (outer loop) [DONE]
 
 **Goal**: Route review feedback to the correct loop-back target and re-enter the pipeline.
+**Note**: The `determineFeedbackRoute` function implements the routing logic. The full `runOuterLoop` that wires all stages together is implemented in Phase 9 (controller integration) since it's the main orchestration loop.
 
 **Key changes:**
 - Modify `src/core/swarm/state.ts`: Outer loop tracking, feedback routing logic
