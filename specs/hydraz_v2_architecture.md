@@ -14,52 +14,13 @@
 > architectural decisions and rationale documented here. Any agent working on v2 must review
 > and understand this document before making implementation decisions.
 >
-> **Post-implementation update:** The core pipeline (Phases 1-10) is implemented and working
+> **Post-implementation update:** The core pipeline (Phases 1-9 complete, Phase 10 partial) is working
 > for local bare-metal mode. Container/cloud mode requires a significant architectural change:
 > running the swarm pipeline INSIDE the container rather than on the host. See `specs/hydraz_v2_plan.md`
 > for the "Container-side orchestration" section which details this next step. The `containerContext`
 > plumbing that was added to thread SSH info through each stage is superseded by this approach --
 > when the pipeline runs inside the container, all Claude invocations are local, no SSH needed per-stage.
 
----
-
----
-name: Hydraz v2 Swarm Harness
-overview: Design and implementation plan for Hydraz v2 -- a real multi-process swarm with a TypeScript orchestrator, structured planning pipeline (investigate -> architect -> plan -> consensus), parallel Claude Code workers with strict TDD, and a famous-engineer review panel with categorized feedback loops.
-todos:
-  - id: discuss-plan
-    content: Discuss and refine the plan with the user, resolve open questions
-    status: completed
-  - id: phase-1
-    content: "Phase 1: Swarm types, artifact model, and state machine"
-    status: pending
-  - id: phase-2
-    content: "Phase 2: Investigation stage"
-    status: pending
-  - id: phase-3
-    content: "Phase 3: Architecture stage"
-    status: pending
-  - id: phase-4
-    content: "Phase 4: Planning stage + architect-planner consensus loop"
-    status: pending
-  - id: phase-5
-    content: "Phase 5: Worker fan-out with local worktrees"
-    status: pending
-  - id: phase-6
-    content: "Phase 6: Fan-in and branch merge"
-    status: pending
-  - id: phase-7
-    content: "Phase 7: Review panel with famous-engineer personas"
-    status: pending
-  - id: phase-8
-    content: "Phase 8: Categorized feedback loops (outer loop)"
-    status: pending
-  - id: phase-9
-    content: "Phase 9: Controller integration, CLI surface, delivery"
-    status: pending
-  - id: phase-10
-    content: "Phase 10: Resume and checkpoint support"
-    status: pending
 ---
 
 # Hydraz v2 Swarm Harness Plan
@@ -303,7 +264,9 @@ Any phase -> stopped     (user action)
 
 ### 3.9 Resume / Checkpoint Strategy
 
-Each stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. Resume logic:
+**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it resets to `created` and reruns the full pipeline.
+
+**Target behavior (when wired):** Each stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. Resume logic:
 
 - If investigation completed: skip to architect with existing `investigation.md`
 - If architecture completed: skip to planner
@@ -382,7 +345,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
       # Note: review aggregation is done in-memory by the pipeline, not persisted to disk
 
     delivery/
-      pr-draft.md                 # Final PR content
+      # Note: PR draft is currently read from sessions/<id>/artifacts/pr-draft.md (v1 path), not swarm/delivery/
 ```
 
 ### Who writes what
@@ -599,7 +562,7 @@ It introduces zero parallelism and zero loop complexity. It's one Claude invocat
 
 2. **Shared files (package.json, lock files)**: The ownership model needs a `shared` category for files multiple workers might touch. Recommendation: shared files are listed in `ownership.json` with `exclusive: false`. Workers are instructed to minimize shared-file changes and note them in `progress.md`. Merge phase handles conflicts.
 
-3. **Worker progress monitoring**: Should the orchestrator poll worker progress files while workers run, or just wait for exit? Recommendation: wait for exit initially. Add polling for stall detection later (Phase 4).
+3. **Worker progress monitoring**: Should the orchestrator poll worker progress files while workers run, or just wait for exit? Recommendation: wait for exit initially. Add polling for stall detection later.
 
 4. **Reviewer persona storage**: Where do reviewer persona definitions live? Recommendation: `~/.config/hydraz/reviewers/` alongside the existing persona directory, but conceptually separate. Ship defaults, user can add custom.
 

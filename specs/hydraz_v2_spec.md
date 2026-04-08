@@ -376,7 +376,7 @@ Resumable states: `stopped`, `blocked`, `failed` -> `created` (for resume).
 ### 7.1 Session directory layout
 
 ```
-~/.hydraz/repos/<hash>/sessions/<session-id>/
+~/.hydraz/repos/<repo>-<hash>/sessions/<session-id>/
   session.json                    # SessionMetadata (extended with swarm phase tracking)
   events.jsonl                    # Event log
 
