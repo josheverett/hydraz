@@ -512,7 +512,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 
 **Key changes:**
 - New `src/core/swarm/merge.ts`: Sequential merge of worker branches into integration branch, conflict detection, merge report
-- Handle three outcomes: clean merge, conflict requiring resolution (launch short-lived Claude process), unresolvable conflict (session -> blocked)
+- Two outcomes implemented: clean merge, unresolvable conflict (session -> blocked). Claude-assisted conflict resolution is not implemented (future work).
 
 **Why sixth**: Must follow worker completion. Ownership map makes conflicts unlikely; merge logic is the safety net.
 **Dependencies**: Phase 5

@@ -296,7 +296,7 @@ Each reviewer produces a structured review with:
   - `implementation`: code-level issues fixable by workers (routes back to targeted workers)
 - Specific file/line references for each finding
 
-The orchestrator aggregates reviews into `swarm/reviews/aggregate.json`. If any reviewer requests changes, the categorized findings determine the loop-back target.
+The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the loop-back target.
 
 ### 4.8 Feedback loop routing
 

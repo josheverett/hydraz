@@ -187,10 +187,11 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Goal**: Wire the full pipeline into the controller and CLI. Replace v1 controller entirely.
 
 **Key changes:**
-- Rewrite `src/core/orchestration/controller.ts`: `startSwarmSession()` drives the full pipeline
-- Modify CLI commands: `run` (add `--swarm`, `--workers N`, `--reviewers`), `status` (swarm-aware), `review` (show review panel output), `events` (new event types)
-- Modify `src/cli/interactive.ts`: Swarm options in new-session flow
-- PR creation from integration branch after review approval
+- Rewrite `src/core/orchestration/controller.ts`: `startSession()` now drives `runSwarmPipeline`
+- CLI `run` command: added `--swarm` (no-op), `--workers N`, `--reviewers` flags
+- Note: `status`, `review`, `sessions` commands NOT updated for swarm-aware display (still show v1-level detail). Swarm-aware display is future work.
+- Note: `interactive.ts` does not pass `swarmOptions` to `startSession` (no interactive worker/reviewer override). Future work.
+- PR creation from integration branch after review approval (container mode only)
 
 **Why ninth**: Integration and UX. Wires together all phases.
 **Dependencies**: All prior phases
