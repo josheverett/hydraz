@@ -1,6 +1,8 @@
-import type { ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import type { TaskLedger, OwnershipMap } from './types.js';
+import { readTaskLedger, readOwnershipMap } from './artifacts.js';
+import { buildPlannerPrompt } from './prompts/planner.js';
 
 export interface PlannerResult {
   success: boolean;
@@ -22,12 +24,59 @@ export interface PlannerOptions {
   workerCount: number;
 }
 
-export async function runPlanner(_options: PlannerOptions): Promise<PlannerResult> {
+export async function runPlanner(options: PlannerOptions): Promise<PlannerResult> {
+  const prompt = buildPlannerPrompt(
+    options.task,
+    options.sessionName,
+    options.investigationBrief,
+    options.architectureDesign,
+    options.workerCount,
+  );
+
+  const executor = launchClaude({
+    workingDirectory: options.workingDirectory,
+    prompt,
+    config: options.config,
+  });
+
+  const executorResult = await executor.waitForExit();
+
+  if (!executorResult.success) {
+    return {
+      success: false,
+      executorResult,
+      ledger: null,
+      ownership: null,
+      error: `Planner Claude process failed: exit code ${executorResult.exitCode}`,
+    };
+  }
+
+  const ledger = readTaskLedger(options.repoRoot, options.sessionId);
+  if (!ledger) {
+    return {
+      success: false,
+      executorResult,
+      ledger: null,
+      ownership: null,
+      error: 'Planner completed but did not produce swarm/task-ledger.json',
+    };
+  }
+
+  const ownership = readOwnershipMap(options.repoRoot, options.sessionId);
+  if (!ownership) {
+    return {
+      success: false,
+      executorResult,
+      ledger,
+      ownership: null,
+      error: 'Planner completed but did not produce swarm/ownership.json',
+    };
+  }
+
   return {
-    success: false,
-    executorResult: null,
-    ledger: null,
-    ownership: null,
-    error: 'not implemented',
+    success: true,
+    executorResult,
+    ledger,
+    ownership,
   };
 }
