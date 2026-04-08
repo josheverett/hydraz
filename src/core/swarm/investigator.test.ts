@@ -112,6 +112,11 @@ describe('buildInvestigatorPrompt', () => {
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
+
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session', '/home/user/.hydraz/repos/test/sessions/abc/swarm');
+    expect(prompt).toContain('/home/user/.hydraz/repos/test/sessions/abc/swarm');
+  });
 });
 
 describe('runInvestigation', () => {

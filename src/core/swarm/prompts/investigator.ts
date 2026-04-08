@@ -1,6 +1,6 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
 
-export function buildInvestigatorPrompt(task: string, sessionName: string): string {
+export function buildInvestigatorPrompt(task: string, sessionName: string, swarmDir?: string): string {
   return `# Hydraz Investigator
 
 You are the investigator for Hydraz session "${sessionName}". Your job is to explore the repository and produce a factual brief about its structure, conventions, and constraints.

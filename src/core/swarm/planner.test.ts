@@ -173,6 +173,11 @@ describe('buildPlannerPrompt', () => {
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
+
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, '/tmp/swarm');
+    expect(prompt).toContain('/tmp/swarm');
+  });
 });
 
 describe('runPlanner', () => {

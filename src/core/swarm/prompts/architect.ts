@@ -1,6 +1,6 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
 
-export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string): string {
+export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string, swarmDir?: string): string {
   return `# Hydraz Architect
 
 You are the architect for Hydraz session "${sessionName}". Your job is to read the investigation brief and the task, then produce a design document with recommendations, tradeoffs, and risks.

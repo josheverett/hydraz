@@ -7,6 +7,7 @@ export function buildReviewerPrompt(
   architectureDesign: string,
   reviewerPersona: string,
   reviewerName: string,
+  swarmDir?: string,
 ): string {
   return `# Hydraz Code Review — ${reviewerName}
 

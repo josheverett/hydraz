@@ -115,6 +115,11 @@ describe('buildArchitectPrompt', () => {
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
+
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, '/tmp/swarm');
+    expect(prompt).toContain('/tmp/swarm');
+  });
 });
 
 describe('runArchitect', () => {

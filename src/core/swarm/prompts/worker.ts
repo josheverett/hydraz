@@ -6,6 +6,7 @@ export function buildWorkerPrompt(
   workerBrief: string,
   planContent: string,
   workerId: string,
+  swarmDir?: string,
 ): string {
   return `# Hydraz Worker — ${workerId}
 

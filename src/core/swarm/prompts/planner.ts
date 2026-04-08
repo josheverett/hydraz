@@ -6,6 +6,7 @@ export function buildPlannerPrompt(
   investigationBrief: string,
   architectureDesign: string,
   workerCount: number,
+  swarmDir?: string,
 ): string {
   return `# Hydraz Planner
 

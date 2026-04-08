@@ -167,6 +167,11 @@ describe('buildArchitectPlanReviewPrompt', () => {
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
+
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, '/tmp/swarm');
+    expect(prompt).toContain('/tmp/swarm');
+  });
 });
 
 describe('runConsensus', () => {

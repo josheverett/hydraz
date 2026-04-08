@@ -140,6 +140,11 @@ describe('buildReviewerPrompt', () => {
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
+
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack', '/tmp/swarm');
+    expect(prompt).toContain('/tmp/swarm');
+  });
 });
 
 describe('runReviewPanel', () => {

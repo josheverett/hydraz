@@ -6,6 +6,7 @@ export function buildArchitectPlanReviewPrompt(
   architectureDesign: string,
   planContent: string,
   round: number,
+  swarmDir?: string,
 ): string {
   return `# Hydraz Architect — Plan Review (Round ${round})
 

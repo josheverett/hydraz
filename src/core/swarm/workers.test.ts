@@ -169,6 +169,11 @@ describe('buildWorkerPrompt', () => {
     expect(prompt).toContain('Unknown');
   });
 
+  it('should include the absolute swarm directory path when provided', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', '/tmp/swarm');
+    expect(prompt).toContain('/tmp/swarm');
+  });
+
   it('should include the plan content', () => {
     const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nDetailed steps here.', 'worker-a');
     expect(prompt).toContain('Detailed steps here');
