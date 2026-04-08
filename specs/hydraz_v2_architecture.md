@@ -518,7 +518,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 - CLI `run` command: added `--swarm` (no-op), `--workers N`, `--reviewers` flags
 - Note: `status`, `review`, `sessions` commands NOT updated for swarm-aware display. Swarm-aware display is future work.
 - Note: `interactive.ts` does not pass `swarmOptions`. Future work.
-- PR creation from integration branch after review approval (container mode only)
+- PR creation from integration branch after review approval (container/cloud mode only)
 
 **Why ninth**: Integration and UX. Wires together all phases.
 **Dependencies**: All prior phases

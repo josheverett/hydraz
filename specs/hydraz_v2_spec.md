@@ -326,7 +326,7 @@ After the review panel approves:
 
 ## 5. Default Reviewer Personas
 
-The review panel ships with three default famous-engineer personas. These are user-configurable via `--reviewers` or global config.
+The review panel ships with three default famous-engineer personas. These are user-configurable per-session via `--reviewers`. Global config for reviewers is not yet implemented (see §12).
 
 ### John Carmack
 Focus: correctness, edge cases, error handling, data flow, performance traps, subtle bugs. Known for mathematical rigor, relentless attention to detail, and finding the things that will break at 3am.
