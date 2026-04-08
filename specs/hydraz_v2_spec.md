@@ -272,10 +272,11 @@ Each worker:
 
 The TypeScript orchestrator merges worker branches into the integration branch sequentially (worker-a, then worker-b, then worker-c, etc.).
 
-**Three outcomes:**
+**Two outcomes (current implementation):**
 1. **Clean merge**: continue to review
-2. **Conflict, resolvable**: launch a short-lived Claude process with the conflict diff, ownership context, and plan to resolve. If successful, continue.
-3. **Conflict, unresolvable**: session transitions to `blocked` with details for human inspection
+2. **Conflict, unresolvable**: merge aborts, session transitions to `failed`
+
+Note: Claude-assisted conflict resolution (launching a short-lived Claude process to resolve merge conflicts) is not implemented. Future work.
 
 File ownership makes conflicts unlikely. The merge phase is a safety net, not the normal path.
 
@@ -312,7 +313,7 @@ The orchestrator aggregates reviews in memory (not persisted to disk). If any re
 - Other workers are not re-launched
 - After fixes: re-merge -> re-review
 
-**Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `blocked` with full review history for human inspection.
+**Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures).
 
 ### 4.9 Delivery
 

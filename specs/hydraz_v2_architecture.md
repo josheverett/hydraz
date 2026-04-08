@@ -275,7 +275,7 @@ When reviewers flag issues:
 
 **Bounds:**
 - Max 5 outer loops total (across both architectural and implementation feedback)
-- If cap hit: session transitions to `blocked` with full review history for human inspection
+- If cap hit: session transitions to `failed` (controller maps all pipeline non-success to `failed`; `blocked` is for pre-flight issues)
 
 ### 3.8 Swarm State Machine
 
@@ -512,7 +512,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 
 **Key changes:**
 - New `src/core/swarm/merge.ts`: Sequential merge of worker branches into integration branch, conflict detection, merge report
-- Two outcomes implemented: clean merge, unresolvable conflict (session -> blocked). Claude-assisted conflict resolution is not implemented (future work).
+- Two outcomes implemented: clean merge, unresolvable conflict (session -> failed). Claude-assisted conflict resolution is not implemented (future work).
 
 **Why sixth**: Must follow worker completion. Ownership map makes conflicts unlikely; merge logic is the safety net.
 **Dependencies**: Phase 5
@@ -540,7 +540,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 - Modify `src/core/swarm/state.ts`: Outer loop tracking, feedback routing logic
 - Handle architectural feedback: re-enter at architect stage (skip investigation)
 - Handle implementation feedback: re-launch only affected workers, re-merge, re-review
-- Enforce 5-outer-loop bound; transition to `blocked` if exceeded
+- Enforce 5-outer-loop bound; transition to `failed` if exceeded
 
 **Why eighth**: This wires together all prior stages into a complete loop. It's integration, not new capability.
 **Dependencies**: All prior phases

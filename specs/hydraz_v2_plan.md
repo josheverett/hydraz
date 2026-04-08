@@ -146,7 +146,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 **Key changes:**
 - New `src/core/swarm/merge.ts`: Sequential merge of worker branches into integration branch, conflict detection, merge report
-- Two outcomes implemented: clean merge, unresolvable conflict (session -> blocked)
+- Two outcomes implemented: clean merge, unresolvable conflict (session -> failed)
 - Note: Claude-assisted conflict resolution (launching a short-lived Claude process to resolve merge conflicts) is NOT implemented. Conflicts abort with an error. This is future work.
 
 **Why sixth**: Must follow worker completion. Ownership map makes conflicts unlikely; merge logic is the safety net.
@@ -176,7 +176,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - Modify `src/core/swarm/state.ts`: Outer loop tracking, feedback routing logic
 - Handle architectural feedback: re-enter at architect stage (skip investigation)
 - Handle implementation feedback: re-launch only affected workers, re-merge, re-review
-- Enforce 5-outer-loop bound; transition to `blocked` if exceeded
+- Enforce 5-outer-loop bound; transition to `failed` if exceeded
 
 **Why eighth**: This wires together all prior stages into a complete loop. It's integration, not new capability.
 **Dependencies**: All prior phases
