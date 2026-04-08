@@ -1,5 +1,7 @@
-import type { ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
+import { readArchitectureDesign, getSwarmDir } from './artifacts.js';
+import { buildArchitectPrompt } from './prompts/architect.js';
 
 export interface ArchitectResult {
   success: boolean;
@@ -18,11 +20,41 @@ export interface ArchitectOptions {
   investigationBrief: string;
 }
 
-export async function runArchitect(_options: ArchitectOptions): Promise<ArchitectResult> {
+export async function runArchitect(options: ArchitectOptions): Promise<ArchitectResult> {
+  const prompt = buildArchitectPrompt(options.task, options.sessionName, options.investigationBrief);
+
+  const executor = launchClaude({
+    workingDirectory: options.workingDirectory,
+    prompt,
+    config: options.config,
+  });
+
+  const executorResult = await executor.waitForExit();
+
+  if (!executorResult.success) {
+    return {
+      success: false,
+      designPath: null,
+      executorResult,
+      error: `Architect Claude process failed: exit code ${executorResult.exitCode}`,
+    };
+  }
+
+  const design = readArchitectureDesign(options.repoRoot, options.sessionId);
+  if (!design) {
+    return {
+      success: false,
+      designPath: null,
+      executorResult,
+      error: 'Architect completed but did not produce swarm/architecture/design.md',
+    };
+  }
+
+  const designPath = `${getSwarmDir(options.repoRoot, options.sessionId)}/architecture/design.md`;
+
   return {
-    success: false,
-    designPath: null,
-    executorResult: null,
-    error: 'not implemented',
+    success: true,
+    designPath,
+    executorResult,
   };
 }
