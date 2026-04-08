@@ -190,7 +190,7 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
        │
        ├── architectural issues ──► back to Architect (step 2, skip investigation)
        ├── implementation issues ──► back to Workers (targeted fixes)
-       │   (max 5 outer loops total, then block)
+       │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
 ┌─────────────┐
@@ -313,7 +313,7 @@ The orchestrator aggregates reviews in memory (not persisted to disk). If any re
 - Other workers are not re-launched
 - After fixes: re-merge -> re-review
 
-**Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures).
+**Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures). Note: the pipeline internally returns `phase: 'blocked'` for exhaustion, but the controller overrides this to `failed` for the session state.
 
 ### 4.9 Delivery
 
@@ -360,8 +360,8 @@ created
   -> delivering            (PR creation, cleanup)
   -> completed
 
-Any phase -> failed        (unrecoverable error)
-Any phase -> blocked       (needs human input or bounds exceeded)
+Any phase -> failed        (unrecoverable error, pipeline failure, or bounds exceeded)
+Any phase -> blocked       (pre-flight issues: auth, provider, or config problems)
 Any phase -> stopped       (user action)
 ```
 
@@ -785,7 +785,7 @@ src/core/swarm/
 4. **Personas**: Applied to reviewers only. Workers get identical prompts.
 5. **Verification**: Workers own TDD. No separate verification stage.
 6. **Consensus bounds**: 10 rounds, architect final say.
-7. **Outer loop bounds**: 5 iterations, then block.
+7. **Outer loop bounds**: 5 iterations, then fail.
 8. **Feedback routing**: Reviewers categorize as architectural vs implementation.
 9. **Default reviewers**: Carmack, Metz, Torvalds.
 

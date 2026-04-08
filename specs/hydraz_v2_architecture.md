@@ -87,7 +87,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 - The master prompt ([`src/core/config/master-prompt.ts`](src/core/config/master-prompt.ts)) describes a 3-persona workflow but it all runs in a single Claude process.
 - The prompt builder ([`src/core/prompts/builder.ts`](src/core/prompts/builder.ts)) stacks master prompt + 3 persona files + task into one `fullText` string passed as a single argument to `claude --print`.
-- The controller ([`src/core/orchestration/controller.ts`](src/core/orchestration/controller.ts)) transitions: `created -> starting -> planning -> (Claude runs) -> completed|failed`. States `implementing` and `verifying` exist in the schema but are never set at runtime.
+- The controller ([`src/core/orchestration/controller.ts`](src/core/orchestration/controller.ts)) now drives `runSwarmPipeline` which transitions through all `SwarmPhase` states. The v1 states `implementing` and `verifying` no longer exist -- replaced by `SwarmPhase`.
 - `--dangerously-skip-permissions` is hardcoded in the executor.
 
 ### Infrastructure that v2 builds on
@@ -97,7 +97,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **42 test files, ~460 test cases**.
+- **54 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -296,8 +296,8 @@ created
   -> delivering          (PR creation, cleanup)
   -> completed
 
-Any phase -> failed      (unrecoverable error)
-Any phase -> blocked     (needs human input or bounds exceeded)
+Any phase -> failed      (unrecoverable error, pipeline failure, or bounds exceeded)
+Any phase -> blocked     (pre-flight issues: auth, provider, or config problems)
 Any phase -> stopped     (user action)
 ```
 
