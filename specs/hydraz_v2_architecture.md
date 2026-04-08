@@ -13,6 +13,13 @@
 > All three documents must be read together. The spec and plan must remain aligned with the
 > architectural decisions and rationale documented here. Any agent working on v2 must review
 > and understand this document before making implementation decisions.
+>
+> **Post-implementation update:** The core pipeline (Phases 1-10) is implemented and working
+> for local bare-metal mode. Container/cloud mode requires a significant architectural change:
+> running the swarm pipeline INSIDE the container rather than on the host. See `specs/hydraz_v2_plan.md`
+> for the "Container-side orchestration" section which details this next step. The `containerContext`
+> plumbing that was added to thread SSH info through each stage is superseded by this approach --
+> when the pipeline runs inside the container, all Claude invocations are local, no SSH needed per-stage.
 
 ---
 

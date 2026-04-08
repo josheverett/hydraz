@@ -208,15 +208,9 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: All prior phases
 **Risks**: Resume state reconstruction is complex. Mitigate by making `task-ledger.json` the single source of truth.
 
-### Post-phase: README overhaul
-
-After all phases are complete, overhaul `README.md` to accurately reflect v2 reality. No v1 references -- clean v2 documentation with sufficient instructions for users to get started without pain. This is not a numbered phase but must be done before release.
+### Post-phase: README overhaul [DONE]
 
 ### Post-phase: Dead code audit [DONE]
-
-Audit the codebase for dead code left over from v1 that is no longer referenced by v2. The controller rewrite, executor simplification, and SessionState replacement may have orphaned modules, functions, or types. Remove anything confirmed unreachable.
-
-### Post-phase: README overhaul [DONE]
 
 ### Post-phase: Manual testing and bug fixes [DONE]
 
@@ -226,12 +220,65 @@ Bugs found and fixed during local bare-metal manual testing:
 - SIGKILL fallback: executor escalates to SIGKILL after 5s
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees
 - Missing phase emissions: pipeline emits all state machine phases
+- Container context plumbing (superseded by container-side orchestration)
+
+### Post-phase: Complexity reduction (4 rounds) [DONE]
+
+- Extracted `ExecutionContext` to replace per-stage options bags
+- Created `artifactPath` helper for prompt path templating
+- Consensus now calls `runPlanner` instead of inlining
+- Consolidated duplicate `APPROVED` parsing into `parseReviewVerdict`
+- Threaded `maxConsensusRounds` from pipeline config to consensus
+- Folded `orchestrator.ts` into `review-aggregate.ts`
+- Removed dead code: `architectFinalSay`, `conflict-resolved`, `canContinueConsensus`, `canContinueOuterLoop`, `OUTER_LOOP_MAX_ITERATIONS`, `run-phase.ts`, `conflictFiles`
+- Removed unused barrel exports for `resume.ts`
+
+### Post-phase: Dev workflow fixes [DONE]
+
+- `postbuild` script for `chmod +x` on CLI entry point (npm link compatibility)
+- CLI version reads from `package.json` dynamically
+- Config `version` field removed (inert, no migration logic)
+
+### NEXT: Container-side orchestration
+
+**Status: Not started. This is the blocking item for container/cloud mode.**
+
+**Problem:** The swarm pipeline runs on the host. For container/cloud mode, Claude runs inside the container but the orchestrator reads artifacts from the host filesystem. These are different filesystems -- artifacts written by Claude inside the container are invisible to the host orchestrator.
+
+**Solution:** Run the entire swarm pipeline inside the container. The host's only role is:
+1. Create DevPod workspace (existing code)
+2. Copy Hydraz `dist/` into the container via SCP
+3. SSH into the container and run `node /tmp/hydraz-dist/swarm/pipeline-runner.js '<serialized-options>'`
+4. Wait for SSH process to exit
+5. SSH back in to read final result + artifacts
+6. Create PR, cleanup DevPod workspace (existing code)
+
+**Why this approach:**
+- Pipeline runs identically to local bare metal from inside the container -- all Claude invocations and artifact I/O are container-local
+- No per-stage SSH overhead (10+ SSH sessions reduced to 1)
+- Cloud mode works identically (DevPod abstracts the infrastructure)
+- Uses exact same code as host (no version skew)
+- No requirement for Hydraz to be installed in the devcontainer
+
+**Implementation needed:**
+- New `src/core/swarm/pipeline-runner.ts`: thin entry point that deserializes options and calls `runSwarmPipeline`
+- New SCP step in controller after DevPod workspace creation to copy `dist/` into container
+- Controller rewrite for container mode: instead of passing `containerContext` through pipeline, SSH the pipeline runner
+- Result serialization: pipeline runner writes result JSON to a known path, host reads it via SSH
+- Remove `containerContext` from `ExecutionContext` and all stage drivers (no longer needed -- pipeline runs container-local)
+
+### v2.0.0: Worker count intelligence
+
+**Status: Not started.**
+
+The planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections (workers adding unnecessary test scripts etc.).
 
 ### Deferred to v2.1.0
 
-- **Worker count intelligence for trivial tasks**: planner should detect when a task is too small for N workers and reduce accordingly
 - **Architect council**: parallel architects with synthesis (see spec non-goals)
-- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy (discuss post-e2e)
+- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
+- **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
+- **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
 
 ---
 

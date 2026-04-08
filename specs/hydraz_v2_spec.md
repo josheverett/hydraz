@@ -2,18 +2,33 @@
 
 ## 0. Current State (read this first)
 
-**Status:** All 10 implementation phases are complete. Post-phase tasks (README overhaul, dead code audit) are done. Local bare-metal mode verified end-to-end. Container and cloud mode testing in progress.
+**Status:** All 10 implementation phases complete. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container/cloud mode blocked by a fundamental architecture issue (see below).
+
+**Critical open item: container-side orchestration.** The swarm pipeline currently runs on the host. For container/cloud mode, the pipeline must run INSIDE the container so Claude invocations and artifact I/O are all container-local. This requires copying Hydraz dist into the container and executing a pipeline runner script via SSH. This is the next implementation task. See plan for details.
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
 - Review content aggregation: pipeline reads actual review files from disk instead of passing empty strings
 - SIGKILL fallback: executor sends SIGKILL after 5s if SIGTERM doesn't terminate the process
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees instead of trying to create duplicates
-- Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions The implementation plan is in `specs/hydraz_v2_plan.md`.
+- Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions
+- Container context plumbing: `containerContext` now threaded through pipeline to all stage executors (but superseded by container-side orchestration approach)
+
+**Post-implementation refactoring completed:**
+- `ExecutionContext` extracted to eliminate repetitive plumbing across all stage drivers
+- `artifactPath` helper eliminates duplicated ternary path logic in all prompts
+- Consensus calls `runPlanner` instead of inlining duplicate planner logic
+- Duplicate `APPROVED` parsing consolidated to single `parseReviewVerdict`
+- `maxConsensusRounds` threaded from pipeline config to consensus (was ignored before)
+- `orchestrator.ts` folded into `review-aggregate.ts` (10-line file eliminated)
+- Dead code removed: `architectFinalSay`, `conflict-resolved`, `canContinueConsensus`, `canContinueOuterLoop`, `OUTER_LOOP_MAX_ITERATIONS`, `run-phase.ts`, `conflictFiles`, unused barrel exports
+- `postbuild` script added for `chmod +x` on CLI entry point (npm link dev workflow)
+- CLI version now reads from `package.json` dynamically instead of hardcoded
+- Config `version` field removed (was inert, no migration logic)
 
 **What v2 changes from v1:** v1 ran a single Claude Code process per session and simulated a "swarm" by stacking 3 persona prompts into one context window. v2 replaces this with a real multi-process pipeline: a TypeScript orchestrator drives a sequence of independent Claude Code invocations (investigator, architect, planner, parallel workers, parallel reviewers) with explicit artifact handoffs between each stage.
 
-**Codebase entry points:** Same as v1 until Phase 9 rewrites the controller. Key files: `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor). New v2 code will live under `src/core/swarm/`.
+**Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle, calls `runSwarmPipeline`), `src/core/swarm/pipeline.ts` (swarm pipeline driver), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
 
 **v2 document set (all three must be read and understood before implementation):**
 - `specs/hydraz_v2_spec.md` (this file) — the authoritative specification defining product behavior and architecture
