@@ -530,7 +530,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 **Goal**: Make swarm sessions resumable from any stage.
 
 **Key changes:**
-- Modify `src/core/swarm/state.ts`: Determine resume point from `task-ledger.json`
+- `src/core/swarm/resume.ts`: `determineResumePoint` reads `task-ledger.json` and artifact state to determine re-entry point (implemented, not wired to controller)
 - Handle partial completion at every stage: re-enter pipeline at the right point
 - Handle partial worker completion: re-launch only failed/stalled workers
 
