@@ -46,7 +46,13 @@ async function runSingleWorker(
     return { workerId, success: false, executorResult: null, error: `No brief found for ${workerId}` };
   }
 
-  const worktree = createWorktree(options.repoRoot, `${options.sessionId}-${workerId}`, workerInfo.branch);
+  let workingDirectory: string;
+  if (options.existingWorktrees?.[workerId]) {
+    workingDirectory = options.existingWorktrees[workerId];
+  } else {
+    const worktree = createWorktree(options.repoRoot, `${options.sessionId}-${workerId}`, workerInfo.branch);
+    workingDirectory = worktree.directory;
+  }
 
   const prompt = buildWorkerPrompt(
     options.task,
@@ -58,7 +64,7 @@ async function runSingleWorker(
   );
 
   const executor = launchClaude({
-    workingDirectory: worktree.directory,
+    workingDirectory,
     prompt,
     config: options.config,
   });
