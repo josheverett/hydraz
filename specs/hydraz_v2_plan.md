@@ -77,7 +77,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Goal**: Define all data structures, schemas, and state transitions. No runtime behavior.
 
 **Key changes:**
-- New `src/core/swarm/types.ts`: `TaskLedger`, `OwnershipMap`, `WorkerState`, `SwarmPhase`, `ReviewFinding`, `SwarmConfig`
+- New `src/core/swarm/types.ts`: `TaskLedger`, `OwnershipMap`, `WorkerStatus`, `SwarmPhase`, `ReviewFinding`, `SwarmConfig`, `ExecutionContext`
 - New `src/core/swarm/artifacts.ts`: Read/write/validate all swarm artifacts (task-ledger, ownership, briefs, progress, reviews)
 - New `src/core/swarm/state.ts`: Swarm state machine, phase transitions, worker sub-states, loop counters, bounds checking
 - Extend `src/core/sessions/schema.ts`: New session states for the swarm pipeline
@@ -146,7 +146,8 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 **Key changes:**
 - New `src/core/swarm/merge.ts`: Sequential merge of worker branches into integration branch, conflict detection, merge report
-- Handle three outcomes: clean merge, conflict requiring resolution (launch short-lived Claude process), unresolvable conflict (session -> blocked)
+- Two outcomes implemented: clean merge, unresolvable conflict (session -> blocked)
+- Note: Claude-assisted conflict resolution (launching a short-lived Claude process to resolve merge conflicts) is NOT implemented. Conflicts abort with an error. This is future work.
 
 **Why sixth**: Must follow worker completion. Ownership map makes conflicts unlikely; merge logic is the safety net.
 **Dependencies**: Phase 5
@@ -195,7 +196,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: All prior phases
 **Risks**: Breaking the existing CLI surface. Mitigate with thorough testing.
 
-### Phase 10: Resume and checkpoint support [DONE]
+### Phase 10: Resume and checkpoint support [PARTIAL]
 
 **Goal**: Make swarm sessions resumable from any stage.
 

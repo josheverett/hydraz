@@ -365,7 +365,8 @@ Any phase -> stopped       (user action)
 ```
 
 Terminal states: `completed`, `failed`, `blocked`, `stopped`.
-Resumable states: `stopped`, `blocked`, `failed`.
+Resumable states: `stopped`, `blocked`, `failed` -> `created` (for resume).
+`completed` has no outgoing transitions.
 
 ---
 
@@ -416,10 +417,10 @@ Resumable states: `stopped`, `blocked`, `failed`.
       carmack.md                  # Review from John Carmack persona
       metz.md                     # Review from Sandi Metz persona
       torvalds.md                 # Review from Linus Torvalds persona
-      aggregate.json              # Orchestrator-produced aggregate: approve/reject + routed findings
+      # Note: review aggregation is done in-memory by the pipeline, not persisted to disk
 
     delivery/
-      pr-draft.md                 # Final PR content
+      # Note: PR draft is currently read from sessions/<id>/artifacts/pr-draft.md (v1 path), not swarm/delivery/
 ```
 
 ### 7.2 Artifact ownership
@@ -431,7 +432,7 @@ Resumable states: `stopped`, `blocked`, `failed`.
 | Planner | `swarm/plan/plan.md`, `swarm/task-ledger.json`, `swarm/ownership.json`, `swarm/workers/*/brief.md`, `swarm/plan/revisions/round-N.md` |
 | Workers | `swarm/workers/<id>/progress.md` + code commits on their branch |
 | Reviewers | `swarm/reviews/<persona>.md` |
-| Orchestrator (TypeScript) | `session.json`, `events.jsonl`, `swarm/reviews/aggregate.json`, `swarm/merge/report.md`, status updates to `task-ledger.json` |
+| Orchestrator (TypeScript) | `session.json`, `events.jsonl`, `swarm/merge/report.md` (review aggregation is in-memory, not persisted; task-ledger updates not yet implemented in production) |
 
 ### 7.3 task-ledger.json schema
 
@@ -480,17 +481,19 @@ The task ledger is the master checkpoint file. The orchestrator reads it to dete
 
 ```json
 {
-  "worker-a": {
-    "paths": ["src/auth/", "src/middleware/auth.ts"],
-    "exclusive": true
-  },
-  "worker-b": {
-    "paths": ["src/api/routes/", "tests/api/"],
-    "exclusive": true
-  },
-  "worker-c": {
-    "paths": ["src/database/migrations/", "src/models/"],
-    "exclusive": true
+  "workers": {
+    "worker-a": {
+      "paths": ["src/auth/", "src/middleware/auth.ts"],
+      "exclusive": true
+    },
+    "worker-b": {
+      "paths": ["src/api/routes/", "tests/api/"],
+      "exclusive": true
+    },
+    "worker-c": {
+      "paths": ["src/database/migrations/", "src/models/"],
+      "exclusive": true
+    }
   },
   "shared": ["package.json", "tsconfig.json"]
 }
@@ -519,7 +522,9 @@ Each worker would get its own DevPod workspace via the existing `LocalContainerP
 
 ## 9. Resume and Checkpoint Strategy
 
-Each pipeline stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. When a session is resumed, the orchestrator reads the ledger and re-enters the pipeline at the appropriate point:
+**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it currently resets to `created` and reruns the full pipeline from scratch. Wiring resume is deferred to v2.1.0.
+
+**Target behavior (when wired):** Each pipeline stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. When a session is resumed, the orchestrator reads the ledger and re-enters the pipeline at the appropriate point:
 
 - Investigation completed -> skip to architect
 - Architecture completed -> skip to planner
@@ -568,31 +573,38 @@ Aggregate swarm metrics:
 
 ## 11. CLI Surface Changes
 
-### 11.1 New flags
+### 11.1 New/updated flags on `run`
 
 ```bash
-hydraz run --swarm "<task>"           # Launch swarm pipeline
-hydraz run --swarm --workers 5 "<task>"  # 5 parallel workers
-hydraz run --swarm --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
+hydraz run "<task>"                      # Launch swarm pipeline (swarm is always active, no separate --swarm needed)
+hydraz run --workers 5 "<task>"          # 5 parallel workers
+hydraz run --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
+hydraz run --local "<task>"              # Run locally (bare metal, default)
+hydraz run --container "<task>"          # Run in local Docker container via DevPod
+hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 ```
 
-- `--swarm`: Opt-in to swarm mode
+- `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
 - `--workers N`: Number of parallel workers (default 3)
 - `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
+- `--local` / `--container` / `--cloud`: Execution target selection (carried from v1)
 
-### 11.2 Existing commands (updated for swarm awareness)
+### 11.2 Existing commands (swarm awareness NOT yet implemented in display)
 
-- `hydraz status`: Show current swarm phase, worker states, loop counts
-- `hydraz review`: Show review panel output (all 3 reviews + aggregate)
-- `hydraz events`: Show swarm events with stage-level detail
-- `hydraz sessions`: Show swarm metadata in session list
-- `hydraz stop`: Stop all active workers and the session
-- `hydraz resume`: Resume from checkpoint
+Note: The following commands exist but their output has NOT been updated for v2 swarm awareness. They still show v1-level detail (session state, branch, timestamps). Richer swarm display (worker states, loop counts, review panel output) is future work.
+
+- `hydraz status`: Shows session state (uses swarm phases as state values)
+- `hydraz review`: Shows session review summary (v1 format, does not show panel reviews)
+- `hydraz events`: Shows event log (includes swarm events via JSONL)
+- `hydraz sessions`: Lists sessions
+- `hydraz stop`: Stops active session
+- `hydraz resume`: Resumes session (currently restarts from scratch, smart resume deferred)
 
 ### 11.3 Commands unchanged from v1
 
 - `hydraz config`
 - `hydraz attach`
+- `hydraz personas`
 - `hydraz mcp`
 - `hydraz clean`
 
@@ -600,33 +612,21 @@ hydraz run --swarm --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer
 
 ## 12. Config Model Changes
 
-### 12.1 New config fields
+### 12.1 Swarm config defaults
 
-```json
-{
-  "swarm": {
-    "defaultWorkerCount": 3,
-    "defaultReviewers": ["carmack", "metz", "torvalds"],
-    "consensusMaxRounds": 10,
-    "outerLoopMaxIterations": 5
-  }
-}
-```
+**Status: Not yet in `HydrazConfig`.** Swarm defaults are currently hardcoded in `DEFAULT_SWARM_CONFIG` in `src/core/swarm/types.ts` and applied by the controller. They are NOT part of the on-disk config schema and cannot be changed via `hydraz config`. Adding them to `HydrazConfig` is future work.
+
+Current defaults:
+- `defaultWorkerCount`: 3
+- `defaultReviewers`: `["carmack", "metz", "torvalds"]`
+- `consensusMaxRounds`: 10
+- `outerLoopMaxIterations`: 5
+
+These can be overridden per-session via CLI flags (`--workers N`, `--reviewers <list>`).
 
 ### 12.2 Reviewer persona storage
 
-Reviewer persona definitions live at `~/.config/hydraz/reviewers/`:
-```
-~/.config/hydraz/reviewers/
-  carmack.md
-  metz.md
-  torvalds.md
-  custom-reviewer.md
-```
-
-Built-in reviewer personas are seeded on first use, similar to how v1 seeds built-in personas. Users can add, edit, or remove custom reviewer personas.
-
-Reviewer personas are conceptually separate from v1 worker personas (which are retired in v2).
+**Status: Not implemented.** Reviewer persona definitions are currently inline strings in the controller (`"You are ${name}. Review the code with your characteristic engineering perspective."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
 
 ---
 
@@ -645,6 +645,7 @@ The `--dangerously-skip-permissions` flag is a known debt item. Per-role permiss
 
 Each pipeline role has its own prompt template in `src/core/swarm/prompts/`:
 - `core-principles.ts`: Shared engineering principle text blocks (prove-it-first, evidence taxonomy, strict TDD) composed into all role prompts
+- `paths.ts`: `artifactPath` helper for constructing absolute/relative artifact paths in prompts
 - `investigator.ts`: Read-only exploration, produce factual brief
 - `architect.ts`: Design reasoning, produce architecture document
 - `architect-review.ts`: Architect reviews the planner's execution plan
@@ -670,15 +671,15 @@ v2 builds on top of v1 infrastructure rather than replacing it:
 
 | v1 Component | v2 Usage |
 |---|---|
-| `WorkspaceProvider` interface | Unchanged. Workers use `LocalProvider.createWorkspace()` for worktrees. |
-| `launchClaude()` / `ExecutorHandle` | Simplified: `ExecutorOptions.prompt` changed from `AssembledPrompt` to `string`. Called once per pipeline stage. Multiple concurrent calls for workers. |
-| Event system (`appendEvent`, `readEvents`) | Extended with new event types. JSONL format unchanged. |
-| Session model (`SessionMetadata`, state machine) | Extended with new states. Session creation/persistence unchanged. |
-| GitHub delivery | Reused for PR creation from integration branch. |
-| Config system | Extended with swarm-specific fields. |
+| `WorkspaceProvider` interface | Session workspace creation unchanged. Workers create worktrees directly via `createWorktree()` from `worktree.ts`, not through the provider interface. |
+| `launchClaude()` / `ExecutorHandle` | Simplified: `prompt` changed from `AssembledPrompt` to `string`. Added SIGKILL fallback after SIGTERM timeout. Called once per pipeline stage, multiple concurrent calls for workers/reviewers. |
+| Event system (`appendEvent`, `readEvents`) | Extended with new swarm event types. JSONL format unchanged. |
+| Session model (`SessionMetadata`, state machine) | `SessionState` replaced with `SwarmPhase` (type alias). All v1 states replaced with v2 pipeline phases. Session creation/persistence unchanged. |
+| GitHub delivery | Reused for PR creation from integration branch (container mode only). |
+| Config system | Unchanged on disk. Swarm defaults live in `DEFAULT_SWARM_CONFIG` in code, not in `HydrazConfig`. |
 | Auth resolution | Unchanged. Each Claude invocation uses the same auth. |
-| DevPod / container providers | Available for future per-worker container isolation. |
-| Stream parser / display | Reused for all Claude invocations. |
+| DevPod / container providers | Used for session workspace. Container-side orchestration (pipeline runs inside container) is the next implementation task. |
+| Stream parser / display | Available but not actively used by v2 pipeline (pipeline stages don't stream to the user). |
 
 ---
 
@@ -739,19 +740,22 @@ All coding standards from v1 spec Section 26b are carried forward without modifi
 ```
 src/core/swarm/
   index.ts                  # Barrel: public API for the swarm module
-  types.ts                  # TaskLedger, OwnershipMap, WorkerState, SwarmPhase, etc.
+  types.ts                  # TaskLedger, OwnershipMap, WorkerState, SwarmPhase, ExecutionContext, etc.
   artifacts.ts              # Read/write/validate swarm artifacts (includes schema validation)
   state.ts                  # Swarm state machine, transitions, bounds
+  pipeline.ts               # Main swarm pipeline orchestration loop
   investigator.ts           # Investigation stage driver
   architect.ts              # Architecture stage driver
   planner.ts                # Planning stage driver
-  consensus.ts              # Architect-planner consensus loop
+  consensus.ts              # Architect-planner consensus loop (calls runPlanner)
   workers.ts                # Worker fan-out lifecycle
   merge.ts                  # Fan-in branch merge
   reviewer.ts               # Review panel driver
-  review-aggregate.ts       # Aggregate and categorize review findings
+  review-aggregate.ts       # Aggregate reviews, categorize findings, determineFeedbackRoute
+  resume.ts                 # Resume checkpoint determination (not yet wired to controller)
   prompts/
     core-principles.ts      # Shared engineering principle text blocks
+    paths.ts                # artifactPath helper for prompt path templating
     investigator.ts         # Investigator prompt template
     architect.ts            # Architect prompt template
     architect-review.ts     # Architect plan-review prompt template

@@ -487,7 +487,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 - New `src/core/swarm/planner.ts`: Build planner prompt (includes investigation + architecture), launch Claude, parse structured outputs (`plan.md`, `task-ledger.json`, `ownership.json`, worker briefs)
 - New `src/core/swarm/prompts/planner.ts`: Planner prompt template
 - New `src/core/swarm/consensus.ts`: Drive the planner <-> architect loop, enforce 10-round cap, handle architect-final-say
-- New `src/core/swarm/parser.ts`: Parse and validate `task-ledger.json` and `ownership.json` from planner output
+- Note: `parser.ts` was not created as a separate file. Schema validation (`validateTaskLedger`, `validateOwnershipMap`) lives in `artifacts.ts`.
 
 **Why fourth**: This is the most complex pre-worker stage. The consensus loop introduces the first loop construct and the first multi-artifact validation.
 **Dependencies**: Phase 3
