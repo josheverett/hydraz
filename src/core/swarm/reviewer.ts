@@ -1,5 +1,6 @@
-import type { ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
+import { buildReviewerPrompt } from './prompts/reviewer.js';
 
 export interface SingleReviewResult {
   reviewerName: string;
@@ -26,10 +27,46 @@ export interface ReviewPanelOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
 }
 
-export async function runReviewPanel(_options: ReviewPanelOptions): Promise<ReviewPanelResult> {
+async function runSingleReviewer(
+  reviewerInfo: { name: string; persona: string },
+  options: ReviewPanelOptions,
+): Promise<SingleReviewResult> {
+  const prompt = buildReviewerPrompt(
+    options.task,
+    options.sessionName,
+    options.planContent,
+    options.architectureDesign,
+    reviewerInfo.persona,
+    reviewerInfo.name,
+  );
+
+  const executor = launchClaude({
+    workingDirectory: options.workingDirectory,
+    prompt,
+    config: options.config,
+  });
+
+  const executorResult = await executor.waitForExit();
+
   return {
-    success: false,
-    reviews: [],
-    error: 'not implemented',
+    reviewerName: reviewerInfo.name,
+    success: executorResult.success,
+    executorResult,
+    error: executorResult.success ? undefined : `Reviewer ${reviewerInfo.name} failed: exit code ${executorResult.exitCode}`,
+  };
+}
+
+export async function runReviewPanel(options: ReviewPanelOptions): Promise<ReviewPanelResult> {
+  const reviewPromises = options.reviewerPersonas.map(persona =>
+    runSingleReviewer(persona, options),
+  );
+
+  const reviews = await Promise.all(reviewPromises);
+  const allSucceeded = reviews.every(r => r.success);
+
+  return {
+    success: allSucceeded,
+    reviews,
+    error: allSucceeded ? undefined : 'One or more reviewers failed',
   };
 }

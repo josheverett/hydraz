@@ -207,6 +207,10 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: All prior phases
 **Risks**: Resume state reconstruction is complex. Mitigate by making `task-ledger.json` the single source of truth.
 
+### Post-phase: README overhaul
+
+After all phases are complete, overhaul `README.md` to accurately reflect v2 reality. No v1 references -- clean v2 documentation with sufficient instructions for users to get started without pain. This is not a numbered phase but must be done before release.
+
 ---
 
 ## 4. First Implementation Slice
