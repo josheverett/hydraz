@@ -17,10 +17,11 @@ export interface InvestigatorOptions {
   sessionName: string;
   workingDirectory: string;
   config: HydrazConfig;
+  swarmDir?: string;
 }
 
 export async function runInvestigation(options: InvestigatorOptions): Promise<InvestigationResult> {
-  const prompt = buildInvestigatorPrompt(options.task, options.sessionName);
+  const prompt = buildInvestigatorPrompt(options.task, options.sessionName, options.swarmDir);
 
   const executor = launchClaude({
     workingDirectory: options.workingDirectory,

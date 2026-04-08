@@ -27,6 +27,7 @@ export interface ConsensusOptions {
   investigationBrief: string;
   architectureDesign: string;
   workerCount: number;
+  swarmDir?: string;
 }
 
 function readFeedback(repoRoot: string, sessionId: string, round: number): string | null {
@@ -46,9 +47,9 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
 
   for (let round = 1; round <= CONSENSUS_MAX_ROUNDS; round++) {
     const plannerPrompt = previousFeedback
-      ? buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount)
+      ? buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount, options.swarmDir)
         + `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
-      : buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount);
+      : buildPlannerPrompt(options.task, options.sessionName, options.investigationBrief, currentDesign, options.workerCount, options.swarmDir);
 
     const plannerExecutor = launchClaude({
       workingDirectory: options.workingDirectory,
@@ -98,8 +99,9 @@ export async function runConsensus(options: ConsensusOptions): Promise<Consensus
       options.task,
       options.sessionName,
       currentDesign,
-      plan,
+      plan!,
       round,
+      options.swarmDir,
     );
 
     const reviewExecutor = launchClaude({

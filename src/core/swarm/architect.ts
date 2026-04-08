@@ -18,10 +18,11 @@ export interface ArchitectOptions {
   workingDirectory: string;
   config: HydrazConfig;
   investigationBrief: string;
+  swarmDir?: string;
 }
 
 export async function runArchitect(options: ArchitectOptions): Promise<ArchitectResult> {
-  const prompt = buildArchitectPrompt(options.task, options.sessionName, options.investigationBrief);
+  const prompt = buildArchitectPrompt(options.task, options.sessionName, options.investigationBrief, options.swarmDir);
 
   const executor = launchClaude({
     workingDirectory: options.workingDirectory,

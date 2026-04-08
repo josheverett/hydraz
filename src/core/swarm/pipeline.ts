@@ -12,6 +12,7 @@ import {
   readInvestigationBrief,
   readArchitectureDesign,
   readPlan,
+  getSwarmDir,
 } from './artifacts.js';
 
 export interface PipelineCallbacks {
@@ -58,6 +59,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   let ledger: TaskLedger;
   let ownership: OwnershipMap;
   let totalConsensusRounds = 0;
+  const swarmDir = getSwarmDir(options.repoRoot, options.sessionId);
 
   emitPhase(options, 'investigating');
   emitEvent(options, 'swarm.investigate_started', 'Investigation starting');
@@ -69,6 +71,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     sessionName: options.sessionName,
     workingDirectory: options.workingDirectory,
     config: options.config,
+    swarmDir,
   });
 
   if (!investigationResult.success) {
@@ -96,6 +99,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     workingDirectory: options.workingDirectory,
     config: options.config,
     investigationBrief,
+    swarmDir,
   });
 
   if (!architectResult.success) {
@@ -126,6 +130,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       investigationBrief,
       architectureDesign,
       workerCount: options.workerCount,
+      swarmDir,
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;
@@ -159,6 +164,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       ledger,
       ownership,
       planContent,
+      swarmDir,
     });
 
     if (!workerResult.success) {
@@ -209,6 +215,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       planContent,
       architectureDesign,
       reviewerPersonas: options.reviewerPersonas,
+      swarmDir,
     });
 
     if (!reviewResult.success) {

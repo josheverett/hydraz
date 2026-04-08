@@ -32,7 +32,7 @@ ${EVIDENCE_DISCIPLINE}
 
 ## Output
 
-Write your findings to \`swarm/investigation/brief.md\` in the session artifacts directory. Structure it clearly with headers for each area investigated. Be factual and specific -- cite file paths, function names, and concrete details rather than vague descriptions.
+Write your findings to \`${swarmDir ? swarmDir + '/investigation/brief.md' : 'swarm/investigation/brief.md'}\`. Structure it clearly with headers for each area investigated. Be factual and specific -- cite file paths, function names, and concrete details rather than vague descriptions.
 
 Do not design a solution or make recommendations. That is the architect's job. Your job is to provide the architect with a thorough factual basis for their design work.
 `;

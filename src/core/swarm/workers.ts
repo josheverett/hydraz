@@ -28,6 +28,7 @@ export interface FanoutOptions {
   ledger: TaskLedger;
   ownership: OwnershipMap;
   planContent: string;
+  swarmDir?: string;
 }
 
 async function runSingleWorker(
@@ -52,6 +53,7 @@ async function runSingleWorker(
     brief,
     options.planContent,
     workerId,
+    options.swarmDir,
   );
 
   const executor = launchClaude({

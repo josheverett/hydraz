@@ -23,7 +23,7 @@ ${EVIDENCE_DISCIPLINE}
 
 ## What to Produce
 
-Write your design to \`swarm/architecture/design.md\` in the session artifacts directory. Your document should cover:
+Write your design to \`${swarmDir ? swarmDir + '/architecture/design.md' : 'swarm/architecture/design.md'}\`. Your document should cover:
 
 1. **Approach**: What is the recommended approach and why?
 2. **Component design**: What components, modules, or abstractions should be created or modified?

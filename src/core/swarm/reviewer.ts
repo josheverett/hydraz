@@ -25,6 +25,7 @@ export interface ReviewPanelOptions {
   planContent: string;
   architectureDesign: string;
   reviewerPersonas: Array<{ name: string; persona: string }>;
+  swarmDir?: string;
 }
 
 async function runSingleReviewer(
@@ -38,6 +39,7 @@ async function runSingleReviewer(
     options.architectureDesign,
     reviewerInfo.persona,
     reviewerInfo.name,
+    options.swarmDir,
   );
 
   const executor = launchClaude({

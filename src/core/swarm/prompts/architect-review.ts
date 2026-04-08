@@ -39,9 +39,9 @@ Review the plan against your architecture design. Consider:
 
 ## Your Output
 
-If the plan is acceptable, write a short approval to \`swarm/architecture/feedback/round-${round}.md\` stating the plan is approved and noting any minor observations.
+If the plan is acceptable, write a short approval to \`${swarmDir ? swarmDir + `/architecture/feedback/round-${round}.md` : `swarm/architecture/feedback/round-${round}.md`}\` stating the plan is approved and noting any minor observations.
 
-If the plan needs revision, write detailed feedback to \`swarm/architecture/feedback/round-${round}.md\` explaining:
+If the plan needs revision, write detailed feedback to \`${swarmDir ? swarmDir + `/architecture/feedback/round-${round}.md` : `swarm/architecture/feedback/round-${round}.md`}\` explaining:
 - What specific issues need to be addressed
 - Why they matter
 - What changes you recommend

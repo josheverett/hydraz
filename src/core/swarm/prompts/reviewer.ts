@@ -39,7 +39,7 @@ Examine the integrated codebase. Look at the changes that were made to implement
 
 ## Output Format
 
-Write your review to \`swarm/reviews/${reviewerName}.md\` in the session artifacts directory.
+Write your review to \`${swarmDir ? swarmDir + `/reviews/${reviewerName}.md` : `swarm/reviews/${reviewerName}.md`}\`.
 
 Your review MUST follow this structure:
 

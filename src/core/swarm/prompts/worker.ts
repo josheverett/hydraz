@@ -34,7 +34,7 @@ You may ONLY modify files within your owned paths as specified in your assignmen
 
 ## Progress Reporting
 
-When your work is complete, write a progress file to \`swarm/workers/${workerId}/progress.md\` documenting:
+When your work is complete, write a progress file to \`${swarmDir ? swarmDir + `/workers/${workerId}/progress.md` : `swarm/workers/${workerId}/progress.md`}\` documenting:
 - What was implemented
 - What tests were written and their results (with Runtime proof -- actual test output)
 - What interface contracts were implemented
