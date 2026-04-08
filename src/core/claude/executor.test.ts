@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { buildClaudeArgs, buildClaudeEnv, mapExitToSessionState } from './executor.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { buildClaudeArgs, buildClaudeEnv } from './executor.js';
 import { createDefaultConfig } from '../config/schema.js';
 
 const TEST_PROMPT = 'You are a test agent. Do the thing.';
@@ -70,24 +70,5 @@ describe('buildClaudeEnv', () => {
     const config = createDefaultConfig();
     const env = buildClaudeEnv(config, '/tmp/workspace');
     expect(env['MY_CUSTOM_VAR']).toBe('hello');
-  });
-});
-
-describe('mapExitToSessionState', () => {
-  it('maps exit code 0 to completed', () => {
-    const result = mapExitToSessionState({ exitCode: 0, signal: null, success: true });
-    expect(result.state).toBe('completed');
-  });
-
-  it('maps non-zero exit code to failed with message', () => {
-    const result = mapExitToSessionState({ exitCode: 1, signal: null, success: false });
-    expect(result.state).toBe('failed');
-    expect(result.message).toContain('code 1');
-  });
-
-  it('maps signal kill to failed with signal info', () => {
-    const result = mapExitToSessionState({ exitCode: null, signal: 'SIGTERM', success: false });
-    expect(result.state).toBe('failed');
-    expect(result.message).toContain('SIGTERM');
   });
 });

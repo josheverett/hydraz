@@ -174,26 +174,3 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     waitForExit,
   };
 }
-
-export function mapExitToSessionState(result: ExecutorResult): {
-  state: 'completed' | 'failed';
-  message?: string;
-} {
-  if (result.success) {
-    return { state: 'completed' };
-  }
-
-  const stderrSuffix = result.stderr ? `\nstderr: ${result.stderr}` : '';
-
-  if (result.signal) {
-    return {
-      state: 'failed',
-      message: `Claude Code process killed by signal: ${result.signal}${stderrSuffix}`,
-    };
-  }
-
-  return {
-    state: 'failed',
-    message: `Claude Code process exited with code ${result.exitCode}${stderrSuffix}`,
-  };
-}
