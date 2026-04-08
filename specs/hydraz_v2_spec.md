@@ -2,7 +2,14 @@
 
 ## 0. Current State (read this first)
 
-**Status:** All 10 implementation phases are complete. Remaining work: update the barrel file (`src/core/swarm/index.ts`) to export new modules, README overhaul, dead code audit. The implementation plan is in `specs/hydraz_v2_plan.md`.
+**Status:** All 10 implementation phases are complete. Post-phase tasks (README overhaul, dead code audit) are done. Local bare-metal mode verified end-to-end. Container and cloud mode testing in progress.
+
+**Bugs found and fixed during manual testing:**
+- Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
+- Review content aggregation: pipeline reads actual review files from disk instead of passing empty strings
+- SIGKILL fallback: executor sends SIGKILL after 5s if SIGTERM doesn't terminate the process
+- Worker worktree reuse: implementation feedback loops re-use existing worktrees instead of trying to create duplicates
+- Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions The implementation plan is in `specs/hydraz_v2_plan.md`.
 
 **What v2 changes from v1:** v1 ran a single Claude Code process per session and simulated a "swarm" by stacking 3 persona prompts into one context window. v2 replaces this with a real multi-process pipeline: a TypeScript orchestrator drives a sequence of independent Claude Code invocations (investigator, architect, planner, parallel workers, parallel reviewers) with explicit artifact handoffs between each stage.
 
