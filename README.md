@@ -75,7 +75,7 @@ hydraz sessions        # list all sessions in this repo
 hydraz status          # show current session state and swarm phase
 hydraz attach          # attach to an active session
 hydraz stop            # stop an active session
-hydraz resume          # resume a stopped/blocked session (currently restarts from scratch)
+hydraz resume          # resume a stopped/blocked/failed session (currently restarts from scratch)
 hydraz review          # review a session's outcome and review panel output
 hydraz events          # show structured event history
 
