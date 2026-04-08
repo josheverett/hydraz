@@ -214,15 +214,19 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 ### Post-phase: Dead code audit [DONE]
 
-### Post-phase: Manual testing and bug fixes [DONE]
+### Post-phase: Manual testing and bug fixes [PARTIAL]
 
-Bugs found and fixed during local bare-metal manual testing:
+**Local bare metal: PASSED.** Bugs found and fixed during testing:
 - Artifact path mismatch: prompts now include absolute `swarmDir` path
 - Review content aggregation: pipeline reads actual review files
 - SIGKILL fallback: executor escalates to SIGKILL after 5s
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees
 - Missing phase emissions: pipeline emits all state machine phases
 - Container context plumbing (superseded by container-side orchestration)
+
+**Container mode: BLOCKED.** Requires container-side orchestration (see "NEXT" section above). Pipeline runs on host but Claude runs in container -- artifact paths don't cross the boundary.
+
+**Cloud mode: NOT TESTED.** Blocked by same issue as container mode. Once container-side orchestration is implemented, cloud should work identically (DevPod abstracts the infrastructure).
 
 ### Post-phase: Complexity reduction (4 rounds) [DONE]
 
@@ -281,6 +285,15 @@ The planner should detect when a task is too small for N workers and assign fewe
 - **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
 - **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
 - **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
+
+### Known doc discrepancies (minor, to fix in next session)
+
+- Spec §11.1: "no separate --swarm needed" wording contradicts listing --swarm as a declared flag
+- Architecture §3.3 roles table: artifact filenames abbreviated (`investigation.md` instead of `investigation/brief.md`, `architecture.md` instead of `architecture/design.md`)
+- Architecture §3.9 resume bullets: same abbreviated filenames
+- Pipeline swarm events not written to `events.jsonl` -- only forwarded to console callback via `onEvent`. This is a **functional gap**, not just a doc issue. Several declared event types in `logger.ts` (`swarm.consensus_round`, `swarm.worker_completed`, `swarm.worker_failed`, `swarm.merge_conflict`) are never emitted by the pipeline. The pipeline should call `appendEvent` to persist events, and emit all declared event types at appropriate points.
+- CLI help text for `--swarm` in `run.ts` says "Enable swarm pipeline (default)" vs README saying "No-op" -- should align
+- README should be re-audited after container-side orchestration is implemented to ensure it accurately reflects the final architecture
 
 ---
 
