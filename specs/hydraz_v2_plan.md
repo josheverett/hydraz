@@ -212,6 +212,10 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 After all phases are complete, overhaul `README.md` to accurately reflect v2 reality. No v1 references -- clean v2 documentation with sufficient instructions for users to get started without pain. This is not a numbered phase but must be done before release.
 
+### Post-phase: Dead code audit
+
+Audit the codebase for dead code left over from v1 that is no longer referenced by v2. The controller rewrite, executor simplification, and SessionState replacement may have orphaned modules, functions, or types. Remove anything confirmed unreachable.
+
 ---
 
 ## 4. First Implementation Slice

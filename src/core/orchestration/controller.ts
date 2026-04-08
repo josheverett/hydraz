@@ -54,10 +54,16 @@ function formatTs(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+export interface SwarmOptions {
+  workerCount?: number;
+  reviewerNames?: string[];
+}
+
 export async function startSession(
   sessionId: string,
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
+  swarmOptions: SwarmOptions = {},
 ): Promise<void> {
   const config = loadConfig();
   const session = loadSession(repoRoot, sessionId);
@@ -140,7 +146,8 @@ export async function startSession(
 
   activeSessions.set(sessionId, { session, workspace });
 
-  const swarmConfig = DEFAULT_SWARM_CONFIG;
+  const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
+  const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
 
   const pipelineResult = await runSwarmPipeline({
     repoRoot,
@@ -149,13 +156,13 @@ export async function startSession(
     task: session.task,
     workingDirectory: workspace.directory,
     config,
-    workerCount: swarmConfig.defaultWorkerCount,
-    reviewerPersonas: swarmConfig.defaultReviewers.map(name => ({
+    workerCount,
+    reviewerPersonas: reviewerNames.map(name => ({
       name,
       persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
     })),
-    maxOuterLoops: swarmConfig.outerLoopMaxIterations,
-    maxConsensusRounds: swarmConfig.consensusMaxRounds,
+    maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
+    maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
     callbacks: {
       onPhaseChange: (phase) => {
         try {

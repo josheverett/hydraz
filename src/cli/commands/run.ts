@@ -20,12 +20,18 @@ export function registerRunCommand(program: Command): void {
     .option('--local', 'Run locally (bare metal)')
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
+    .option('--swarm', 'Enable swarm pipeline (default)')
+    .option('--workers <count>', 'Number of parallel workers (default: 3)')
+    .option('--reviewers <names>', 'Comma-separated reviewer persona names (default: carmack,metz,torvalds)')
     .action(async (task: string, options: {
       session?: string;
       branch?: string;
       local?: boolean;
       container?: boolean;
       cloud?: boolean;
+      swarm?: boolean;
+      workers?: string;
+      reviewers?: string;
     }) => {
       const repo = detectRepo();
       if (!repo) {
@@ -82,12 +88,28 @@ export function registerRunCommand(program: Command): void {
         createEvent(session.id, 'session.created', `Session "${sessionName}" created`),
       );
 
+      const workerCount = options.workers ? parseInt(options.workers, 10) : undefined;
+      if (options.workers && (isNaN(workerCount!) || workerCount! < 1)) {
+        console.error(`Invalid worker count: "${options.workers}". Must be a positive integer.`);
+        return;
+      }
+
+      const reviewerNames = options.reviewers
+        ? options.reviewers.split(',').map(s => s.trim()).filter(Boolean)
+        : undefined;
+
       console.log(`\nSession "${sessionName}" started on branch ${branchName}`);
-      console.log(`Task: ${task}\n`);
+      console.log(`Task: ${task}`);
+      if (workerCount) console.log(`Workers: ${workerCount}`);
+      if (reviewerNames) console.log(`Reviewers: ${reviewerNames.join(', ')}`);
+      console.log('');
 
       await startSession(session.id, repo.root, {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
+      }, {
+        workerCount,
+        reviewerNames,
       });
     });
 }
