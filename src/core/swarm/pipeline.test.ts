@@ -77,6 +77,7 @@ vi.mock('./artifacts.js', async (importOriginal) => {
     readInvestigationBrief: vi.fn().mockReturnValue('# Investigation\nFindings.'),
     readArchitectureDesign: vi.fn().mockReturnValue('# Architecture\nDesign.'),
     readPlan: vi.fn().mockReturnValue('# Plan\nSteps.'),
+    readReviewFile: vi.fn().mockReturnValue('APPROVED\n\nLooks good.'),
   };
 });
 
@@ -164,6 +165,14 @@ describe('runSwarmPipeline', () => {
 
     expect(result.success).toBe(true);
     expect(result.approved).toBe(true);
+  });
+
+  it('should pass actual review file contents to aggregateReviews, not empty strings', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const aggregateCall = vi.mocked(aggregateReviews).mock.calls[0]![0]!;
+    const hasNonEmptyContent = aggregateCall.some((r: { content: string }) => r.content.length > 0);
+    expect(hasNonEmptyContent).toBe(true);
   });
 
   it('should report phase changes via callbacks', async () => {

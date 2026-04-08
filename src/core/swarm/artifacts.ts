@@ -132,3 +132,9 @@ export function readPlan(repoRoot: string, sessionId: string): string | null {
   if (!existsSync(filePath)) return null;
   return readFileSync(filePath, 'utf-8');
 }
+
+export function readReviewFile(repoRoot: string, sessionId: string, reviewerName: string): string | null {
+  const filePath = join(getSwarmDir(repoRoot, sessionId), 'reviews', `${reviewerName}.md`);
+  if (!existsSync(filePath)) return null;
+  return readFileSync(filePath, 'utf-8');
+}
