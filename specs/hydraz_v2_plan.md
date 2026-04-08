@@ -140,7 +140,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: Phase 4 (plan artifacts)
 **Risks**: Multiple concurrent Claude processes; workers writing outside owned paths; API rate limits.
 
-### Phase 6: Fan-in and branch merge
+### Phase 6: Fan-in and branch merge [DONE]
 
 **Goal**: Merge worker branches into the integration branch.
 
