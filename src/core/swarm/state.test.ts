@@ -9,8 +9,6 @@ import {
   isSwarmActiveState,
   CONSENSUS_MAX_ROUNDS,
   OUTER_LOOP_MAX_ITERATIONS,
-  canContinueConsensus,
-  canContinueOuterLoop,
 } from './state.js';
 import type { SwarmPhase } from './types.js';
 
@@ -152,34 +150,13 @@ describe('swarm state machine', () => {
     });
   });
 
-  describe('bounds checking', () => {
+  describe('bounds constants', () => {
     it('should define consensus max rounds as 10', () => {
       expect(CONSENSUS_MAX_ROUNDS).toBe(10);
     });
 
     it('should define outer loop max iterations as 5', () => {
       expect(OUTER_LOOP_MAX_ITERATIONS).toBe(5);
-    });
-
-    it('should allow consensus to continue below the limit', () => {
-      expect(canContinueConsensus(0)).toBe(true);
-      expect(canContinueConsensus(5)).toBe(true);
-      expect(canContinueConsensus(9)).toBe(true);
-    });
-
-    it('should reject consensus at or above the limit', () => {
-      expect(canContinueConsensus(10)).toBe(false);
-      expect(canContinueConsensus(11)).toBe(false);
-    });
-
-    it('should allow outer loop to continue below the limit', () => {
-      expect(canContinueOuterLoop(0)).toBe(true);
-      expect(canContinueOuterLoop(4)).toBe(true);
-    });
-
-    it('should reject outer loop at or above the limit', () => {
-      expect(canContinueOuterLoop(5)).toBe(false);
-      expect(canContinueOuterLoop(6)).toBe(false);
     });
   });
 });

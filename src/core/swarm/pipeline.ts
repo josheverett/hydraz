@@ -7,8 +7,7 @@ import { runConsensus } from './consensus.js';
 import { runWorkerFanout } from './workers.js';
 import { runFanIn } from './merge.js';
 import { runReviewPanel } from './reviewer.js';
-import { aggregateReviews } from './review-aggregate.js';
-import { determineFeedbackRoute } from './orchestrator.js';
+import { aggregateReviews, determineFeedbackRoute } from './review-aggregate.js';
 import {
   readInvestigationBrief,
   readArchitectureDesign,
@@ -126,6 +125,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       investigationBrief,
       architectureDesign,
       workerCount: options.workerCount,
+      maxRounds: options.maxConsensusRounds,
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;

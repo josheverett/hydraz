@@ -86,7 +86,6 @@ describe('runConsensus', () => {
     expect(result.roundsUsed).toBe(1);
     expect(result.finalLedger).toBeTruthy();
     expect(result.finalOwnership).toBeTruthy();
-    expect(result.architectFinalSay).toBe(false);
   });
 
   it('should call launchClaude at least twice (planner + architect review)', async () => {
@@ -120,7 +119,6 @@ describe('runConsensus', () => {
       workerCount: 3,
       maxRounds: 2,
     });
-    expect(result.architectFinalSay).toBe(true);
     expect(result.roundsUsed).toBe(2);
   });
 });

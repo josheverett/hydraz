@@ -13,7 +13,6 @@ export interface ConsensusResult {
   roundsUsed: number;
   finalLedger: TaskLedger | null;
   finalOwnership: OwnershipMap | null;
-  architectFinalSay: boolean;
   error?: string;
 }
 
@@ -33,8 +32,9 @@ function readFeedback(repoRoot: string, sessionId: string, round: number): strin
 export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions): Promise<ConsensusResult> {
   let currentDesign = opts.architectureDesign;
   let previousFeedback: string | null = null;
+  const maxRounds = opts.maxRounds ?? CONSENSUS_MAX_ROUNDS;
 
-  for (let round = 1; round <= CONSENSUS_MAX_ROUNDS; round++) {
+  for (let round = 1; round <= maxRounds; round++) {
     const plannerResult = await runPlanner(ctx, {
       investigationBrief: opts.investigationBrief,
       architectureDesign: currentDesign + (previousFeedback
@@ -49,7 +49,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         roundsUsed: round,
         finalLedger: null,
         finalOwnership: null,
-        architectFinalSay: false,
         error: `Planner failed in round ${round}: ${plannerResult.error}`,
       };
     }
@@ -58,13 +57,12 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     const ownership = plannerResult.ownership!;
     const plan = readPlan(ctx.repoRoot, ctx.sessionId);
 
-    if (round === CONSENSUS_MAX_ROUNDS) {
+    if (round === maxRounds) {
       return {
         success: true,
         roundsUsed: round,
         finalLedger: ledger,
         finalOwnership: ownership,
-        architectFinalSay: true,
       };
     }
 
@@ -92,7 +90,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         roundsUsed: round,
         finalLedger: ledger,
         finalOwnership: ownership,
-        architectFinalSay: false,
         error: `Architect review failed in round ${round}: exit code ${reviewResult.exitCode}`,
       };
     }
@@ -105,7 +102,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         roundsUsed: round,
         finalLedger: ledger,
         finalOwnership: ownership,
-        architectFinalSay: false,
       };
     }
 
@@ -114,10 +110,9 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
 
   return {
     success: false,
-    roundsUsed: CONSENSUS_MAX_ROUNDS,
+    roundsUsed: maxRounds,
     finalLedger: null,
     finalOwnership: null,
-    architectFinalSay: true,
     error: 'Consensus loop exhausted without resolution',
   };
 }

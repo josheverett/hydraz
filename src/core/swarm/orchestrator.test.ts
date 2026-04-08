@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineFeedbackRoute } from './orchestrator.js';
+import { determineFeedbackRoute } from './review-aggregate.js';
 import type { ReviewAggregate } from './types.js';
 
 function makeAggregate(overrides: Partial<ReviewAggregate> = {}): ReviewAggregate {

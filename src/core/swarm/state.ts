@@ -62,10 +62,3 @@ export function isSwarmActiveState(phase: SwarmPhase): boolean {
   return (SWARM_ACTIVE_STATES as readonly string[]).includes(phase);
 }
 
-export function canContinueConsensus(round: number): boolean {
-  return round < CONSENSUS_MAX_ROUNDS;
-}
-
-export function canContinueOuterLoop(iteration: number): boolean {
-  return iteration < OUTER_LOOP_MAX_ITERATIONS;
-}

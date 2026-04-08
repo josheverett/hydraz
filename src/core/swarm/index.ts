@@ -29,8 +29,6 @@ export {
   isValidSwarmTransition,
   isSwarmTerminalState,
   isSwarmActiveState,
-  canContinueConsensus,
-  canContinueOuterLoop,
 } from './state.js';
 export {
   getSwarmDir,
@@ -94,11 +92,9 @@ export {
   parseReviewVerdict,
   parseReviewFindings,
   aggregateReviews,
-} from './review-aggregate.js';
-export {
   type FeedbackRoute,
   determineFeedbackRoute,
-} from './orchestrator.js';
+} from './review-aggregate.js';
 export {
   type PipelineCallbacks,
   type PipelineResult,

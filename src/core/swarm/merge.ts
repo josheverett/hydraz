@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { TaskLedger } from './types.js';
 import { getSwarmDir } from './artifacts.js';
 
-export type MergeOutcome = 'clean' | 'conflict-resolved' | 'conflict-unresolvable';
+export type MergeOutcome = 'clean' | 'conflict-unresolvable';
 
 export interface WorkerMergeResult {
   workerId: string;

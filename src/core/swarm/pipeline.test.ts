@@ -39,7 +39,6 @@ vi.mock('./consensus.js', () => ({
       stages: {},
     },
     finalOwnership: { workers: { 'worker-a': { paths: ['src/'], exclusive: true } }, shared: [] },
-    architectFinalSay: false,
   }),
 }));
 
@@ -211,7 +210,6 @@ describe('runSwarmPipeline', () => {
       roundsUsed: 1,
       finalLedger: null,
       finalOwnership: null,
-      architectFinalSay: false,
       error: 'Consensus failed',
     });
 
