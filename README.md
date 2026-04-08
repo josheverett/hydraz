@@ -1,4 +1,4 @@
-> **EXPERIMENTAL: USE WITH CAUTION** - This CLI is a half-baked exploration of running opinionated swarms in the cloud.
+> **EXPERIMENTAL: USE WITH CAUTION** - This CLI is an active exploration of real multi-process coding swarms.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/josheverett/hydraz/main/hydraz-logo.png" alt="Hydraz logo" width="300">
@@ -8,16 +8,33 @@
 
 <p align="center">
   <strong>Hydra</strong> — many heads, one swarm. <strong>Hydrazine</strong> — rocket fuel.<br>
-  An opinionated CLI for autonomous, persona-driven coding swarms.
+  An opinionated CLI for autonomous, multi-process coding swarms.
 </p>
 
 <p align="center">
   <a href="https://github.com/josheverett/hydraz/actions/workflows/ci.yml"><img src="https://github.com/josheverett/hydraz/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
-Stand in a repo, describe a task, walk away. A strict 3-persona swarm works autonomously in an isolated workspace — powered by Claude Code CLI (Opus 4.6) — and delivers a branch with committed work, ready for review.
+Stand in a repo, describe a task, walk away. A real multi-process swarm — powered by Claude Code CLI (Opus 4.6) — investigates, designs, plans, implements in parallel, merges, and runs an independent review panel. You get back a PR with a full audit trail.
 
-Runs locally, in local containers (Docker via DevPod), or on cloud VMs (any cloud provider via DevPod — GCP, AWS, Azure, etc.).
+## How it works
+
+Hydraz is a deterministic TypeScript orchestrator that drives a pipeline of independent Claude Code processes:
+
+```
+Investigate → Architect → Plan (with consensus loop) → Parallel Workers → Merge → Review Panel → Deliver
+```
+
+1. An **investigator** explores the repo and documents its structure
+2. An **architect** designs the solution based on the investigation
+3. A **planner** decomposes the work into parallel tasks; the architect reviews the plan until both agree (up to 10 rounds)
+4. **N parallel workers** (default 3) implement their assigned tasks in isolated worktrees, each using strict TDD
+5. The orchestrator **merges** worker branches into an integration branch
+6. A **review panel** of 3 famous-engineer personas (Carmack, Metz, Torvalds) independently reviews the result
+7. If changes are needed, the right part of the pipeline re-runs automatically (up to 5 iterations)
+8. When the panel approves, a **PR** is created
+
+Every stage produces durable artifacts. Every Claude invocation is stateless — fresh context, no shared conversation history. Communication between stages is entirely file-based.
 
 ## Quickstart
 
@@ -29,92 +46,74 @@ cd your-repo
 hydraz
 ```
 
-This opens the interactive console where you can start new sessions, attach to running ones, review completed work, and manage configuration — all from a single entry point.
-
-<!-- TODO: add terminal recording / video gif here -->
-
 ### Non-interactive
 
 ```bash
 hydraz run "fix the auth timeout regression"
-hydraz run --container "refactor the database connection pool"
+hydraz run --workers 5 "build the user management system"
+hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 ```
 
-### Container setup (one-time)
+### CLI flags
 
-Container mode runs the swarm in an isolated Docker container (locally or on any cloud provider via DevPod). Requires a `.devcontainer/devcontainer.json` in the target repo with Claude Code CLI included, and a git remote configured. For the initial beta, automated push/PR delivery in container mode is GitHub-only.
-
-```bash
-# Configure container auth (portable OAuth token for headless Claude Code)
-claude setup-token
-hydraz config                               # → Claude Code auth → Set OAuth token
-
-# Configure GitHub delivery auth (beta container push/PR automation)
-hydraz config                               # → GitHub push/PR auth → Set GitHub token
-
-# For local containers
-devpod provider add docker
-
-# For cloud containers (e.g. GCP)
-devpod provider add gcloud -o PROJECT=my-project -o ZONE=us-central1-a -o MACHINE_TYPE=e2-standard-8
-devpod provider use gcloud
-```
-
-Cloud uses the same container pipeline as local. The only difference is which DevPod provider is active.
-
-## What happens when you run it
-
-```
-Session "fix-auth-timeout-8pr3" started on branch hydraz/fix-auth-timeout-8pr3
-Task: fix the auth timeout regression
-
-2026-03-25T06:05:26Z  session.state_changed    Session starting
-2026-03-25T06:05:26Z  claude.auth_resolved     Auth: Claude.ai subscription (OAuth)
-2026-03-25T06:05:31Z  workspace.created        Workspace ready
-2026-03-25T06:05:32Z  claude.init              claude-opus-4-6 (23 tools)
-2026-03-25T06:05:38Z  claude.tool              Glob: **/*.ts
-2026-03-25T06:05:44Z  claude.text              ## Phase 1: Intake — analyzing the auth timeout...
-2026-03-25T06:05:50Z  claude.tool              Read: src/auth/session.ts
-2026-03-25T06:06:02Z  claude.tool              Edit: src/auth/session.ts
-2026-03-25T06:06:15Z  claude.tool              Bash: npm test
-2026-03-25T06:06:33Z  claude.text              ## Phase 4: Verification — all tests passing...
-2026-03-25T06:06:40Z  claude.tool              Bash: git add . && git commit -m "fix: auth timeout"
-2026-03-25T06:06:45Z  claude.tool              Bash: git push -u origin hydraz/fix-auth-timeout-8pr3
-2026-03-25T06:06:50Z  claude.complete          Session complete · $0.24 · 45s · 12 turns
-2026-03-25T06:06:50Z  session.completed        Session completed successfully
-```
-
-You get back a branch with committed, tested work.
-
-## How it works
-
-1. You submit a task (interactive or CLI)
-2. Hydraz creates an isolated workspace on a session branch
-3. A 3-persona swarm runs autonomously:
-   - **Architect** — decomposes the task into a plan
-   - **Implementer** — writes the code
-   - **Verifier** — checks the work, runs tests
-4. Work is committed and pushed to the session branch
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--swarm` | Enable swarm pipeline | Enabled |
+| `--workers <N>` | Number of parallel workers | 3 |
+| `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
+| `--local` | Run locally (bare metal) | Default |
+| `--container` | Run locally in a Docker container | |
+| `--cloud` | Run on a cloud VM via DevPod | |
 
 ## Commands
 
 ```bash
 hydraz                 # interactive mode — start sessions, attach, review
 hydraz run "<task>"    # launch a task directly
-hydraz run --container "<task>"  # run in a container (local or cloud)
 
 hydraz sessions        # list all sessions in this repo
-hydraz status          # show current session state
+hydraz status          # show current session state and swarm phase
 hydraz attach          # attach to an active session
 hydraz stop            # stop an active session
-hydraz resume          # resume a stopped/blocked session
-hydraz review          # review a session's outcome
+hydraz resume          # resume a stopped/blocked session from checkpoint
+hydraz review          # review a session's outcome and review panel output
 hydraz events          # show structured event history
 
-hydraz config          # configure defaults, auth, master prompt
-hydraz personas        # manage personas and default swarm
+hydraz config          # configure defaults, auth
+hydraz personas        # manage personas
 hydraz mcp             # manage MCP server configuration
 hydraz clean           # clean up orphaned DevPod workspaces
+```
+
+## Review panel
+
+Three independent reviewers evaluate the integrated result, each embodying a celebrated software engineer:
+
+- **John Carmack** — correctness, edge cases, error handling, subtle bugs
+- **Sandi Metz** — code organization, naming, abstraction quality, maintainability
+- **Linus Torvalds** — simplicity, rejecting unnecessary complexity, bloat detection
+
+Reviewers categorize their findings as **architectural** (routes back to the architect for redesign) or **implementation** (routes back to the affected workers for targeted fixes). The orchestrator automatically determines the feedback route.
+
+Configurable via `--reviewers` or global config.
+
+## Artifacts
+
+Every session produces a full audit trail at `~/.hydraz/repos/<repo>/sessions/<id>/swarm/`:
+
+```
+swarm/
+  investigation/brief.md          # what the investigator found
+  architecture/design.md          # the architect's design
+  plan/plan.md                    # the decomposed execution plan
+  task-ledger.json                # task assignments, status, metrics
+  ownership.json                  # file ownership per worker
+  workers/worker-a/brief.md      # each worker's assignment
+  workers/worker-a/progress.md   # what each worker did
+  merge/report.md                 # merge results
+  reviews/carmack.md              # each reviewer's independent review
+  reviews/metz.md
+  reviews/torvalds.md
 ```
 
 ## Prerequisites
@@ -134,11 +133,23 @@ hydraz clean           # clean up orphaned DevPod workspaces
 - A cloud provider configured in DevPod (GCP, AWS, Azure, etc.)
 - Cloud account with compute permissions and billing enabled
 
-## Personas
+### Container setup (one-time)
 
-Ships with 6 built-in personas: Architect, Implementer, Verifier, Skeptic, Product Generalist, and Performance/Reliability Engineer.
+```bash
+# Configure container auth (portable OAuth token for headless Claude Code)
+claude setup-token
+hydraz config                               # → Claude Code auth → Set OAuth token
 
-Each session uses exactly 3. You choose a default swarm and can override per session. Add custom personas with `hydraz personas` — they're markdown files you can edit directly.
+# Configure GitHub delivery auth (beta container push/PR automation)
+hydraz config                               # → GitHub push/PR auth → Set GitHub token
+
+# For local containers
+devpod provider add docker
+
+# For cloud containers (e.g. GCP)
+devpod provider add gcloud -o PROJECT=my-project -o ZONE=us-central1-a -o MACHINE_TYPE=e2-standard-8
+devpod provider use gcloud
+```
 
 ## Config
 
