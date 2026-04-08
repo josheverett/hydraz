@@ -175,10 +175,11 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (the session's primary branch)
 
-**Container mode (future):**
-- Each worker gets its own DevPod workspace
-- Same isolation model, different substrate
-- Deferred until local worktree parallelism is proven
+**Container/cloud mode:**
+- The entire swarm pipeline runs inside a single DevPod container (see plan "Container-side orchestration")
+- Workers use local worktrees inside the container, same as bare-metal mode
+- The host copies Hydraz dist into the container and runs the pipeline via SSH
+- Per-worker DevPod workspaces are not used; one container hosts all workers
 
 ### 3.5 Worker Prompts
 

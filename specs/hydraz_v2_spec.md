@@ -515,9 +515,9 @@ Each worker gets its own git worktree via the existing `createWorktree()` in `sr
 - All worktrees share the git object store (cheap on disk)
 - Workers run as separate `claude --print` processes in their respective worktree directories
 
-### 8.2 Container mode (future, deferred)
+### 8.2 Container/cloud mode
 
-Each worker would get its own DevPod workspace via the existing `LocalContainerProvider`. Same isolation model, different substrate. Deferred until local worktree parallelism is proven and the cost model is understood.
+The entire swarm pipeline runs inside a single DevPod container. Workers use local worktrees inside the container, same as bare-metal mode. The host copies Hydraz `dist/` into the container and runs the pipeline via SSH. Per-worker DevPod workspaces are not used. See plan "Container-side orchestration" for implementation details (not yet implemented).
 
 ---
 
