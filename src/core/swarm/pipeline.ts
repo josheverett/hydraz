@@ -15,6 +15,7 @@ import {
   readReviewFile,
   getSwarmDir,
 } from './artifacts.js';
+import { getWorkspaceDir } from '../providers/provider.js';
 
 export interface PipelineCallbacks {
   onPhaseChange?: (phase: SwarmPhase) => void;
@@ -60,6 +61,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   let ledger: TaskLedger;
   let ownership: OwnershipMap;
   let totalConsensusRounds = 0;
+  let workerWorktrees: Record<string, string> | undefined;
   const swarmDir = getSwarmDir(options.repoRoot, options.sessionId);
 
   emitPhase(options, 'investigating');
@@ -166,7 +168,15 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       ownership,
       planContent,
       swarmDir,
+      existingWorktrees: workerWorktrees,
     });
+
+    if (!workerWorktrees) {
+      workerWorktrees = {};
+      for (const wr of workerResult.workerResults) {
+        workerWorktrees[wr.workerId] = getWorkspaceDir(options.repoRoot, `${options.sessionId}-${wr.workerId}`);
+      }
+    }
 
     if (!workerResult.success) {
       return {
