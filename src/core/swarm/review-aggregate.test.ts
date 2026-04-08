@@ -3,6 +3,7 @@ import {
   parseReviewVerdict,
   parseReviewFindings,
   aggregateReviews,
+  determineFeedbackRoute,
 } from './review-aggregate.js';
 
 const APPROVED_REVIEW = `APPROVED
@@ -149,5 +150,49 @@ describe('aggregateReviews', () => {
     const metz = result.reviews.find(r => r.reviewer === 'metz')!;
     expect(carmack.verdict).toBe('approve');
     expect(metz.verdict).toBe('changes-requested');
+  });
+});
+
+describe('determineFeedbackRoute', () => {
+  function makeAggregate(overrides: Partial<ReturnType<typeof aggregateReviews>> = {}) {
+    return {
+      approved: true,
+      architecturalFindings: [],
+      implementationFindings: [],
+      reviews: [],
+      ...overrides,
+    };
+  }
+
+  it('should return none when approved with no findings', () => {
+    expect(determineFeedbackRoute(makeAggregate({ approved: true }))).toBe('none');
+  });
+
+  it('should return architectural when there are architectural findings', () => {
+    expect(determineFeedbackRoute(makeAggregate({
+      approved: false,
+      architecturalFindings: [{ category: 'architectural', description: 'Bad design' }],
+    }))).toBe('architectural');
+  });
+
+  it('should return implementation when there are only implementation findings', () => {
+    expect(determineFeedbackRoute(makeAggregate({
+      approved: false,
+      implementationFindings: [{ category: 'implementation', description: 'Missing null check' }],
+    }))).toBe('implementation');
+  });
+
+  it('should prioritize architectural over implementation when both present', () => {
+    expect(determineFeedbackRoute(makeAggregate({
+      approved: false,
+      architecturalFindings: [{ category: 'architectural', description: 'Bad coupling' }],
+      implementationFindings: [{ category: 'implementation', description: 'Bug' }],
+    }))).toBe('architectural');
+  });
+
+  it('should return none when not approved but no categorized findings', () => {
+    expect(determineFeedbackRoute(makeAggregate({
+      approved: false,
+    }))).toBe('none');
   });
 });

@@ -8,7 +8,6 @@ import {
   isSwarmTerminalState,
   isSwarmActiveState,
   CONSENSUS_MAX_ROUNDS,
-  OUTER_LOOP_MAX_ITERATIONS,
 } from './state.js';
 import type { SwarmPhase } from './types.js';
 
@@ -153,10 +152,6 @@ describe('swarm state machine', () => {
   describe('bounds constants', () => {
     it('should define consensus max rounds as 10', () => {
       expect(CONSENSUS_MAX_ROUNDS).toBe(10);
-    });
-
-    it('should define outer loop max iterations as 5', () => {
-      expect(OUTER_LOOP_MAX_ITERATIONS).toBe(5);
     });
   });
 });

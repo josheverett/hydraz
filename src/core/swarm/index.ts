@@ -21,7 +21,6 @@ export type {
 export { DEFAULT_SWARM_CONFIG } from './types.js';
 export {
   CONSENSUS_MAX_ROUNDS,
-  OUTER_LOOP_MAX_ITERATIONS,
   SWARM_ACTIVE_STATES,
   SWARM_TERMINAL_STATES,
   SWARM_RESUMABLE_STATES,
@@ -101,7 +100,3 @@ export {
   type PipelineOptions,
   runSwarmPipeline,
 } from './pipeline.js';
-export {
-  type ResumePoint,
-  determineResumePoint,
-} from './resume.js';

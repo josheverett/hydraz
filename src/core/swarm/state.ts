@@ -3,8 +3,6 @@ import { DEFAULT_SWARM_CONFIG } from './types.js';
 
 export const CONSENSUS_MAX_ROUNDS = DEFAULT_SWARM_CONFIG.consensusMaxRounds;
 
-export const OUTER_LOOP_MAX_ITERATIONS = DEFAULT_SWARM_CONFIG.outerLoopMaxIterations;
-
 export const SWARM_ACTIVE_STATES: readonly SwarmPhase[] = [
   'created',
   'starting',
