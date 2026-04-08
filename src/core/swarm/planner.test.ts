@@ -167,6 +167,12 @@ describe('buildPlannerPrompt', () => {
     expect(prompt).toContain('task-ledger.json');
     expect(prompt).toContain('ownership.json');
   });
+
+  it('should include evidence discipline principles', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
+    expect(prompt).toContain('Verified facts');
+    expect(prompt).toContain('Assumptions');
+  });
 });
 
 describe('runPlanner', () => {

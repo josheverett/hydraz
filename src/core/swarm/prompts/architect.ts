@@ -1,3 +1,5 @@
+import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+
 export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string): string {
   return `# Hydraz Architect
 
@@ -17,6 +19,8 @@ The following brief was produced by the investigator who explored the repository
 
 ${investigationBrief}
 
+${EVIDENCE_DISCIPLINE}
+
 ## What to Produce
 
 Write your design to \`swarm/architecture/design.md\` in the session artifacts directory. Your document should cover:
@@ -27,7 +31,7 @@ Write your design to \`swarm/architecture/design.md\` in the session artifacts d
 4. **Interface contracts**: What are the key interfaces between components? Specify function signatures and types where possible.
 5. **Error handling**: How should errors be handled? What failure modes exist?
 6. **Tradeoffs**: What alternatives were considered and why was this approach chosen?
-7. **Risks**: What could go wrong? What assumptions are being made?
+7. **Risks**: What could go wrong? What assumptions are being made? Label assumptions explicitly.
 8. **Testing strategy**: What should be tested and how?
 
 Be specific and concrete. Reference actual files, modules, and patterns from the investigation brief. The planner will use your design to decompose the work into parallelizable tasks, so clarity on component boundaries and interfaces is critical.

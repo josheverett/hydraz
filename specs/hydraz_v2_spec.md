@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** v2 development has not yet started. This spec defines the target architecture. The implementation plan is in `specs/hydraz_v2_plan.md`.
+**Status:** v2 development is in progress. Phases 1-5 are complete (types, state machine, artifacts, investigator, architect, planner, consensus loop, worker fan-out). Phase 6 (merge/fan-in) is next. The implementation plan is in `specs/hydraz_v2_plan.md`.
 
 **What v2 changes from v1:** v1 ran a single Claude Code process per session and simulated a "swarm" by stacking 3 persona prompts into one context window. v2 replaces this with a real multi-process pipeline: a TypeScript orchestrator drives a sequence of independent Claude Code invocations (investigator, architect, planner, parallel workers, parallel reviewers) with explicit artifact handoffs between each stage.
 
@@ -622,11 +622,15 @@ The `--dangerously-skip-permissions` flag is a known debt item. Per-role permiss
 ### 13.2 Role-specific prompts
 
 Each pipeline role has its own prompt template in `src/core/swarm/prompts/`:
+- `core-principles.ts`: Shared engineering principle text blocks (prove-it-first, evidence taxonomy, strict TDD) composed into all role prompts
 - `investigator.ts`: Read-only exploration, produce factual brief
-- `architect.ts`: Design reasoning, produce architecture document (also: plan review variant)
+- `architect.ts`: Design reasoning, produce architecture document
+- `architect-review.ts`: Architect reviews the planner's execution plan
 - `planner.ts`: Task decomposition, produce structured plan artifacts
-- `worker.ts`: Strict TDD implementation with ownership constraints
+- `worker.ts`: Strict TDD implementation with ownership constraints, full prove-it methodology
 - `reviewer.ts`: Famous-engineer persona review with categorized findings
+
+All prompts embed core engineering principles via `core-principles.ts`. Workers receive the most rigorous version (full TDD + full prove-it-first + evidence taxonomy). Other roles receive evidence discipline appropriate to their function.
 
 All prompts include the model hardcode `claude-opus-4-6`. This is an opinionated product decision carried from v1.
 
@@ -645,7 +649,7 @@ v2 builds on top of v1 infrastructure rather than replacing it:
 | v1 Component | v2 Usage |
 |---|---|
 | `WorkspaceProvider` interface | Unchanged. Workers use `LocalProvider.createWorkspace()` for worktrees. |
-| `launchClaude()` / `ExecutorHandle` | Unchanged. Called once per pipeline stage. Multiple concurrent calls for workers. |
+| `launchClaude()` / `ExecutorHandle` | Simplified: `ExecutorOptions.prompt` changed from `AssembledPrompt` to `string`. Called once per pipeline stage. Multiple concurrent calls for workers. |
 | Event system (`appendEvent`, `readEvents`) | Extended with new event types. JSONL format unchanged. |
 | Session model (`SessionMetadata`, state machine) | Extended with new states. Session creation/persistence unchanged. |
 | GitHub delivery | Reused for PR creation from integration branch. |
@@ -714,20 +718,21 @@ All coding standards from v1 spec Section 26b are carried forward without modifi
 src/core/swarm/
   index.ts                  # Barrel: public API for the swarm module
   types.ts                  # TaskLedger, OwnershipMap, WorkerState, SwarmPhase, etc.
-  artifacts.ts              # Read/write/validate swarm artifacts
+  artifacts.ts              # Read/write/validate swarm artifacts (includes schema validation)
   state.ts                  # Swarm state machine, transitions, bounds
   investigator.ts           # Investigation stage driver
   architect.ts              # Architecture stage driver
   planner.ts                # Planning stage driver
   consensus.ts              # Architect-planner consensus loop
-  parser.ts                 # Parse/validate task-ledger.json, ownership.json
   workers.ts                # Worker fan-out lifecycle
   merge.ts                  # Fan-in branch merge
   reviewer.ts               # Review panel driver
   review-aggregate.ts       # Aggregate and categorize review findings
   prompts/
+    core-principles.ts      # Shared engineering principle text blocks
     investigator.ts         # Investigator prompt template
     architect.ts            # Architect prompt template
+    architect-review.ts     # Architect plan-review prompt template
     planner.ts              # Planner prompt template
     worker.ts               # Worker prompt template
     reviewer.ts             # Reviewer prompt template

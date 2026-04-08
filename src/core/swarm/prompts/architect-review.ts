@@ -1,3 +1,5 @@
+import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+
 export function buildArchitectPlanReviewPrompt(
   task: string,
   sessionName: string,
@@ -20,6 +22,8 @@ ${architectureDesign}
 ## The Planner's Plan
 
 ${planContent}
+
+${EVIDENCE_DISCIPLINE}
 
 ## What to Do
 

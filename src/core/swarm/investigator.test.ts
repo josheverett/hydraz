@@ -106,6 +106,12 @@ describe('buildInvestigatorPrompt', () => {
     const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session');
     expect(prompt).toContain('brief.md');
   });
+
+  it('should include evidence discipline principles', () => {
+    const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session');
+    expect(prompt).toContain('Verified facts');
+    expect(prompt).toContain('Assumptions');
+  });
 });
 
 describe('runInvestigation', () => {

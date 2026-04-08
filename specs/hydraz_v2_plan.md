@@ -72,7 +72,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 ## 3. Implementation Phases
 
-### Phase 1: Swarm types, artifact model, and state machine
+### Phase 1: Swarm types, artifact model, and state machine [DONE]
 
 **Goal**: Define all data structures, schemas, and state transitions. No runtime behavior.
 
@@ -87,7 +87,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: None
 **Risks**: Schema design errors force rework. Mitigate by keeping schemas minimal and extending later.
 
-### Phase 2: Investigation stage
+### Phase 2: Investigation stage [DONE]
 
 **Goal**: Implement the investigator -- a read-only Claude Code invocation that explores the repo and produces `investigation/brief.md`.
 
@@ -100,7 +100,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: Phase 1
 **Risks**: Low. Read-only pass with a single artifact.
 
-### Phase 3: Architecture stage
+### Phase 3: Architecture stage [DONE]
 
 **Goal**: Implement the architect -- reads investigation, produces design document.
 
@@ -112,21 +112,22 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: Phase 2
 **Risks**: Low. Single invocation, single artifact.
 
-### Phase 4: Planning stage + architect-planner consensus loop
+### Phase 4: Planning stage + architect-planner consensus loop [DONE]
 
 **Goal**: Implement the planner and the consensus loop between planner and architect.
 
 **Key changes:**
 - New `src/core/swarm/planner.ts`: Build planner prompt (includes investigation + architecture), launch Claude, parse structured outputs (`plan.md`, `task-ledger.json`, `ownership.json`, worker briefs)
 - New `src/core/swarm/prompts/planner.ts`: Planner prompt template
+- New `src/core/swarm/prompts/architect-review.ts`: Architect plan-review prompt template
 - New `src/core/swarm/consensus.ts`: Drive the planner <-> architect loop, enforce 10-round cap, handle architect-final-say
-- New `src/core/swarm/parser.ts`: Parse and validate `task-ledger.json` and `ownership.json` from planner output
+- Note: `parser.ts` was not created as a separate file. Schema validation (validateTaskLedger, validateOwnershipMap) lives in `artifacts.ts`.
 
 **Why fourth**: This is the most complex pre-worker stage. The consensus loop introduces the first loop construct and the first multi-artifact validation.
 **Dependencies**: Phase 3
 **Risks**: Planner may produce malformed JSON. Mitigate with validation + structured output instructions + retry. The consensus loop needs careful bounds enforcement.
 
-### Phase 5: Worker fan-out with local worktrees
+### Phase 5: Worker fan-out with local worktrees [DONE]
 
 **Goal**: Create N worktrees and launch N worker Claude processes in parallel with strict TDD methodology.
 

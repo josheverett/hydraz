@@ -109,6 +109,12 @@ describe('buildArchitectPrompt', () => {
     const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
     expect(prompt).toContain('design.md');
   });
+
+  it('should include evidence discipline principles', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    expect(prompt).toContain('Verified facts');
+    expect(prompt).toContain('Assumptions');
+  });
 });
 
 describe('runArchitect', () => {

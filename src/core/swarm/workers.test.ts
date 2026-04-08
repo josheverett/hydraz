@@ -161,6 +161,14 @@ describe('buildWorkerPrompt', () => {
     expect(prompt).toContain('progress.md');
   });
 
+  it('should include full prove-it methodology with evidence taxonomy', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a');
+    expect(prompt).toContain('Runtime proof');
+    expect(prompt).toContain('Source fact');
+    expect(prompt).toContain('Hypothesis');
+    expect(prompt).toContain('Unknown');
+  });
+
   it('should include the plan content', () => {
     const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nDetailed steps here.', 'worker-a');
     expect(prompt).toContain('Detailed steps here');

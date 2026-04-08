@@ -1,3 +1,5 @@
+import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+
 export function buildPlannerPrompt(
   task: string,
   sessionName: string,
@@ -28,6 +30,8 @@ ${investigationBrief}
 ## Architecture Design
 
 ${architectureDesign}
+
+${EVIDENCE_DISCIPLINE}
 
 ## What to Produce
 

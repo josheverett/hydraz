@@ -1,3 +1,5 @@
+import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+
 export function buildInvestigatorPrompt(task: string, sessionName: string): string {
   return `# Hydraz Investigator
 
@@ -25,6 +27,8 @@ Explore the repository and document:
 6. **Constraints and conventions**: What coding conventions, linting rules, or architectural patterns does the project follow?
 7. **Dependencies**: What are the key dependencies? Are there version constraints or notable choices?
 8. **Risks and considerations**: Are there any gotchas, known issues, or constraints that would affect the task?
+
+${EVIDENCE_DISCIPLINE}
 
 ## Output
 

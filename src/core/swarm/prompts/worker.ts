@@ -1,3 +1,5 @@
+import { PROVE_IT_METHODOLOGY, STRICT_TDD_METHODOLOGY } from './core-principles.js';
+
 export function buildWorkerPrompt(
   task: string,
   sessionName: string,
@@ -21,21 +23,9 @@ ${planContent}
 
 ${workerBrief}
 
-## Methodology — Strict TDD Required
+${STRICT_TDD_METHODOLOGY}
 
-You MUST follow a strictly atomic TDD workflow without exception:
-
-1. Write failing tests FIRST for each unit of work
-2. Implement the minimum code to make tests pass
-3. Run tests to verify they pass
-4. Commit with a clear, descriptive message
-5. Repeat for the next unit
-
-Do not write implementation code without tests. Do not skip tests. Do not batch large changes. Every commit must be atomic and self-contained.
-
-## Prove-It Methodology
-
-Never assume behavior -- verify it. Run tests, check output, confirm results. If you say something works, you must have evidence. No exceptions.
+${PROVE_IT_METHODOLOGY}
 
 ## Ownership Constraints
 
@@ -45,18 +35,18 @@ You may ONLY modify files within your owned paths as specified in your assignmen
 
 When your work is complete, write a progress file to \`swarm/workers/${workerId}/progress.md\` documenting:
 - What was implemented
-- What tests were written and their results
+- What tests were written and their results (with Runtime proof -- actual test output)
 - What interface contracts were implemented
-- Any concerns, uncertainties, or deviations from the plan
+- Any concerns, uncertainties, or deviations from the plan (labeled as Hypothesis or Unknown per the evidence taxonomy)
 - Total commits made
 
 ## Stopping Conditions
 
 Stop when:
-- All assigned tasks are complete and verified
-- You encounter an unrecoverable blocker (document it in progress.md)
+- All assigned tasks are complete and verified with Runtime proof (tests pass, not just "should work")
+- You encounter an unrecoverable blocker (document it in progress.md with evidence)
 - You have exhausted reasonable retry attempts (3 per failing issue)
 
-Do not loop indefinitely. If a problem persists after reasonable attempts, document the failure and stop.
+Do not loop indefinitely. If a problem persists after reasonable attempts, document the failure with evidence and stop.
 `;
 }

@@ -161,6 +161,12 @@ describe('buildArchitectPlanReviewPrompt', () => {
     const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
     expect(prompt).toContain('feedback');
   });
+
+  it('should include evidence discipline principles', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    expect(prompt).toContain('Verified facts');
+    expect(prompt).toContain('Assumptions');
+  });
 });
 
 describe('runConsensus', () => {
