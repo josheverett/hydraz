@@ -170,7 +170,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
        │
        ├── architectural issues ──► back to Architect (step 2, skip investigation)
        ├── implementation issues ──► back to Workers (targeted fixes)
-       │   (max 5 outer loops total, then block)
+       │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
 ┌─────────────┐
