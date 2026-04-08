@@ -140,9 +140,15 @@ function formatState(state: string): string {
     stopped: 'stopped',
     created: 'created',
     starting: 'starting...',
+    investigating: 'investigating...',
+    architecting: 'architecting...',
     planning: 'planning...',
-    implementing: 'implementing...',
-    verifying: 'verifying...',
+    'architect-reviewing': 'reviewing plan...',
+    'fanning-out': 'launching workers...',
+    syncing: 'workers running...',
+    merging: 'merging...',
+    reviewing: 'review panel...',
+    delivering: 'delivering...',
   };
   return icons[state] ?? state;
 }

@@ -177,7 +177,7 @@ describe('transitionState', () => {
 
   it('rejects invalid transitions', () => {
     const session = makeSession();
-    expect(() => transitionState(repoRoot, session.id, 'implementing')).toThrow(SessionError);
+    expect(() => transitionState(repoRoot, session.id, 'investigating')).toThrow(SessionError);
   });
 
   it('persists state change to disk', () => {
@@ -221,7 +221,15 @@ describe('transitionState', () => {
   it('rejects transition from completed to created', () => {
     const session = makeSession();
     transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'investigating');
+    transitionState(repoRoot, session.id, 'architecting');
     transitionState(repoRoot, session.id, 'planning');
+    transitionState(repoRoot, session.id, 'architect-reviewing');
+    transitionState(repoRoot, session.id, 'fanning-out');
+    transitionState(repoRoot, session.id, 'syncing');
+    transitionState(repoRoot, session.id, 'merging');
+    transitionState(repoRoot, session.id, 'reviewing');
+    transitionState(repoRoot, session.id, 'delivering');
     transitionState(repoRoot, session.id, 'completed');
     expect(() => transitionState(repoRoot, session.id, 'created')).toThrow(SessionError);
   });

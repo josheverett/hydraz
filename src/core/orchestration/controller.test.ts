@@ -71,7 +71,15 @@ describe('resumeSession', () => {
   it('rejects resuming a completed session', async () => {
     const session = makeSession('completed-one');
     transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'investigating');
+    transitionState(repoRoot, session.id, 'architecting');
     transitionState(repoRoot, session.id, 'planning');
+    transitionState(repoRoot, session.id, 'architect-reviewing');
+    transitionState(repoRoot, session.id, 'fanning-out');
+    transitionState(repoRoot, session.id, 'syncing');
+    transitionState(repoRoot, session.id, 'merging');
+    transitionState(repoRoot, session.id, 'reviewing');
+    transitionState(repoRoot, session.id, 'delivering');
     transitionState(repoRoot, session.id, 'completed');
 
     const errors: string[] = [];
