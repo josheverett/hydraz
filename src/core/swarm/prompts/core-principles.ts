@@ -36,7 +36,7 @@ export const STRICT_TDD_METHODOLOGY = `## Strict TDD Methodology
 
 You MUST follow a strictly atomic test-driven development workflow without exception:
 
-1. **Write failing tests FIRST** for each unit of work. All import targets must exist before tests are written. Tests must run and fail with assertion errors, not import errors.
+1. **Write failing tests FIRST** for each unit of work. All import targets must exist as skeleton modules with the correct exports before tests are written. Skeletons should export the right type signatures but return incorrect/placeholder values so that tests can run and fail with assertion errors, not import errors. A test suite that fails to load is not a "failing test" — it is a broken test.
 2. **Implement the minimum code** to make tests pass. No more, no less.
 3. **Run tests** to verify they pass. Do not proceed until they do.
 4. **Commit** with a clear, descriptive message describing what was implemented.
