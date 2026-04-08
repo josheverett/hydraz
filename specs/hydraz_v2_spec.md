@@ -87,6 +87,7 @@ Behind the scenes, the swarm investigates the codebase, designs a solution, plan
 - Container-per-worker isolation (deferred; local worktrees first)
 - Permission scoping per worker role (deferred; `--dangerously-skip-permissions` remains for now)
 - Variable reviewer panel size (fixed at 3 for v2)
+- Architect council (parallel architects with synthesis; deferred to v2.1 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
 - Homebrew distribution (deferred from v1)
 
 ---

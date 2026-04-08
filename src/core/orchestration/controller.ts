@@ -160,7 +160,7 @@ export async function startSession(
 
   const executor = launchClaude({
     workingDirectory: workspace.directory,
-    prompt,
+    prompt: prompt.fullText,
     config,
     containerContext,
     onStreamEvent: (event: ParsedClaudeEvent) => {
