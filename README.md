@@ -58,7 +58,7 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--swarm` | Enable swarm pipeline | Enabled |
+| `--swarm` | No-op (swarm pipeline always runs) | Always on |
 | `--workers <N>` | Number of parallel workers | 3 |
 | `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
 | `--local` | Run locally (bare metal) | Default |

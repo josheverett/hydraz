@@ -379,7 +379,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
       carmack.md                  # Review from John Carmack persona
       metz.md                     # Review from Sandi Metz persona
       torvalds.md                 # Review from Linus Torvalds persona
-      aggregate.json              # Orchestrator-produced aggregate: approve/reject + routed findings
+      # Note: review aggregation is done in-memory by the pipeline, not persisted to disk
 
     delivery/
       pr-draft.md                 # Final PR content
@@ -392,7 +392,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 - **Planner** writes: `swarm/plan/plan.md`, `swarm/task-ledger.json`, `swarm/ownership.json`, `swarm/workers/*/brief.md`, `swarm/plan/revisions/round-N.md`
 - **Workers** write: `swarm/workers/<id>/progress.md` + code commits on their branch
 - **Reviewers** write: `swarm/reviews/<persona>.md`
-- **Orchestrator (TypeScript)** writes: `session.json`, `events.jsonl`, `swarm/reviews/aggregate.json`, `swarm/merge/report.md`, status updates to `task-ledger.json`
+- **Orchestrator (TypeScript)** writes: `session.json`, `events.jsonl`, `swarm/merge/report.md` (review aggregation is in-memory, not persisted; task-ledger updates not yet implemented in production)
 
 ### task-ledger.json schema (draft)
 
