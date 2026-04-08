@@ -444,7 +444,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 **Goal**: Define all data structures, schemas, and state transitions. No runtime behavior.
 
 **Key changes:**
-- New `src/core/swarm/types.ts`: `TaskLedger`, `OwnershipMap`, `WorkerState`, `SwarmPhase`, `ReviewFinding`, `SwarmConfig`
+- New `src/core/swarm/types.ts`: `TaskLedger`, `OwnershipMap`, `WorkerStatus`, `SwarmPhase`, `ReviewFinding`, `SwarmConfig`, `ExecutionContext`
 - New `src/core/swarm/artifacts.ts`: Read/write/validate all swarm artifacts (task-ledger, ownership, briefs, progress, reviews)
 - New `src/core/swarm/state.ts`: Swarm state machine, phase transitions, worker sub-states, loop counters, bounds checking
 - Extend `src/core/sessions/schema.ts`: New session states for the swarm pipeline

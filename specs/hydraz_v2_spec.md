@@ -741,7 +741,7 @@ All coding standards from v1 spec Section 26b are carried forward without modifi
 ```
 src/core/swarm/
   index.ts                  # Barrel: public API for the swarm module
-  types.ts                  # TaskLedger, OwnershipMap, WorkerState, SwarmPhase, ExecutionContext, etc.
+  types.ts                  # TaskLedger, OwnershipMap, WorkerStatus, SwarmPhase, ExecutionContext, etc.
   artifacts.ts              # Read/write/validate swarm artifacts (includes schema validation)
   state.ts                  # Swarm state machine, transitions, bounds
   pipeline.ts               # Main swarm pipeline orchestration loop

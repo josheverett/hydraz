@@ -99,7 +99,7 @@ Configurable via `--reviewers` or global config.
 
 ## Artifacts
 
-Every session produces a full audit trail at `~/.hydraz/repos/<repo>/sessions/<id>/swarm/`:
+Every session produces a full audit trail at `~/.hydraz/repos/<repo>-<hash>/sessions/<id>/swarm/`:
 
 ```
 swarm/
