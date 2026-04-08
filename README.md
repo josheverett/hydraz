@@ -15,7 +15,7 @@
   <a href="https://github.com/josheverett/hydraz/actions/workflows/ci.yml"><img src="https://github.com/josheverett/hydraz/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
-Stand in a repo, describe a task, walk away. A real multi-process swarm — powered by Claude Code CLI (Opus 4.6) — investigates, designs, plans, implements in parallel, merges, and runs an independent review panel. You get back a PR with a full audit trail.
+Stand in a repo, describe a task, walk away. A real multi-process swarm — powered by Claude Code CLI (Opus 4.6) — investigates, designs, plans, implements in parallel, merges, and runs an independent review panel. You get back a branch with committed work (and a PR in container/cloud mode).
 
 ## How it works
 
@@ -32,7 +32,7 @@ Investigate → Architect → Plan (with consensus loop) → Parallel Workers �
 5. The orchestrator **merges** worker branches into an integration branch
 6. A **review panel** of 3 famous-engineer personas (Carmack, Metz, Torvalds) independently reviews the result
 7. If changes are needed, the right part of the pipeline re-runs automatically (up to 5 iterations)
-8. When the panel approves, a **PR** is created
+8. When the panel approves, work is delivered (PR in container/cloud mode; branch with commits in local mode)
 
 Every stage produces durable artifacts. Every Claude invocation is stateless — fresh context, no shared conversation history. Communication between stages is entirely file-based.
 
