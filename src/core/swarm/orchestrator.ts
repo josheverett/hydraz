@@ -21,16 +21,9 @@ export interface OrchestratorOptions {
   maxOuterLoops: number;
 }
 
-export function determineFeedbackRoute(_aggregate: ReviewAggregate): FeedbackRoute {
+export function determineFeedbackRoute(aggregate: ReviewAggregate): FeedbackRoute {
+  if (aggregate.approved) return 'none';
+  if (aggregate.architecturalFindings.length > 0) return 'architectural';
+  if (aggregate.implementationFindings.length > 0) return 'implementation';
   return 'none';
-}
-
-export async function runOuterLoop(_options: OrchestratorOptions): Promise<OrchestratorResult> {
-  return {
-    success: false,
-    outerLoopsUsed: 0,
-    finalRoute: 'none',
-    approved: false,
-    error: 'not implemented',
-  };
 }
