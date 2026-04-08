@@ -24,7 +24,6 @@ export interface RetentionConfig {
 }
 
 export interface HydrazConfig {
-  version: string;
   executionTarget: ExecutionTarget;
   defaultPersonas: [string, string, string];
   branchNaming: BranchNamingConfig;
@@ -53,7 +52,6 @@ export const DEFAULT_SWARM: [string, string, string] = [
 
 export function createDefaultConfig(): HydrazConfig {
   return {
-    version: '1',
     executionTarget: 'local',
     defaultPersonas: [...DEFAULT_SWARM],
     branchNaming: {
@@ -79,7 +77,6 @@ export function validateConfig(data: unknown): HydrazConfig {
   const obj = data as Record<string, unknown>;
   const defaults = createDefaultConfig();
 
-  const version = expectString(obj, 'version', defaults.version);
 
   const executionTarget = expectEnum(
     obj,
@@ -130,7 +127,6 @@ export function validateConfig(data: unknown): HydrazConfig {
   );
 
   return {
-    version,
     executionTarget,
     defaultPersonas,
     branchNaming,

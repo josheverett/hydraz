@@ -28,7 +28,6 @@ describe('DEFAULT_SWARM', () => {
 describe('createDefaultConfig', () => {
   it('returns a valid config object', () => {
     const config = createDefaultConfig();
-    expect(config.version).toBe('1');
     expect(config.executionTarget).toBe('local');
     expect(config.defaultPersonas).toHaveLength(3);
     expect(config.branchNaming.prefix).toBe('hydraz/');
@@ -148,7 +147,7 @@ describe('validateConfig', () => {
   });
 
   it('rejects non-string fields', () => {
-    expect(() => validateConfig({ version: 42 })).toThrow(ConfigValidationError);
+    expect(() => validateConfig({ executionTarget: 42 })).toThrow(ConfigValidationError);
   });
 
   it('rejects non-boolean retention fields', () => {

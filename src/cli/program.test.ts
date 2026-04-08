@@ -22,9 +22,9 @@ describe('createProgram', () => {
     expect(program.name()).toBe('hydraz');
   });
 
-  it('has the correct version', () => {
+  it('has the correct version from package.json', () => {
     const program = createProgram();
-    expect(program.version()).toBe('0.1.0');
+    expect(program.version()).toBe('2.0.0');
   });
 
   it('has a description', () => {
