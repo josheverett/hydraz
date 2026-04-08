@@ -29,6 +29,7 @@ export interface FanoutOptions {
   ownership: OwnershipMap;
   planContent: string;
   swarmDir?: string;
+  existingWorktrees?: Record<string, string>;
 }
 
 async function runSingleWorker(

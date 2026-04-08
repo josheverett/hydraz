@@ -237,4 +237,49 @@ describe('runWorkerFanout', () => {
     expect(prompts.some(p => p.includes('Do API'))).toBe(true);
     expect(prompts.some(p => p.includes('Do DB'))).toBe(true);
   });
+
+  it('should not create worktrees when existingWorktrees is provided', async () => {
+    mockAllWorkersSucceed();
+
+    await runWorkerFanout(makeOptions({
+      existingWorktrees: {
+        'worker-a': '/tmp/existing-worktree-a',
+        'worker-b': '/tmp/existing-worktree-b',
+        'worker-c': '/tmp/existing-worktree-c',
+      },
+    }));
+
+    expect(mockCreateWorktree).not.toHaveBeenCalled();
+  });
+
+  it('should use existing worktree paths as working directories when provided', async () => {
+    mockAllWorkersSucceed();
+
+    await runWorkerFanout(makeOptions({
+      existingWorktrees: {
+        'worker-a': '/tmp/existing-a',
+        'worker-b': '/tmp/existing-b',
+        'worker-c': '/tmp/existing-c',
+      },
+    }));
+
+    const workDirs = mockLaunchClaude.mock.calls.map(c => c[0]!.workingDirectory);
+    expect(workDirs).toContain('/tmp/existing-a');
+    expect(workDirs).toContain('/tmp/existing-b');
+    expect(workDirs).toContain('/tmp/existing-c');
+  });
+
+  it('should still launch claude for all workers when using existing worktrees', async () => {
+    mockAllWorkersSucceed();
+
+    await runWorkerFanout(makeOptions({
+      existingWorktrees: {
+        'worker-a': '/tmp/existing-a',
+        'worker-b': '/tmp/existing-b',
+        'worker-c': '/tmp/existing-c',
+      },
+    }));
+
+    expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
+  });
 });
