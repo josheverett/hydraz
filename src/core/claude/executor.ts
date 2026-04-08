@@ -125,6 +125,9 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
             lastResult = event;
             setTimeout(() => {
               if (!child.killed) child.kill('SIGTERM');
+              setTimeout(() => {
+                if (!child.killed) child.kill('SIGKILL');
+              }, 5000);
             }, 1000);
           }
           options.onStreamEvent?.(event);
@@ -169,6 +172,9 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     kill: () => {
       if (!child.killed) {
         child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
       }
     },
     waitForExit,
