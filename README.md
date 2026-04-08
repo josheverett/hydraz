@@ -140,7 +140,7 @@ swarm/
 claude setup-token
 hydraz config                               # → Claude Code auth → Set OAuth token
 
-# Configure GitHub delivery auth (beta container push/PR automation)
+# Configure GitHub delivery auth (container/cloud push/PR automation)
 hydraz config                               # → GitHub push/PR auth → Set GitHub token
 
 # For local containers
