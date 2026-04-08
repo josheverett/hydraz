@@ -181,4 +181,19 @@ describe('runInvestigation', () => {
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
   });
+
+  it('should pass containerContext to the executor when provided', async () => {
+    mockSuccessfulClaude();
+    writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings.');
+
+    const containerContext = {
+      workspaceName: 'hydraz-test-container',
+      authEnv: { CLAUDE_CODE_OAUTH_TOKEN: 'test-token' },
+      workingDirectory: '/tmp/hydraz-worktrees/test',
+    };
+    await runInvestigation(makeOptions({ containerContext }));
+
+    const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(callArgs.containerContext).toEqual(containerContext);
+  });
 });

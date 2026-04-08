@@ -1,4 +1,4 @@
-import { launchClaude, type ExecutorResult } from '../claude/executor.js';
+import { launchClaude, type ExecutorResult, type ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { readInvestigationBrief } from './artifacts.js';
 import { buildInvestigatorPrompt } from './prompts/investigator.js';
@@ -18,6 +18,7 @@ export interface InvestigatorOptions {
   workingDirectory: string;
   config: HydrazConfig;
   swarmDir?: string;
+  containerContext?: ContainerContext;
 }
 
 export async function runInvestigation(options: InvestigatorOptions): Promise<InvestigationResult> {
