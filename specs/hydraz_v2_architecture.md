@@ -15,11 +15,11 @@
 > and understand this document before making implementation decisions.
 >
 > **Post-implementation update:** The core pipeline (Phases 1-9 complete, Phase 10 partial) is working
-> for local bare-metal mode. Container/cloud mode requires a significant architectural change:
-> running the swarm pipeline INSIDE the container rather than on the host. See `specs/hydraz_v2_plan.md`
-> for the "Container-side orchestration" section which details this next step. The `containerContext`
-> plumbing that was added to thread SSH info through each stage is superseded by this approach --
-> when the pipeline runs inside the container, all Claude invocations are local, no SSH needed per-stage.
+> for local bare-metal mode. Container-side orchestration is implemented: the host copies `dist/` into the
+> container via SCP, runs `pipeline-runner.ts` via SSH, and reads the result after exit. The pipeline runs
+> identically to local bare-metal mode inside the container -- all Claude invocations are local, no
+> per-stage SSH needed. The `containerContext` plumbing that was previously threaded through each stage
+> has been removed.
 
 ---
 
@@ -175,10 +175,11 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (the session's primary branch)
 
-**Container/cloud mode:**
-- The entire swarm pipeline runs inside a single DevPod container (see plan "Container-side orchestration")
+**Container/cloud mode (implemented):**
+- The entire swarm pipeline runs inside a single DevPod container
+- The host copies `dist/` via SCP, SSHs in to run `pipeline-runner.ts`, reads the result after exit
+- Inside the container, the pipeline runs identically to local bare-metal mode
 - Workers use local worktrees inside the container, same as bare-metal mode
-- The host copies Hydraz dist into the container and runs the pipeline via SSH
 - Per-worker DevPod workspaces are not used; one container hosts all workers
 
 ### 3.5 Worker Prompts

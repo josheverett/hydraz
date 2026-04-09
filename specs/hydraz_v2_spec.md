@@ -2,9 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container/cloud mode blocked by a fundamental architecture issue (see below).
-
-**Critical open item: container-side orchestration.** The swarm pipeline currently runs on the host. For container/cloud mode, the pipeline must run INSIDE the container so Claude invocations and artifact I/O are all container-local. This requires copying Hydraz dist into the container and executing a pipeline runner script via SSH. This is the next implementation task. See plan for details.
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container/cloud mode ready for manual testing.
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
@@ -12,7 +10,7 @@
 - SIGKILL fallback: executor sends SIGKILL after 5s if SIGTERM doesn't terminate the process
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees instead of trying to create duplicates
 - Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions
-- Container context plumbing: `containerContext` now threaded through pipeline to all stage executors (but superseded by container-side orchestration approach)
+- Container context plumbing: `containerContext` was threaded through pipeline to all stage executors, then removed when container-side orchestration was implemented (pipeline runs inside the container, so no per-stage SSH needed)
 
 **Post-implementation refactoring completed:**
 - `ExecutionContext` extracted to eliminate repetitive plumbing across all stage drivers
@@ -28,7 +26,7 @@
 
 **What v2 changes from v1:** v1 ran a single Claude Code process per session and simulated a "swarm" by stacking 3 persona prompts into one context window. v2 replaces this with a real multi-process pipeline: a TypeScript orchestrator drives a sequence of independent Claude Code invocations (investigator, architect, planner, parallel workers, parallel reviewers) with explicit artifact handoffs between each stage.
 
-**Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle, calls `runSwarmPipeline`), `src/core/swarm/pipeline.ts` (swarm pipeline driver), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
+**Codebase entry points:** `src/cli/index.ts` (CLI entry), `src/core/orchestration/controller.ts` (session lifecycle, calls `runSwarmPipeline` for local mode or SSH pipeline-runner for container mode), `src/core/swarm/pipeline.ts` (swarm pipeline driver), `src/core/swarm/pipeline-runner.ts` (container-side entry point -- deserializes options, runs pipeline, writes result), `src/core/providers/local-container.ts` (container provider), `src/core/claude/executor.ts` (Claude Code executor).
 
 **v2 document set (all three must be read and understood before implementation):**
 - `specs/hydraz_v2_spec.md` (this file) — the authoritative specification defining product behavior and architecture
@@ -517,7 +515,15 @@ Each worker gets its own git worktree via the existing `createWorktree()` in `sr
 
 ### 8.2 Container/cloud mode
 
-The entire swarm pipeline runs inside a single DevPod container. Workers use local worktrees inside the container, same as bare-metal mode. The host copies Hydraz `dist/` into the container and runs the pipeline via SSH. Per-worker DevPod workspaces are not used. See plan "Container-side orchestration" for implementation details (not yet implemented).
+The entire swarm pipeline runs inside a single DevPod container. The host:
+1. Creates the DevPod workspace and worktree (existing provider code)
+2. Copies Hydraz `dist/` into the container via SCP (`/tmp/hydraz-dist/`)
+3. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
+4. Streams structured JSON events from SSH stdout for real-time phase tracking
+5. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
+6. Handles delivery (PR creation) and cleanup on the host side
+
+Inside the container, the pipeline runs identically to local bare-metal mode -- all Claude invocations, artifact I/O, and worktree operations are container-local. Workers use local worktrees inside the container, same as bare-metal mode. Per-worker DevPod workspaces are not used; one container hosts all workers.
 
 ---
 
@@ -661,7 +667,7 @@ All prompts include the model hardcode `claude-opus-4-6`. This is an opinionated
 ### 13.3 Execution context
 
 - **Local mode**: `spawn('claude', args, { cwd: worktreeDir })` -- same as v1
-- **Container mode**: SSH into DevPod workspace and exec Claude -- same as v1
+- **Container mode**: The entire pipeline runs inside the container via `pipeline-runner.ts`. All Claude invocations are local `spawn` calls inside the container -- no per-stage SSH. The host only SSHs once to run the pipeline runner.
 - **Multiple concurrent workers**: Multiple `launchClaude()` calls returning independent `ExecutorHandle` instances. The existing executor already supports this.
 
 ---
@@ -679,7 +685,7 @@ v2 builds on top of v1 infrastructure rather than replacing it:
 | GitHub delivery | Reused for PR creation from integration branch (container/cloud mode only). |
 | Config system | Unchanged on disk. Swarm defaults live in `DEFAULT_SWARM_CONFIG` in code, not in `HydrazConfig`. |
 | Auth resolution | Unchanged. Each Claude invocation uses the same auth. |
-| DevPod / container providers | Used for session workspace. Container-side orchestration (pipeline runs inside container) is the next implementation task. |
+| DevPod / container providers | Used for session workspace. Container-side orchestration implemented: host copies `dist/` into container via SCP, runs `pipeline-runner.ts` via SSH, reads result after exit. |
 | Stream parser / display | Available but not actively used by v2 pipeline (pipeline stages don't stream to the user). |
 
 ---
@@ -745,6 +751,7 @@ src/core/swarm/
   artifacts.ts              # Read/write/validate swarm artifacts (includes schema validation)
   state.ts                  # Swarm state machine, transitions, bounds
   pipeline.ts               # Main swarm pipeline orchestration loop
+  pipeline-runner.ts        # Container-side entry point (deserialize options, run pipeline, write result)
   investigator.ts           # Investigation stage driver
   architect.ts              # Architecture stage driver
   planner.ts                # Planning stage driver

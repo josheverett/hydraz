@@ -222,11 +222,11 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - SIGKILL fallback: executor escalates to SIGKILL after 5s
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees
 - Missing phase emissions: pipeline emits all state machine phases
-- Container context plumbing (superseded by container-side orchestration)
+- Container context plumbing (removed -- superseded by container-side orchestration)
 
-**Container mode: BLOCKED.** Requires container-side orchestration (see "NEXT" section above). Pipeline runs on host but Claude runs in container -- artifact paths don't cross the boundary.
+**Container mode: READY FOR TESTING.** Container-side orchestration implemented. Pipeline runs inside the container via `pipeline-runner.ts`. Needs manual verification with a real DevPod workspace.
 
-**Cloud mode: NOT TESTED.** Blocked by same issue as container mode. Once container-side orchestration is implemented, cloud should work identically (DevPod abstracts the infrastructure).
+**Cloud mode: NOT TESTED.** Should work identically to container mode (DevPod abstracts the infrastructure). Needs manual verification.
 
 ### Post-phase: Complexity reduction (4 rounds) [DONE]
 
@@ -245,33 +245,24 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - CLI version reads from `package.json` dynamically
 - Config `version` field removed (inert, no migration logic)
 
-### NEXT: Container-side orchestration
+### Container-side orchestration [DONE]
 
-**Status: Not started. This is the blocking item for container/cloud mode.**
+**Problem (resolved):** The swarm pipeline ran on the host. For container/cloud mode, Claude ran inside the container but the orchestrator read artifacts from the host filesystem -- different filesystems, artifacts invisible across the boundary.
 
-**Problem:** The swarm pipeline runs on the host. For container/cloud mode, Claude runs inside the container but the orchestrator reads artifacts from the host filesystem. These are different filesystems -- artifacts written by Claude inside the container are invisible to the host orchestrator.
+**Solution (implemented):** The entire swarm pipeline runs inside the container. The host:
+1. Creates DevPod workspace (existing code)
+2. Copies Hydraz `dist/` into the container via SCP (`/tmp/hydraz-dist/`)
+3. SSHs into the container and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<serialized-options>'`
+4. Streams structured JSON events from SSH stdout for real-time phase tracking on the host
+5. Reads pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
+6. Creates PR, cleans up DevPod workspace (existing code)
 
-**Solution:** Run the entire swarm pipeline inside the container. The host's only role is:
-1. Create DevPod workspace (existing code)
-2. Copy Hydraz `dist/` into the container via SCP
-3. SSH into the container and run `node /tmp/hydraz-dist/swarm/pipeline-runner.js '<serialized-options>'`
-4. Wait for SSH process to exit
-5. SSH back in to read final result + artifacts
-6. Create PR, cleanup DevPod workspace (existing code)
-
-**Why this approach:**
-- Pipeline runs identically to local bare metal from inside the container -- all Claude invocations and artifact I/O are container-local
-- No per-stage SSH overhead (10+ SSH sessions reduced to 1)
-- Cloud mode works identically (DevPod abstracts the infrastructure)
-- Uses exact same code as host (no version skew)
-- No requirement for Hydraz to be installed in the devcontainer
-
-**Implementation needed:**
-- New `src/core/swarm/pipeline-runner.ts`: thin entry point that deserializes options and calls `runSwarmPipeline`
-- New SCP step in controller after DevPod workspace creation to copy `dist/` into container
-- Controller rewrite for container mode: instead of passing `containerContext` through pipeline, SSH the pipeline runner
-- Result serialization: pipeline runner writes result JSON to a known path, host reads it via SSH
-- Remove `containerContext` from `ExecutionContext` and all stage drivers (no longer needed -- pipeline runs container-local)
+**Implementation:**
+- `src/core/swarm/pipeline-runner.ts`: `SerializablePipelineOptions` type, `toSerializable()`, `toPipelineOptions()` (adds stdout-printing callbacks), `executePipeline()` (calls `ensureSwarmDirs` + `runSwarmPipeline` + writes result JSON)
+- `src/core/claude/ssh.ts`: `buildSshNodeCommand()` -- builds SSH command to run `node <script> <args>` with auth env (same pattern as `buildSshClaudeArgs`)
+- `src/core/providers/devpod.ts`: `scpToContainer()` -- copies local directory into container via SCP; `getDistRoot()` -- locates `dist/` at runtime via `import.meta.url`
+- `src/core/orchestration/controller.ts`: container mode uses SCP + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
+- `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
 ### v2.0.0: Worker count intelligence
 
@@ -293,7 +284,7 @@ The planner should detect when a task is too small for N workers and assign fewe
 - Architecture §3.9 resume bullets: same abbreviated filenames
 - Pipeline swarm events not written to `events.jsonl` -- only forwarded to console callback via `onEvent`. This is a **functional gap**, not just a doc issue. Several declared event types in `logger.ts` (`swarm.consensus_round`, `swarm.worker_completed`, `swarm.worker_failed`, `swarm.merge_conflict`) are never emitted by the pipeline. The pipeline should call `appendEvent` to persist events, and emit all declared event types at appropriate points.
 - CLI help text for `--swarm` in `run.ts` says "Enable swarm pipeline (default)" vs README saying "No-op" -- should align
-- README should be re-audited after container-side orchestration is implemented to ensure it accurately reflects the final architecture
+- README should be re-audited to ensure it accurately reflects the final architecture (container-side orchestration now implemented)
 
 ---
 
