@@ -20,7 +20,7 @@ export function registerRunCommand(program: Command): void {
     .option('--local', 'Run locally (bare metal)')
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
-    .option('--swarm', 'Enable swarm pipeline (default)')
+    .option('--swarm', 'No-op (swarm pipeline always runs)')
     .option('--workers <count>', 'Number of parallel workers (default: 3)')
     .option('--reviewers <names>', 'Comma-separated reviewer persona names (default: carmack,metz,torvalds)')
     .action(async (task: string, options: {

@@ -161,9 +161,9 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 
 | Role | Instances | Input | Output |
 |------|-----------|-------|--------|
-| Investigator | 1 | Task + repo access | `investigation.md` |
-| Architect | 1 | Task + investigation | `architecture.md` |
-| Planner | 1 | Task + investigation + architecture | `plan.md`, `task-ledger.json`, `ownership.json`, worker briefs |
+| Investigator | 1 | Task + repo access | `investigation/brief.md` |
+| Architect | 1 | Task + investigation | `architecture/design.md` |
+| Planner | 1 | Task + investigation + architecture | `plan/plan.md`, `task-ledger.json`, `ownership.json`, worker briefs |
 | Architect (review) | 1 | Plan + architecture | Approval or feedback |
 | Worker | N (default 3) | Plan + brief + ownership scope | Code commits + `progress.md` |
 | Reviewer | 3 | Integrated code + task + plan | Review with categorized findings |
@@ -270,7 +270,7 @@ Any phase -> stopped     (user action)
 
 **Target behavior (when wired):** Each stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. Resume logic:
 
-- If investigation completed: skip to architect with existing `investigation.md`
+- If investigation completed: skip to architect with existing `investigation/brief.md`
 - If architecture completed: skip to planner
 - If plan approved: skip to fan-out
 - If some workers completed, some failed: re-launch only failed workers

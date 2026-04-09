@@ -583,7 +583,7 @@ Aggregate swarm metrics:
 ### 11.1 New/updated flags on `run`
 
 ```bash
-hydraz run "<task>"                      # Launch swarm pipeline (swarm is always active, no separate --swarm needed)
+hydraz run "<task>"                      # Launch swarm pipeline (swarm always runs; --swarm is a no-op)
 hydraz run --workers 5 "<task>"          # 5 parallel workers
 hydraz run --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
 hydraz run --local "<task>"              # Run locally (bare metal, default)

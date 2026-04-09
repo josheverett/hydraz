@@ -277,13 +277,16 @@ The planner should detect when a task is too small for N workers and assign fewe
 - **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
 - **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
 
-### Known doc discrepancies (minor, to fix in next session)
+### Known doc discrepancies
 
-- Spec §11.1: "no separate --swarm needed" wording contradicts listing --swarm as a declared flag
-- Architecture §3.3 roles table: artifact filenames abbreviated (`investigation.md` instead of `investigation/brief.md`, `architecture.md` instead of `architecture/design.md`)
-- Architecture §3.9 resume bullets: same abbreviated filenames
+**Resolved:**
+- ~~Spec §11.1: "no separate --swarm needed" wording contradicts listing --swarm as a declared flag~~ (fixed)
+- ~~Architecture §3.3 roles table: artifact filenames abbreviated~~ (fixed)
+- ~~Architecture §3.9 resume bullets: abbreviated filenames~~ (fixed)
+- ~~CLI help text for `--swarm` in `run.ts` says "Enable swarm pipeline (default)" vs README saying "No-op"~~ (fixed)
+
+**Still open:**
 - Pipeline swarm events not written to `events.jsonl` -- only forwarded to console callback via `onEvent`. This is a **functional gap**, not just a doc issue. Several declared event types in `logger.ts` (`swarm.consensus_round`, `swarm.worker_completed`, `swarm.worker_failed`, `swarm.merge_conflict`) are never emitted by the pipeline. The pipeline should call `appendEvent` to persist events, and emit all declared event types at appropriate points.
-- CLI help text for `--swarm` in `run.ts` says "Enable swarm pipeline (default)" vs README saying "No-op" -- should align
 - README should be re-audited to ensure it accurately reflects the final architecture (container-side orchestration now implemented)
 
 ---
