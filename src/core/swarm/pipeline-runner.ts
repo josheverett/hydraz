@@ -3,6 +3,8 @@ import { ensureSwarmDirs } from './artifacts.js';
 import { runSwarmPipeline, type PipelineOptions, type PipelineResult } from './pipeline.js';
 
 export const RESULT_PATH = '/tmp/hydraz-pipeline-result.json';
+export const CONTAINER_DIST_PATH = '/tmp/hydraz-dist';
+export const CONTAINER_RUNNER_SCRIPT = `${CONTAINER_DIST_PATH}/core/swarm/pipeline-runner.js`;
 
 export interface SerializablePipelineOptions {
   repoRoot: string;

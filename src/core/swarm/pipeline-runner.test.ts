@@ -56,7 +56,7 @@ describe('pipeline-runner', () => {
   });
 
   describe('toSerializable', () => {
-    it('should strip callbacks and containerContext from PipelineOptions', () => {
+    it('should strip callbacks from PipelineOptions', () => {
       const serialized = toSerializable({
         repoRoot: '/repo',
         sessionId: 'abc123',
@@ -68,11 +68,9 @@ describe('pipeline-runner', () => {
         reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
         maxOuterLoops: 5,
         maxConsensusRounds: 10,
-        containerContext: { workspaceName: 'hydraz-abc', authEnv: { ANTHROPIC_API_KEY: 'key' } },
         callbacks: { onPhaseChange: () => {} },
       });
 
-      expect(serialized).not.toHaveProperty('containerContext');
       expect(serialized).not.toHaveProperty('callbacks');
       expect(serialized.repoRoot).toBe('/repo');
       expect(serialized.sessionId).toBe('abc123');

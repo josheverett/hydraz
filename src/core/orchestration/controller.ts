@@ -1,5 +1,7 @@
+import { spawn } from 'node:child_process';
 import { loadConfig } from '../config/index.js';
 import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
+import { buildSshNodeCommand } from '../claude/ssh.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import type { ExecutionTarget } from '../config/schema.js';
 import {
@@ -21,8 +23,10 @@ import {
   type WorkspaceProvider,
   type WorkspaceInfo,
 } from '../providers/provider.js';
-import { runSwarmPipeline } from '../swarm/pipeline.js';
+import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
+import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
 import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
+import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -147,51 +151,139 @@ export async function startSession(
 
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
+  const reviewerPersonas = reviewerNames.map(name => ({
+    name,
+    persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
+  }));
 
-  let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
+  let pipelineResult: PipelineResult;
+
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const authEnv = prepareContainerAuthEnv(config);
-    containerContext = {
-      workspaceName,
-      authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
-      workingDirectory: workspace.directory,
-    };
-  }
 
-  const pipelineResult = await runSwarmPipeline({
-    repoRoot,
-    sessionId,
-    sessionName: session.name,
-    task: session.task,
-    workingDirectory: workspace.directory,
-    config,
-    workerCount,
-    reviewerPersonas: reviewerNames.map(name => ({
-      name,
-      persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
-    })),
-    maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
-    maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
-    containerContext,
-    callbacks: {
-      onPhaseChange: (phase) => {
-        try {
-          transitionState(repoRoot, sessionId, phase);
-          callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
-        } catch {
-          // phase transition may fail if already in a terminal state
+    try {
+      emitEvent('swarm.container_setup', 'Copying Hydraz into container');
+      sshExec(workspaceName, `rm -rf ${CONTAINER_DIST_PATH}`);
+      scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      transitionState(repoRoot, sessionId, 'failed', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.failed', `Container setup failed: ${msg}`);
+      callbacks.onError?.(msg);
+      activeSessions.delete(sessionId);
+      return;
+    }
+
+    const optionsJson = JSON.stringify({
+      repoRoot: workspace.directory,
+      sessionId,
+      sessionName: session.name,
+      task: session.task,
+      workingDirectory: workspace.directory,
+      config,
+      workerCount,
+      reviewerPersonas,
+      maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
+      maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+    });
+
+    const ssh = buildSshNodeCommand(
+      workspaceName,
+      CONTAINER_RUNNER_SCRIPT,
+      [optionsJson],
+      Object.keys(authEnv).length > 0 ? authEnv : undefined,
+    );
+
+    const sshExitCode = await new Promise<number | null>((resolve) => {
+      const child = spawn(ssh.cmd, ssh.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      if (ssh.stdinScript) {
+        child.stdin?.write(ssh.stdinScript);
+      }
+      child.stdin?.end();
+
+      let buffer = '';
+      child.stdout?.on('data', (data: Buffer) => {
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === 'phase') {
+              try {
+                transitionState(repoRoot, sessionId, parsed.phase);
+                callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+              } catch {
+                // phase transition may fail if already in a terminal state
+              }
+            } else if (parsed.type === 'event') {
+              callbacks.onStreamLine?.(`${formatTs()}  ${String(parsed.eventType).padEnd(24)} ${parsed.message}`);
+            }
+          } catch {
+            callbacks.onStreamLine?.(line);
+          }
         }
+      });
+
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString().trim();
+        if (text) callbacks.onError?.(text);
+      });
+
+      child.on('close', (code) => resolve(code));
+      child.on('error', (err) => {
+        callbacks.onError?.(`SSH error: ${err.message}`);
+        resolve(1);
+      });
+    });
+
+    try {
+      const resultJson = sshExec(workspaceName, `cat ${RESULT_PATH}`);
+      pipelineResult = JSON.parse(resultJson);
+    } catch {
+      pipelineResult = {
+        success: false,
+        phase: 'failed',
+        outerLoopsUsed: 0,
+        consensusRoundsUsed: 0,
+        approved: false,
+        error: `Container pipeline exited with code ${sshExitCode} and result could not be read`,
+      };
+    }
+  } else {
+    pipelineResult = await runSwarmPipeline({
+      repoRoot,
+      sessionId,
+      sessionName: session.name,
+      task: session.task,
+      workingDirectory: workspace.directory,
+      config,
+      workerCount,
+      reviewerPersonas,
+      maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
+      maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      callbacks: {
+        onPhaseChange: (phase) => {
+          try {
+            transitionState(repoRoot, sessionId, phase);
+            callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+          } catch {
+            // phase transition may fail if already in a terminal state
+          }
+        },
+        onEvent: (type, message) => {
+          callbacks.onEvent?.(type, message);
+          callbacks.onStreamLine?.(`${formatTs()}  ${type.padEnd(24)} ${message}`);
+        },
+        onError: (message) => {
+          callbacks.onError?.(message);
+        },
       },
-      onEvent: (type, message) => {
-        callbacks.onEvent?.(type, message);
-        callbacks.onStreamLine?.(`${formatTs()}  ${type.padEnd(24)} ${message}`);
-      },
-      onError: (message) => {
-        callbacks.onError?.(message);
-      },
-    },
-  });
+    });
+  }
 
   activeSessions.delete(sessionId);
 

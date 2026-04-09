@@ -1,5 +1,4 @@
 import type { SwarmPhase, TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
-import type { ContainerContext } from '../claude/executor.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { runInvestigation } from './investigator.js';
 import { runArchitect } from './architect.js';
@@ -43,7 +42,6 @@ export interface PipelineOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
   maxOuterLoops: number;
   maxConsensusRounds: number;
-  containerContext?: ContainerContext;
   callbacks?: PipelineCallbacks;
 }
 

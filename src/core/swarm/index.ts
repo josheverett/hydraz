@@ -100,3 +100,12 @@ export {
   type PipelineOptions,
   runSwarmPipeline,
 } from './pipeline.js';
+export {
+  type SerializablePipelineOptions,
+  RESULT_PATH,
+  CONTAINER_DIST_PATH,
+  CONTAINER_RUNNER_SCRIPT,
+  toSerializable,
+  toPipelineOptions,
+  executePipeline,
+} from './pipeline-runner.js';
