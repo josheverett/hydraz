@@ -264,14 +264,9 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - `src/core/orchestration/controller.ts`: container mode uses SCP + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
 - `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
-### v2.0.0: Worker count intelligence
-
-**Status: Not started.**
-
-The planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections (workers adding unnecessary test scripts etc.).
-
 ### Deferred to v2.1.0
 
+- **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
 - **Architect council**: parallel architects with synthesis (see spec non-goals)
 - **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
 - **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
@@ -285,9 +280,8 @@ The planner should detect when a task is too small for N workers and assign fewe
 - ~~Architecture §3.9 resume bullets: abbreviated filenames~~ (fixed)
 - ~~CLI help text for `--swarm` in `run.ts` says "Enable swarm pipeline (default)" vs README saying "No-op"~~ (fixed)
 
-**Still open:**
-- Pipeline swarm events not written to `events.jsonl` -- only forwarded to console callback via `onEvent`. This is a **functional gap**, not just a doc issue. Several declared event types in `logger.ts` (`swarm.consensus_round`, `swarm.worker_completed`, `swarm.worker_failed`, `swarm.merge_conflict`) are never emitted by the pipeline. The pipeline should call `appendEvent` to persist events, and emit all declared event types at appropriate points.
-- README should be re-audited to ensure it accurately reflects the final architecture (container-side orchestration now implemented)
+- ~~Pipeline swarm events not written to `events.jsonl`~~ (fixed: pipeline now emits all declared event types; controller persists them via `appendEvent` for both local and container modes)
+- ~~README re-audited against final architecture~~ (done)
 
 ---
 
