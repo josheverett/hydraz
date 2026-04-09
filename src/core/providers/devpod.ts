@@ -1,6 +1,7 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join, posix } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { shellEscape } from '../claude/ssh.js';
 
 export interface DevPodWorkspace {
@@ -125,15 +126,16 @@ export function verifyBranchPushed(
 }
 
 export function getDistRoot(): string {
-  return undefined as unknown as string;
+  const thisFile = fileURLToPath(import.meta.url);
+  return resolve(dirname(thisFile), '..', '..', '..');
 }
 
 export function scpToContainer(
-  _workspaceName: string,
-  _localPath: string,
-  _remotePath: string,
+  workspaceName: string,
+  localPath: string,
+  remotePath: string,
 ): void {
-  return undefined as unknown as void;
+  execFileSync('scp', ['-r', localPath, `${workspaceName}.devpod:${remotePath}`], EXEC_OPTIONS);
 }
 
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {

@@ -25,13 +25,30 @@ function buildExportStatements(env: Record<string, string>): string[] {
 }
 
 export function buildSshNodeCommand(
-  _workspaceName: string,
-  _scriptPath: string,
-  _scriptArgs: string[],
-  _authEnv?: Record<string, string>,
-  _workingDirectory?: string,
+  workspaceName: string,
+  scriptPath: string,
+  scriptArgs: string[],
+  authEnv?: Record<string, string>,
+  workingDirectory?: string,
 ): SshCommand {
-  return undefined as unknown as SshCommand;
+  const scriptLines = ['set -eu'];
+
+  if (workingDirectory) {
+    scriptLines.push(`cd ${shellEscape(workingDirectory)}`);
+  }
+
+  if (authEnv && Object.keys(authEnv).length > 0) {
+    scriptLines.push(...buildExportStatements(authEnv));
+  }
+
+  const escapedArgs = scriptArgs.map(shellEscape);
+  scriptLines.push(`exec node ${shellEscape(scriptPath)} ${escapedArgs.join(' ')}`);
+
+  return {
+    cmd: 'ssh',
+    args: [`${workspaceName}.devpod`, 'sh', '-s'],
+    stdinScript: scriptLines.join('\n') + '\n',
+  };
 }
 
 export function buildSshClaudeArgs(
