@@ -25,6 +25,7 @@ export type EventType =
   | 'claude.ready'
   | 'claude.auth_resolved'
   | 'swarm.started'
+  | 'swarm.container_setup'
   | 'swarm.phase_changed'
   | 'swarm.investigate_started'
   | 'swarm.investigate_completed'
