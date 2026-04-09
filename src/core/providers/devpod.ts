@@ -135,7 +135,10 @@ export function scpToContainer(
   localPath: string,
   remotePath: string,
 ): void {
-  execFileSync('scp', ['-r', localPath, `${workspaceName}.devpod:${remotePath}`], EXEC_OPTIONS);
+  execFileSync('scp', ['-r', localPath, `${workspaceName}.devpod:${remotePath}`], {
+    ...EXEC_OPTIONS,
+    timeout: 300_000,
+  });
 }
 
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
