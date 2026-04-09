@@ -24,6 +24,16 @@ function buildExportStatements(env: Record<string, string>): string[] {
   });
 }
 
+export function buildSshNodeCommand(
+  _workspaceName: string,
+  _scriptPath: string,
+  _scriptArgs: string[],
+  _authEnv?: Record<string, string>,
+  _workingDirectory?: string,
+): SshCommand {
+  return undefined as unknown as SshCommand;
+}
+
 export function buildSshClaudeArgs(
   workspaceName: string,
   claudeArgs: string[],

@@ -124,6 +124,18 @@ export function verifyBranchPushed(
   }
 }
 
+export function getDistRoot(): string {
+  return undefined as unknown as string;
+}
+
+export function scpToContainer(
+  _workspaceName: string,
+  _localPath: string,
+  _remotePath: string,
+): void {
+  return undefined as unknown as void;
+}
+
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
   try {
     const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shellEscape, buildSshClaudeArgs } from './ssh.js';
+import { shellEscape, buildSshClaudeArgs, buildSshNodeCommand } from './ssh.js';
 
 describe('shellEscape', () => {
   it('wraps simple strings in single quotes', () => {
@@ -128,5 +128,66 @@ describe('buildSshClaudeArgs', () => {
     const claudeIdx = script.indexOf('exec claude');
     expect(cdIdx).toBeLessThan(exportIdx);
     expect(exportIdx).toBeLessThan(claudeIdx);
+  });
+});
+
+describe('buildSshNodeCommand', () => {
+  it('returns ssh as the command', () => {
+    const result = buildSshNodeCommand('my-ws', '/tmp/hydraz-dist/runner.js', ['{}']);
+    expect(result.cmd).toBe('ssh');
+  });
+
+  it('targets the devpod workspace SSH alias', () => {
+    const result = buildSshNodeCommand('my-ws', '/tmp/hydraz-dist/runner.js', ['{}']);
+    expect(result.args[0]).toBe('my-ws.devpod');
+  });
+
+  it('launches a remote shell that reads the script from stdin', () => {
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', []);
+    expect(result.args).toEqual(['ws.devpod', 'sh', '-s']);
+  });
+
+  it('builds a shell script with exec node and the script path', () => {
+    const result = buildSshNodeCommand('ws', '/tmp/hydraz-dist/core/swarm/pipeline-runner.js', []);
+    const script = result.stdinScript ?? '';
+    expect(script).toContain('exec node');
+    expect(script).toContain("'/tmp/hydraz-dist/core/swarm/pipeline-runner.js'");
+  });
+
+  it('includes shell-escaped script arguments', () => {
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', ['{"task":"fix it"}', '--verbose']);
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("'{\"task\":\"fix it\"}'");
+    expect(script).toContain("'--verbose'");
+  });
+
+  it('exports auth env when provided', () => {
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', [], {
+      CLAUDE_CODE_OAUTH_TOKEN: 'secret-token',
+    });
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("export CLAUDE_CODE_OAUTH_TOKEN='secret-token'");
+  });
+
+  it('prepends cd when workingDirectory is provided', () => {
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', [], undefined, '/workspaces/ws');
+    const script = result.stdinScript ?? '';
+    expect(script).toContain("cd '/workspaces/ws'");
+  });
+
+  it('combines cd, auth exports, and node in the correct order', () => {
+    const result = buildSshNodeCommand(
+      'ws',
+      '/tmp/runner.js',
+      ['{}'],
+      { CLAUDE_CODE_OAUTH_TOKEN: 'secret-token' },
+      '/workspaces/ws',
+    );
+    const script = result.stdinScript ?? '';
+    const cdIdx = script.indexOf('cd ');
+    const exportIdx = script.indexOf('export CLAUDE_CODE_OAUTH_TOKEN');
+    const nodeIdx = script.indexOf('exec node');
+    expect(cdIdx).toBeLessThan(exportIdx);
+    expect(exportIdx).toBeLessThan(nodeIdx);
   });
 });
