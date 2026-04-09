@@ -246,4 +246,84 @@ describe('runSwarmPipeline', () => {
     expect(result.success).toBe(false);
     expect(runReviewPanel).not.toHaveBeenCalled();
   });
+
+  it('should emit all expected event types on happy path', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const types = events.map(e => e.type);
+    expect(types).toContain('swarm.investigate_started');
+    expect(types).toContain('swarm.investigate_completed');
+    expect(types).toContain('swarm.architect_started');
+    expect(types).toContain('swarm.architect_completed');
+    expect(types).toContain('swarm.plan_started');
+    expect(types).toContain('swarm.plan_completed');
+    expect(types).toContain('swarm.consensus_round');
+    expect(types).toContain('swarm.worker_launched');
+    expect(types).toContain('swarm.worker_completed');
+    expect(types).toContain('swarm.merge_started');
+    expect(types).toContain('swarm.merge_completed');
+    expect(types).toContain('swarm.review_started');
+    expect(types).toContain('swarm.review_completed');
+  });
+
+  it('should emit per-worker completion events', async () => {
+    vi.mocked(runWorkerFanout).mockResolvedValueOnce({
+      success: true,
+      workerResults: [
+        { workerId: 'worker-a', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
+        { workerId: 'worker-b', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
+      ],
+    });
+
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const completedEvents = events.filter(e => e.type === 'swarm.worker_completed');
+    expect(completedEvents).toHaveLength(2);
+    expect(completedEvents[0]!.message).toContain('worker-a');
+    expect(completedEvents[1]!.message).toContain('worker-b');
+  });
+
+  it('should emit worker_failed events for failed workers', async () => {
+    vi.mocked(runWorkerFanout).mockResolvedValueOnce({
+      success: false,
+      workerResults: [
+        { workerId: 'worker-a', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
+        { workerId: 'worker-b', success: false, executorResult: { exitCode: 1, signal: null, success: false }, error: 'Worker failed' },
+      ],
+      error: 'One or more workers failed',
+    });
+
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const failedEvents = events.filter(e => e.type === 'swarm.worker_failed');
+    expect(failedEvents).toHaveLength(1);
+    expect(failedEvents[0]!.message).toContain('worker-b');
+  });
+
+  it('should emit merge_conflict event when merge fails', async () => {
+    vi.mocked(runFanIn).mockReturnValueOnce({
+      success: false,
+      integrationBranch: 'hydraz/test',
+      workerMerges: [{ workerId: 'worker-a', branch: 'hydraz/test-worker-a', outcome: 'conflict-unresolvable', error: 'Conflict in shared.ts' }],
+      reportPath: null,
+      error: 'Merge conflict',
+    });
+
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const conflictEvents = events.filter(e => e.type === 'swarm.merge_conflict');
+    expect(conflictEvents).toHaveLength(1);
+  });
 });
