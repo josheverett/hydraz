@@ -220,7 +220,7 @@ export async function startSession(
                 // phase transition may fail if already in a terminal state
               }
             } else if (parsed.type === 'event') {
-              callbacks.onStreamLine?.(`${formatTs()}  ${String(parsed.eventType).padEnd(24)} ${parsed.message}`);
+              emitEvent(parsed.eventType as Parameters<typeof createEvent>[1], parsed.message);
             }
           } catch {
             callbacks.onStreamLine?.(line);
@@ -275,8 +275,7 @@ export async function startSession(
           }
         },
         onEvent: (type, message) => {
-          callbacks.onEvent?.(type, message);
-          callbacks.onStreamLine?.(`${formatTs()}  ${type.padEnd(24)} ${message}`);
+          emitEvent(type as Parameters<typeof createEvent>[1], message);
         },
         onError: (message) => {
           callbacks.onError?.(message);

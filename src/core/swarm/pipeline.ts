@@ -141,6 +141,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     ledger = consensusResult.finalLedger!;
     ownership = consensusResult.finalOwnership!;
     planContent = readPlan(options.repoRoot, options.sessionId) ?? '';
+    emitEvent(options, 'swarm.consensus_round', `Consensus used ${consensusResult.roundsUsed} round(s)`);
     emitEvent(options, 'swarm.plan_completed', `Consensus reached in ${consensusResult.roundsUsed} rounds`);
 
     emitPhase(options, 'architect-reviewing');
@@ -158,6 +159,14 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       workerWorktrees = {};
       for (const wr of workerResult.workerResults) {
         workerWorktrees[wr.workerId] = getWorkspaceDir(options.repoRoot, `${options.sessionId}-${wr.workerId}`);
+      }
+    }
+
+    for (const wr of workerResult.workerResults) {
+      if (wr.success) {
+        emitEvent(options, 'swarm.worker_completed', `Worker ${wr.workerId} completed`);
+      } else {
+        emitEvent(options, 'swarm.worker_failed', `Worker ${wr.workerId} failed`);
       }
     }
 
@@ -186,6 +195,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     });
 
     if (!mergeResult.success) {
+      emitEvent(options, 'swarm.merge_conflict', `Merge conflict: ${mergeResult.error}`);
       return {
         success: false,
         phase: 'merging',
