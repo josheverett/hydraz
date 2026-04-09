@@ -17,7 +17,6 @@ export async function runInvestigation(ctx: ExecutionContext): Promise<Investiga
     workingDirectory: ctx.workingDirectory,
     prompt,
     config: ctx.config,
-    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

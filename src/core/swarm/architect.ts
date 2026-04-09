@@ -21,7 +21,6 @@ export async function runArchitect(ctx: ExecutionContext, opts: ArchitectOptions
     workingDirectory: ctx.workingDirectory,
     prompt,
     config: ctx.config,
-    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

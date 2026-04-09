@@ -60,7 +60,6 @@ async function runSingleWorker(
     workingDirectory,
     prompt,
     config: ctx.config,
-    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

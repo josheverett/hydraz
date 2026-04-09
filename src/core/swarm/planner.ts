@@ -31,7 +31,6 @@ export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): P
     workingDirectory: ctx.workingDirectory,
     prompt,
     config: ctx.config,
-    containerContext: ctx.containerContext,
   });
 
   const executorResult = await executor.waitForExit();

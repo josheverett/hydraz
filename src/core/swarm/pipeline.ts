@@ -64,7 +64,6 @@ function buildContext(options: PipelineOptions, swarmDir: string): ExecutionCont
     workingDirectory: options.workingDirectory,
     config: options.config,
     swarmDir,
-    containerContext: options.containerContext,
   };
 }
 

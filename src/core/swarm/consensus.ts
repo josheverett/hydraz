@@ -79,7 +79,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       workingDirectory: ctx.workingDirectory,
       prompt: reviewPrompt,
       config: ctx.config,
-      containerContext: ctx.containerContext,
     });
 
     const reviewResult = await reviewExecutor.waitForExit();

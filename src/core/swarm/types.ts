@@ -107,7 +107,6 @@ export interface ExecutionContext {
   workingDirectory: string;
   config: import('../config/schema.js').HydrazConfig;
   swarmDir: string;
-  containerContext?: import('../claude/executor.js').ContainerContext;
 }
 
 export interface SwarmConfig {
