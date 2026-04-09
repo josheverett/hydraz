@@ -106,7 +106,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 **Key changes:**
 - New `src/core/swarm/architect.ts`: Build architect prompt (includes investigation brief), launch Claude, validate output
-- New `src/core/swarm/prompts/architect.ts`: Architect prompt template (initial design + plan-review variant)
+- New `src/core/swarm/prompts/architect.ts`: Architect prompt template (initial design only; plan-review is a separate file `prompts/architect-review.ts`, added in Phase 4)
 
 **Why third**: Second-simplest stage. Same pattern as investigator but with a richer input (investigation brief).
 **Dependencies**: Phase 2
@@ -173,7 +173,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Note**: The `determineFeedbackRoute` function implements the routing logic. The full `runOuterLoop` that wires all stages together is implemented in Phase 9 (controller integration) since it's the main orchestration loop.
 
 **Key changes:**
-- Modify `src/core/swarm/state.ts`: Outer loop tracking, feedback routing logic
+- Outer loop tracking lives in `src/core/swarm/pipeline.ts`; feedback routing via `determineFeedbackRoute` in `src/core/swarm/review-aggregate.ts`
 - Handle architectural feedback: re-enter at architect stage (skip investigation)
 - Handle implementation feedback: re-launch only affected workers, re-merge, re-review
 - Enforce 5-outer-loop bound; transition to `failed` if exceeded

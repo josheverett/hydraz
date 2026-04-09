@@ -301,7 +301,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 ### Session directory layout
 
 ```
-~/.hydraz/repos/<hash>/sessions/<session-id>/
+~/.hydraz/repos/<repo>-<hash>/sessions/<session-id>/
   session.json                    # SessionMetadata (extended with swarm phase tracking)
   events.jsonl                    # Event log
 
@@ -437,7 +437,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 
 **Key changes:**
 - New `src/core/swarm/architect.ts`: Build architect prompt (includes investigation brief), launch Claude, validate output
-- New `src/core/swarm/prompts/architect.ts`: Architect prompt template (initial design + plan-review variant)
+- New `src/core/swarm/prompts/architect.ts`: Architect prompt template (initial design only; plan-review is a separate file `prompts/architect-review.ts`, added in Phase 4)
 
 **Why third**: Second-simplest stage. Same pattern as investigator but with a richer input (investigation brief).
 **Dependencies**: Phase 2
@@ -450,6 +450,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 **Key changes:**
 - New `src/core/swarm/planner.ts`: Build planner prompt (includes investigation + architecture), launch Claude, parse structured outputs (`plan.md`, `task-ledger.json`, `ownership.json`, worker briefs)
 - New `src/core/swarm/prompts/planner.ts`: Planner prompt template
+- New `src/core/swarm/prompts/architect-review.ts`: Architect plan-review prompt template
 - New `src/core/swarm/consensus.ts`: Drive the planner <-> architect loop, enforce 10-round cap, handle architect-final-say
 - Note: `parser.ts` was not created as a separate file. Schema validation (`validateTaskLedger`, `validateOwnershipMap`) lives in `artifacts.ts`.
 
@@ -501,7 +502,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 **Goal**: Route review feedback to the correct loop-back target and re-enter the pipeline.
 
 **Key changes:**
-- Modify `src/core/swarm/state.ts`: Outer loop tracking, feedback routing logic
+- Outer loop tracking lives in `src/core/swarm/pipeline.ts`; feedback routing via `determineFeedbackRoute` in `src/core/swarm/review-aggregate.ts`
 - Handle architectural feedback: re-enter at architect stage (skip investigation)
 - Handle implementation feedback: re-launch only affected workers, re-merge, re-review
 - Enforce 5-outer-loop bound; transition to `failed` if exceeded
