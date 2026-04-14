@@ -13,6 +13,7 @@ import {
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
   scpToContainer,
+  getDistRoot,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -233,6 +234,20 @@ describe('copyWorktreeIncludesInContainer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
     expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDistRoot', () => {
+  it('returns the directory two levels above the module file (src/ in test, dist/ in production)', () => {
+    const root = getDistRoot();
+    const basename = root.split('/').pop();
+    expect(['src', 'dist']).toContain(basename);
+  });
+
+  it('does not return the project root', () => {
+    const root = getDistRoot();
+    expect(root).not.toMatch(/\/hydraz$/);
+    expect(root).not.toContain('node_modules');
   });
 });
 

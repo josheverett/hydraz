@@ -127,7 +127,7 @@ export function verifyBranchPushed(
 
 export function getDistRoot(): string {
   const thisFile = fileURLToPath(import.meta.url);
-  return resolve(dirname(thisFile), '..', '..', '..');
+  return resolve(dirname(thisFile), '..', '..');
 }
 
 export function scpToContainer(
