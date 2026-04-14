@@ -237,26 +237,34 @@ describe('copyWorktreeIncludesInContainer', () => {
 });
 
 describe('scpToContainer', () => {
-  it('calls scp with recursive flag and correct source and destination', () => {
+  it('uses tar|ssh pipe via sh -c for efficient transfer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     scpToContainer('my-ws', '/local/dist', '/tmp/hydraz-dist');
     expect(mockExecFileSync).toHaveBeenCalledWith(
-      'scp',
-      expect.arrayContaining(['-r', '/local/dist', 'my-ws.devpod:/tmp/hydraz-dist']),
+      'sh',
+      ['-c', expect.stringContaining('tar')],
       expect.any(Object),
     );
   });
 
-  it('targets the correct devpod SSH host in the destination', () => {
+  it('pipes tar output to ssh targeting the correct devpod host', () => {
     mockExecFileSync.mockReturnValue('' as never);
     scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
-    const dest = args.find(a => a.includes('.devpod:'));
-    expect(dest).toBe('hydraz-abc123.devpod:/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('ssh');
+    expect(cmd).toContain('hydraz-abc123.devpod');
   });
 
-  it('throws when scp fails', () => {
-    mockExecFileSync.mockImplementation(() => { throw new Error('scp: connection refused'); });
-    expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('scp: connection refused');
+  it('includes rm and mkdir in the remote command for idempotent transfer', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('rm -rf /tmp/hydraz-dist');
+    expect(cmd).toContain('mkdir -p /tmp/hydraz-dist');
+  });
+
+  it('throws when the transfer fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
+    expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
   });
 });
