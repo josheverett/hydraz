@@ -136,7 +136,7 @@ export function scpToContainer(
   remotePath: string,
 ): void {
   const sshTarget = `${workspaceName}.devpod`;
-  const remoteCmd = `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf -`;
+  const remoteCmd = `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
   execFileSync('sh', ['-c',
     `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`,
   ], EXEC_OPTIONS);

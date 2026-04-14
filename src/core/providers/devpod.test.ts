@@ -278,6 +278,14 @@ describe('scpToContainer', () => {
     expect(cmd).toContain('mkdir -p /tmp/hydraz-dist');
   });
 
+  it('writes a package.json with type:module into the remote path for ESM support', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('package.json');
+    expect(cmd).toContain('"type":"module"');
+  });
+
   it('throws when the transfer fails', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
     expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
