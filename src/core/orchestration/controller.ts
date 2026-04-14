@@ -164,7 +164,6 @@ export async function startSession(
 
     try {
       emitEvent('swarm.container_setup', 'Copying Hydraz into container');
-      sshExec(workspaceName, `rm -rf ${CONTAINER_DIST_PATH}`);
       scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
