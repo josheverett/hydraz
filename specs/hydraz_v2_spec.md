@@ -517,7 +517,7 @@ Each worker gets its own git worktree via the existing `createWorktree()` in `sr
 
 The entire swarm pipeline runs inside a single DevPod container. The host:
 1. Creates the DevPod workspace and worktree (existing provider code)
-2. Copies Hydraz `dist/` into the container via SCP (`/tmp/hydraz-dist/`)
+2. Copies Hydraz `dist/` into the container via `tar | ssh` pipe (`/tmp/hydraz-dist/`)
 3. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
 4. Streams structured JSON events from SSH stdout for real-time phase tracking
 5. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
@@ -685,7 +685,7 @@ v2 builds on top of v1 infrastructure rather than replacing it:
 | GitHub delivery | Reused for PR creation from integration branch (container/cloud mode only). |
 | Config system | Unchanged on disk. Swarm defaults live in `DEFAULT_SWARM_CONFIG` in code, not in `HydrazConfig`. |
 | Auth resolution | Unchanged. Each Claude invocation uses the same auth. |
-| DevPod / container providers | Used for session workspace. Container-side orchestration implemented: host copies `dist/` into container via SCP, runs `pipeline-runner.ts` via SSH, reads result after exit. |
+| DevPod / container providers | Used for session workspace. Container-side orchestration implemented: host copies `dist/` into container via `tar \| ssh` pipe, runs `pipeline-runner.ts` via SSH, reads result after exit. |
 | Stream parser / display | Available but not actively used by v2 pipeline (pipeline stages don't stream to the user). |
 
 ---

@@ -151,6 +151,14 @@ devpod provider add gcloud -o PROJECT=my-project -o ZONE=us-central1-a -o MACHIN
 devpod provider use gcloud
 ```
 
+### Cloud troubleshooting
+
+**`ZONE_RESOURCE_POOL_EXHAUSTED`**: GCP doesn't have capacity for your machine type in the configured zone. Try a different zone: `devpod provider set-options gcloud -o ZONE=us-west1-b`
+
+**Stale DevPod workspaces**: Failed sessions can leave orphaned DevPod workspaces that interfere with new runs. Run `devpod list` to check, and `devpod delete --force <name>` to clean them up.
+
+**`INACTIVITY_TIMEOUT`**: The default DevPod gcloud provider timeout (5m) can be too short for cold container builds. Increase it: `devpod provider set-options gcloud -o INACTIVITY_TIMEOUT=30m`
+
 ## Config
 
 Global config lives at `~/.config/hydraz/`. Session data and worktrees live at `~/.hydraz/repos/<repo>-<hash>/`. No Hydraz-generated files are created in the target repository.

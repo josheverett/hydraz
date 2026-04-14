@@ -251,7 +251,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 **Solution (implemented):** The entire swarm pipeline runs inside the container. The host:
 1. Creates DevPod workspace (existing code)
-2. Copies Hydraz `dist/` into the container via SCP (`/tmp/hydraz-dist/`)
+2. Copies Hydraz `dist/` into the container via `tar | ssh` pipe (`/tmp/hydraz-dist/`)
 3. SSHs into the container and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<serialized-options>'`
 4. Streams structured JSON events from SSH stdout for real-time phase tracking on the host
 5. Reads pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
@@ -260,8 +260,8 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Implementation:**
 - `src/core/swarm/pipeline-runner.ts`: `SerializablePipelineOptions` type, `toSerializable()`, `toPipelineOptions()` (adds stdout-printing callbacks), `executePipeline()` (calls `ensureSwarmDirs` + `runSwarmPipeline` + writes result JSON)
 - `src/core/claude/ssh.ts`: `buildSshNodeCommand()` -- builds SSH command to run `node <script> <args>` with auth env (same pattern as `buildSshClaudeArgs`)
-- `src/core/providers/devpod.ts`: `scpToContainer()` -- copies local directory into container via SCP; `getDistRoot()` -- locates `dist/` at runtime via `import.meta.url`
-- `src/core/orchestration/controller.ts`: container mode uses SCP + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
+- `src/core/providers/devpod.ts`: `scpToContainer()` -- copies local directory into container via `tar | ssh` pipe (25x faster than SCP over DevPod tunnels); `getDistRoot()` -- locates `dist/` at runtime via `import.meta.url`
+- `src/core/orchestration/controller.ts`: container mode uses `tar | ssh` + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
 - `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
 ### Deferred to v2.1.0

@@ -177,7 +177,7 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 
 **Container/cloud mode (implemented):**
 - The entire swarm pipeline runs inside a single DevPod container
-- The host copies `dist/` via SCP, SSHs in to run `pipeline-runner.ts`, reads the result after exit
+- The host copies `dist/` via `tar | ssh` pipe, SSHs in to run `pipeline-runner.ts`, reads the result after exit
 - Inside the container, the pipeline runs identically to local bare-metal mode
 - Workers use local worktrees inside the container, same as bare-metal mode
 - Per-worker DevPod workspaces are not used; one container hosts all workers
