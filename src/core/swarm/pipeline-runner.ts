@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { ensureSwarmDirs } from './artifacts.js';
 import { runSwarmPipeline, type PipelineOptions, type PipelineResult } from './pipeline.js';
 
@@ -69,4 +70,35 @@ export async function executePipeline(
   const result = await runSwarmPipeline(options);
   writeFileSync(resultPath, JSON.stringify(result));
   return result;
+}
+
+export async function runMain(args: string[]): Promise<void> {
+  const json = args[2];
+  if (!json) {
+    process.stderr.write('Usage: node pipeline-runner.js <options-json>\n');
+    process.exit(1);
+    return;
+  }
+
+  let parsed: SerializablePipelineOptions;
+  try {
+    parsed = JSON.parse(json);
+  } catch (err) {
+    process.stderr.write(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+    return;
+  }
+
+  try {
+    await executePipeline(parsed, RESULT_PATH);
+    process.exit(0);
+  } catch (err) {
+    process.stderr.write(`Pipeline failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  }
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  runMain(process.argv);
 }

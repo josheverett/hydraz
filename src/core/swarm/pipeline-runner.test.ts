@@ -27,6 +27,7 @@ import {
   toSerializable,
   toPipelineOptions,
   executePipeline,
+  runMain,
   type SerializablePipelineOptions,
 } from './pipeline-runner.js';
 import { runSwarmPipeline } from './pipeline.js';
@@ -205,6 +206,60 @@ describe('pipeline-runner', () => {
       const written = JSON.parse(readFileSync(resultPath, 'utf-8'));
       expect(written.success).toBe(false);
       expect(written.error).toBe('Investigation failed');
+    });
+  });
+
+  describe('runMain', () => {
+    let exitSpy: ReturnType<typeof vi.spyOn>;
+    let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      exitSpy.mockRestore();
+      stderrSpy.mockRestore();
+      try { rmSync(RESULT_PATH, { force: true }); } catch {}
+    });
+
+    it('should exit 1 with usage message when no JSON argument provided', async () => {
+      await runMain(['node', 'pipeline-runner.js']);
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Usage'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit 1 with error when JSON argument is invalid', async () => {
+      await runMain(['node', 'pipeline-runner.js', '{not valid json']);
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid JSON'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should parse options, run the pipeline, and exit 0 on success', async () => {
+      const options = makeSerializedOptions({ repoRoot: '/container', sessionId: 'main-test' });
+
+      await runMain(['node', 'pipeline-runner.js', JSON.stringify(options)]);
+
+      expect(ensureSwarmDirs).toHaveBeenCalledWith('/container', 'main-test');
+      expect(runSwarmPipeline).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(0);
+
+      const written = JSON.parse(readFileSync(RESULT_PATH, 'utf-8'));
+      expect(written.success).toBe(true);
+    });
+
+    it('should exit 1 and write error to stderr when pipeline throws', async () => {
+      vi.mocked(runSwarmPipeline).mockRejectedValueOnce(new Error('Pipeline exploded'));
+
+      const options = makeSerializedOptions();
+      await runMain(['node', 'pipeline-runner.js', JSON.stringify(options)]);
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Pipeline exploded'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });
