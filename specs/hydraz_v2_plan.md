@@ -283,6 +283,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 ### Deferred to v2.1.0
 
+- **Serial worker execution (default)**: workers should execute serially by default, with parallel mode opt-in via `--parallel`. Parallel workers on greenfield or heavily overlapping codebases produce merge conflicts because there's no existing file boundary to partition. Serial execution lets each worker build on the previous one's commits. This is a prerequisite for worker count intelligence.
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
 - **Architect council**: parallel architects with synthesis (see spec non-goals)
 - **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
