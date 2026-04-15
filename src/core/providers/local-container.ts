@@ -86,10 +86,11 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     const workspaceName = `hydraz-${session.id}`;
     debug(`createWorkspace: workspaceName=${workspaceName}`);
-    debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl}`);
+    const devpodProvider = this.type === 'local-container' ? 'docker' : undefined;
+    debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'}`);
 
     try {
-      devpodUp(ghRepo.remoteUrl, workspaceName);
+      devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LocalContainerProvider } from './local-container.js';
+import { CloudProvider } from './cloud.js';
 import { createSession } from '../sessions/schema.js';
 import { createDefaultConfig } from '../config/schema.js';
 
@@ -126,15 +127,18 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('launches devpod with the git remote URL instead of uploading the local directory', () => {
+    it('launches devpod with the git remote URL and forces docker provider', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
-      const devpodUpArgs = mockDevpodUp.mock.calls[0];
-      expect(devpodUpArgs?.[0]).toBe('git@github.com:octocat/hello-world.git');
+      expect(mockDevpodUp).toHaveBeenCalledWith(
+        'git@github.com:octocat/hello-world.git',
+        expect.stringContaining('hydraz-'),
+        'docker',
+      );
     });
 
     it('creates worktree inside the container via SSH', () => {
@@ -291,6 +295,35 @@ describe('LocalContainerProvider', () => {
       const provider = new LocalContainerProvider();
 
       expect(() => provider.destroyWorkspace('/fake/repo', fakeWorkspace)).not.toThrow();
+    });
+  });
+});
+
+describe('CloudProvider', () => {
+  it('has type "cloud"', () => {
+    const provider = new CloudProvider();
+    expect(provider.type).toBe('cloud');
+  });
+
+  describe('checkAvailability', () => {
+    it('does not require Docker', () => {
+      mockCheckDocker.mockReturnValue(false);
+      const provider = new CloudProvider();
+      const result = provider.checkAvailability();
+      expect(result.available).toBe(true);
+    });
+  });
+
+  describe('createWorkspace', () => {
+    it('does not force docker provider for devpod up', () => {
+      const provider = new CloudProvider();
+      const session = makeSession('cloud-session', 'cloud');
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      const providerArg = mockDevpodUp.mock.calls[0]?.[2];
+      expect(providerArg).toBeUndefined();
     });
   });
 });

@@ -327,4 +327,21 @@ describe('devpodUp', () => {
       expect.any(Object),
     );
   });
+
+  it('includes --provider flag when provider is specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--provider', 'docker'],
+      expect.any(Object),
+    );
+  });
+
+  it('omits --provider flag when provider is not specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--provider');
+  });
 });
