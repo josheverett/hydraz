@@ -36,10 +36,11 @@ describe('debug', () => {
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('hello'));
   });
 
-  it('includes [debug] prefix', () => {
+  it('includes [debug <timestamp>] prefix', () => {
     setVerbose(true);
     debug('test message');
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('[debug]'));
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toMatch(/\[debug \d{2}:\d{2}:\d{2}\.\d{3}\]/);
   });
 
   it('does not write when not verbose', () => {
