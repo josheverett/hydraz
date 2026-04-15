@@ -345,18 +345,32 @@ describe('devpodUp', () => {
     expect(args).not.toContain('--provider');
   });
 
-  it('includes --branch flag when branch is specified', () => {
+  it('appends branch to source URL with @ syntax when branch is specified', () => {
     mockExecFileSync.mockReturnValue('' as never);
     devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
     const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
-    expect(args).toContain('--branch');
-    expect(args[args.indexOf('--branch') + 1]).toBe('feature/devcontainer');
+    expect(args[1]).toBe('git@github.com:org/repo.git@feature/devcontainer');
   });
 
-  it('omits --branch flag when branch is not specified', () => {
+  it('uses bare source URL when branch is not specified', () => {
     mockExecFileSync.mockReturnValue('' as never);
     devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
     const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
-    expect(args).not.toContain('--branch');
+    expect(args[1]).toBe('git@github.com:org/repo.git');
+  });
+
+  it('passes --debug to devpod when verbose is enabled', () => {
+    setVerbose(true);
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('--debug');
+  });
+
+  it('omits --debug when verbose is disabled', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--debug');
   });
 });

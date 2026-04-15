@@ -50,12 +50,13 @@ export function hasDevcontainerJson(repoDir: string): boolean {
 }
 
 export function devpodUp(source: string, workspaceName: string, provider?: string, branch?: string): void {
-  const args = ['up', source, '--ide', 'none', '--id', workspaceName];
+  const devpodSource = branch ? `${source}@${branch}` : source;
+  const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName];
   if (provider) {
     args.push('--provider', provider);
   }
-  if (branch) {
-    args.push('--branch', branch);
+  if (isVerbose()) {
+    args.push('--debug');
   }
   debugExec('devpod', args);
   const start = Date.now();
