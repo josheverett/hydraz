@@ -224,9 +224,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - Missing phase emissions: pipeline emits all state machine phases
 - Container context plumbing (removed -- superseded by container-side orchestration)
 
-**Container mode: READY FOR TESTING.** Container-side orchestration implemented. Pipeline runs inside the container via `pipeline-runner.ts`. Needs manual verification with a real DevPod workspace.
-
-**Cloud mode: NOT TESTED.** Should work identically to container mode (DevPod abstracts the infrastructure). Needs manual verification.
+**Container/cloud mode: PASSED.** Container-side orchestration verified end-to-end (cloud test 11). Full swarm pipeline ran inside a GCP-backed DevPod container: investigation, architecture, planning, consensus, workers, merge, review -- 3 outer loops to approval. Branch delivery has a regression (see known issues).
 
 ### Post-phase: Complexity reduction (4 rounds) [DONE]
 
@@ -264,6 +262,25 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - `src/core/orchestration/controller.ts`: container mode uses `tar | ssh` + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
 - `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
+### Hello World mode [IN PROGRESS]
+
+First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for infrastructure sanity checks. Exercises the full infrastructure path (auth, workspace, DevPod/container setup, dist copy) but bypasses the swarm pipeline, running a single Claude instance with a deterministic task.
+
+**Flow:**
+1. Resolve auth (same as `startSession`)
+2. Validate container auth if container target (same)
+3. Create workspace via provider (same)
+4. For container targets: copy dist via `tar | ssh` (validates the pipe)
+5. Invoke single Claude via `launchClaude` with task: "Create a file called `hello-world-{unixTimestamp}.txt` with the exact contents `hello world`"
+6. Verify file exists in workspace (local: filesystem, container: SSH)
+7. Report structured pass/fail per step
+8. Clean up workspace
+
+**Implementation:**
+- `src/cli/commands/hello-world.ts`: CLI command registration
+- `src/core/orchestration/hello-world.ts`: orchestration logic
+- Reuses `launchClaude` + `ContainerContext` from executor, `scpToContainer`/`sshExec` from devpod, `getProvider` from controller
+
 ### Deferred to v2.1.0
 
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
@@ -282,6 +299,9 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 - ~~Pipeline swarm events not written to `events.jsonl`~~ (fixed: pipeline now emits all declared event types; controller persists them via `appendEvent` for both local and container modes)
 - ~~README re-audited against final architecture~~ (done)
+
+**Open:**
+- **Container git-push regression**: `finalizeGitHubContainerDelivery` in `delivery.ts` checks `githubBranchExists` but nothing in v2 pushes the branch from inside the container. Workers commit locally but the branch is never pushed to the remote. This worked in v1. Fix: after the pipeline SSH exits successfully, the controller should SSH into the container and run `git push origin <branch>` before calling `finalizeGitHubContainerDelivery`.
 
 ---
 

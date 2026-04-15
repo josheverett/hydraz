@@ -49,6 +49,7 @@ export type EventType =
   | 'artifact.created'
   | 'verification.passed'
   | 'verification.failed'
+  | 'branch.pushed'
   | 'pull_request.created'
   | 'workspace.destroyed'
   | 'workspace.preserved';

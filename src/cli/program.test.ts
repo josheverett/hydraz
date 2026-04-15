@@ -4,6 +4,7 @@ import { createProgram } from './program.js';
 const EXPECTED_COMMANDS = [
   'config',
   'run',
+  'hello-world',
   'attach',
   'sessions',
   'status',

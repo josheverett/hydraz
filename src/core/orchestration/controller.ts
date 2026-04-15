@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { loadConfig } from '../config/index.js';
 import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
-import { buildSshNodeCommand } from '../claude/ssh.js';
+import { buildSshNodeCommand, shellEscape } from '../claude/ssh.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import type { ExecutionTarget } from '../config/schema.js';
 import {
@@ -292,6 +292,16 @@ export async function startSession(
       emitEvent('swarm.delivery_started', 'Delivery starting');
 
       if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
+        const deliveryWorkspaceName = `hydraz-${session.id}`;
+        try {
+          sshExec(deliveryWorkspaceName,
+            `cd ${shellEscape(workspace.directory)} && git push origin ${shellEscape(session.branchName)}`);
+          emitEvent('branch.pushed', `Branch pushed: ${session.branchName}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          callbacks.onError?.(`Branch push failed: ${msg}`);
+        }
+
         try {
           const containerDelivery = await finalizeGitHubContainerDelivery({
             session,
