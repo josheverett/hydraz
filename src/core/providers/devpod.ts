@@ -126,6 +126,9 @@ export function verifyBranchPushed(
 }
 
 export function getDistRoot(): string {
+  if (!import.meta.url) {
+    throw new Error('getDistRoot() is not available in SEA builds');
+  }
   const thisFile = fileURLToPath(import.meta.url);
   return resolve(dirname(thisFile), '..', '..');
 }

@@ -7,8 +7,12 @@ cd "$ROOT_DIR"
 
 BINARY_NAME="hydraz"
 
+VERSION=$(node -p "require('./package.json').version")
+
 echo "==> Bundling with esbuild..."
-npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/hydraz-sea.cjs
+npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs \
+  --define:__SEA_VERSION__="\"${VERSION}\"" \
+  --outfile=dist/hydraz-sea.cjs
 
 echo "==> Generating SEA blob..."
 node --experimental-sea-config sea-config.json
