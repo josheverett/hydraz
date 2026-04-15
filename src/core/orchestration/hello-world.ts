@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { ExecutionTarget } from '../config/schema.js';
 import { loadConfig, configExists, initializeConfigDir } from '../config/index.js';
@@ -243,8 +244,22 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
 
   if (isContainer && verifyOk) {
     try {
-      sshExec(workspaceName,
-        `cd ${shellEscape(workspace.directory)} && git add -A && git commit -m 'hello-world' && git push origin ${shellEscape(branchName)}`);
+      const gitAuthEnv = prepareContainerAuthEnv(config);
+      const pushScript = [
+        'set -eu',
+        ...Object.entries(gitAuthEnv).map(([k, v]) => `export ${k}=${shellEscape(v)}`),
+        `cd ${shellEscape(workspace.directory)}`,
+        'git add -A',
+        "git commit -m 'hello-world'",
+        `git push origin ${shellEscape(branchName)}`,
+      ].join('\n') + '\n';
+
+      execFileSync('ssh', [`${workspaceName}.devpod`, 'sh', '-s'], {
+        input: pushScript,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 120_000,
+        encoding: 'utf-8',
+      });
       emitStep(steps, onStep, { name: 'Push', status: 'ok', detail: branchName });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { loadConfig } from '../config/index.js';
 import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
 import { buildSshNodeCommand, shellEscape } from '../claude/ssh.js';
@@ -294,8 +294,20 @@ export async function startSession(
       if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
         const deliveryWorkspaceName = `hydraz-${session.id}`;
         try {
-          sshExec(deliveryWorkspaceName,
-            `cd ${shellEscape(workspace.directory)} && git push origin ${shellEscape(session.branchName)}`);
+          const pushAuthEnv = prepareContainerAuthEnv(config);
+          const pushScript = [
+            'set -eu',
+            ...Object.entries(pushAuthEnv).map(([k, v]) => `export ${k}=${shellEscape(v)}`),
+            `cd ${shellEscape(workspace.directory)}`,
+            `git push origin ${shellEscape(session.branchName)}`,
+          ].join('\n') + '\n';
+
+          execFileSync('ssh', [`${deliveryWorkspaceName}.devpod`, 'sh', '-s'], {
+            input: pushScript,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 120_000,
+            encoding: 'utf-8',
+          });
           emitEvent('branch.pushed', `Branch pushed: ${session.branchName}`);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
