@@ -14,7 +14,9 @@ import {
   copyWorktreeIncludesInContainer,
   scpToContainer,
   getDistRoot,
+  devpodUp,
 } from './devpod.js';
+import { setVerbose } from '../debug.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
@@ -27,6 +29,7 @@ let testDir: string;
 
 beforeEach(() => {
   testDir = mkdtempSync(join(tmpdir(), 'hydraz-devpod-test-'));
+  setVerbose(false);
   vi.clearAllMocks();
 });
 
@@ -289,5 +292,39 @@ describe('scpToContainer', () => {
   it('throws when the transfer fails', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
     expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
+  });
+});
+
+describe('devpodUp', () => {
+  it('uses a 900 second timeout for first-time devcontainer builds', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.timeout).toBe(900_000);
+  });
+
+  it('uses stdio inherit when verbose is enabled for real-time streaming', () => {
+    setVerbose(true);
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.stdio).toBe('inherit');
+  });
+
+  it('uses stdio pipe when verbose is disabled', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.stdio).toBe('pipe');
+  });
+
+  it('passes the source and workspace name to devpod up', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc'],
+      expect.any(Object),
+    );
   });
 });

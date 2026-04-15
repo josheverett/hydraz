@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { detectRepo } from '../../core/repo/detect.js';
 import { runHelloWorld, formatHelloWorldReport } from '../../core/orchestration/hello-world.js';
+import { setVerbose } from '../../core/debug.js';
 
 export function registerHelloWorldCommand(program: Command): void {
   program
@@ -9,11 +10,17 @@ export function registerHelloWorldCommand(program: Command): void {
     .option('--local', 'Run locally (bare metal)')
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
+    .option('--verbose', 'Print detailed debug output to stderr')
     .action(async (options: {
       local?: boolean;
       container?: boolean;
       cloud?: boolean;
+      verbose?: boolean;
     }) => {
+      if (options.verbose) {
+        setVerbose(true);
+      }
+
       const repo = detectRepo();
       if (!repo) {
         console.error('Not in a git repository.');
