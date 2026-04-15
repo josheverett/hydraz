@@ -13,6 +13,7 @@ export interface WorkspaceInfo {
 export interface CreateWorkspaceParams {
   session: SessionMetadata;
   config: HydrazConfig;
+  branchOverride?: string;
 }
 
 export interface ProviderCheckResult {

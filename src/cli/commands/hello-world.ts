@@ -11,11 +11,13 @@ export function registerHelloWorldCommand(program: Command): void {
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
     .option('--verbose', 'Print detailed debug output to stderr')
+    .option('--branch <name>', 'Override the branch cloned into the container')
     .action(async (options: {
       local?: boolean;
       container?: boolean;
       cloud?: boolean;
       verbose?: boolean;
+      branch?: string;
     }) => {
       if (options.verbose) {
         setVerbose(true);
@@ -38,6 +40,7 @@ export function registerHelloWorldCommand(program: Command): void {
       const result = await runHelloWorld({
         executionTarget,
         repoRoot: repo.root,
+        branchOverride: options.branch,
         onStep: (step) => {
           const detail = step.detail ? ` (${step.detail})` : '';
           console.log(`  ${step.name.padEnd(17)}${step.status}${detail}`);

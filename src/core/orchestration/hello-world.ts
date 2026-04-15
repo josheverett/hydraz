@@ -39,6 +39,7 @@ export interface VerifyResult {
 export interface HelloWorldOptions {
   executionTarget: ExecutionTarget;
   repoRoot: string;
+  branchOverride?: string;
   onStep?: (step: HelloWorldStep) => void;
 }
 
@@ -158,7 +159,7 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     });
     debug(`runHelloWorld: session created id=${session.id}`);
 
-    workspace = provider.createWorkspace({ session, config });
+    workspace = provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
     debugTiming('runHelloWorld: createWorkspace', timed(wsStart));
     emitStep(steps, onStep, {
       name: 'Workspace',

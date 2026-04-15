@@ -87,7 +87,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
     const workspaceName = `hydraz-${session.id}`;
     debug(`createWorkspace: workspaceName=${workspaceName}`);
     const devpodProvider = this.type === 'local-container' ? 'docker' : undefined;
-    const currentBranch = this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined;
+    const currentBranch = params.branchOverride ?? (this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined);
     debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'default'}`);
 
     try {
