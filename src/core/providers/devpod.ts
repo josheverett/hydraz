@@ -39,8 +39,8 @@ export function hasDevcontainerJson(repoDir: string): boolean {
   return existsSync(join(repoDir, '.devcontainer', 'devcontainer.json'));
 }
 
-export function devpodUp(sourceDir: string, workspaceName: string): void {
-  execFileSync('devpod', ['up', sourceDir, '--ide', 'none', '--id', workspaceName], {
+export function devpodUp(source: string, workspaceName: string): void {
+  execFileSync('devpod', ['up', source, '--ide', 'none', '--id', workspaceName], {
     ...EXEC_OPTIONS,
     timeout: 300_000,
   });

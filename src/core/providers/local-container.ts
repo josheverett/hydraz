@@ -62,7 +62,8 @@ export class LocalContainerProvider implements WorkspaceProvider {
       throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
     }
 
-    if (!getGitHubRepo(session.repoRoot)) {
+    const ghRepo = getGitHubRepo(session.repoRoot);
+    if (!ghRepo) {
       throw new Error(
         'Container mode beta automation is currently GitHub-only. Configure `origin` to point at github.com and try again.',
       );
@@ -73,7 +74,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
     const workspaceName = `hydraz-${session.id}`;
 
     try {
-      devpodUp(session.repoRoot, workspaceName);
+      devpodUp(ghRepo.remoteUrl, workspaceName);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);

@@ -126,7 +126,7 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('launches devpod with the main repo root, not a worktree', () => {
+    it('launches devpod with the git remote URL instead of uploading the local directory', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
@@ -134,7 +134,7 @@ describe('LocalContainerProvider', () => {
       provider.createWorkspace({ session, config });
 
       const devpodUpArgs = mockDevpodUp.mock.calls[0];
-      expect(devpodUpArgs?.[0]).toBe('/fake/repo');
+      expect(devpodUpArgs?.[0]).toBe('git@github.com:octocat/hello-world.git');
     });
 
     it('creates worktree inside the container via SSH', () => {
