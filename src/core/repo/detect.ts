@@ -85,6 +85,20 @@ export function parseGitHubRemoteUrl(remoteUrl: string): Omit<GitHubRepoInfo, 'r
   return null;
 }
 
+export function getCurrentBranch(repoRoot: string): string | null {
+  try {
+    const output = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repoRoot,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    const branch = output.trim();
+    return branch.length > 0 ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getGitHubRepo(
   repoRoot: string,
   remoteName: string = 'origin',

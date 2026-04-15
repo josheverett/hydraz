@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectRepo, hasGitRemote, parseGitHubRemoteUrl } from './detect.js';
+import { detectRepo, hasGitRemote, parseGitHubRemoteUrl, getCurrentBranch } from './detect.js';
 
 describe('detectRepo', () => {
   it('detects the current repo from the repo root', () => {
@@ -70,5 +70,17 @@ describe('parseGitHubRemoteUrl', () => {
 
   it('returns null for malformed GitHub remotes', () => {
     expect(parseGitHubRemoteUrl('https://github.com/octocat')).toBeNull();
+  });
+});
+
+describe('getCurrentBranch', () => {
+  it('returns the current branch name', () => {
+    const branch = getCurrentBranch(process.cwd());
+    expect(typeof branch).toBe('string');
+    expect(branch!.length).toBeGreaterThan(0);
+  });
+
+  it('returns null for non-git directories', () => {
+    expect(getCurrentBranch('/')).toBeNull();
   });
 });

@@ -18,7 +18,7 @@ import {
   copyWorktreeIncludesInContainer,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
-import { getGitHubRepo, hasGitRemote } from '../repo/detect.js';
+import { getGitHubRepo, hasGitRemote, getCurrentBranch } from '../repo/detect.js';
 import { debug } from '../debug.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
@@ -87,10 +87,11 @@ export class LocalContainerProvider implements WorkspaceProvider {
     const workspaceName = `hydraz-${session.id}`;
     debug(`createWorkspace: workspaceName=${workspaceName}`);
     const devpodProvider = this.type === 'local-container' ? 'docker' : undefined;
-    debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'}`);
+    const currentBranch = this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined;
+    debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'default'}`);
 
     try {
-      devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider);
+      devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider, currentBranch);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);

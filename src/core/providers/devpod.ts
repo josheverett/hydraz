@@ -49,10 +49,13 @@ export function hasDevcontainerJson(repoDir: string): boolean {
   return existsSync(join(repoDir, '.devcontainer', 'devcontainer.json'));
 }
 
-export function devpodUp(source: string, workspaceName: string, provider?: string): void {
+export function devpodUp(source: string, workspaceName: string, provider?: string, branch?: string): void {
   const args = ['up', source, '--ide', 'none', '--id', workspaceName];
   if (provider) {
     args.push('--provider', provider);
+  }
+  if (branch) {
+    args.push('--branch', branch);
   }
   debugExec('devpod', args);
   const start = Date.now();

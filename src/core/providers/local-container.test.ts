@@ -13,6 +13,7 @@ vi.mock('../repo/detect.js', () => ({
     repo: 'hello-world',
     httpsUrl: 'https://github.com/octocat/hello-world.git',
   })),
+  getCurrentBranch: vi.fn(() => 'feature/devcontainer'),
 }));
 
 vi.mock('./worktree-include.js', () => ({
@@ -32,7 +33,7 @@ vi.mock('./devpod.js', () => ({
   sshExec: vi.fn(),
 }));
 
-import { hasGitRemote, getGitHubRepo } from '../repo/detect.js';
+import { hasGitRemote, getGitHubRepo, getCurrentBranch } from '../repo/detect.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -57,6 +58,7 @@ const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
+const mockGetCurrentBranch = vi.mocked(getCurrentBranch);
 const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
 function makeSession(name: string = 'test-session', executionTarget: 'local-container' | 'cloud' = 'local-container') {
@@ -94,6 +96,7 @@ beforeEach(() => {
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
+  mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
 });
 
 describe('LocalContainerProvider', () => {
@@ -127,7 +130,7 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('launches devpod with the git remote URL and forces docker provider', () => {
+    it('launches devpod with the git remote URL, docker provider, and current branch', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
@@ -138,6 +141,7 @@ describe('LocalContainerProvider', () => {
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
         'docker',
+        'feature/devcontainer',
       );
     });
 
@@ -315,7 +319,7 @@ describe('CloudProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('does not force docker provider for devpod up', () => {
+    it('does not force docker provider or branch for devpod up', () => {
       const provider = new CloudProvider();
       const session = makeSession('cloud-session', 'cloud');
       const config = makeConfig();
@@ -323,7 +327,9 @@ describe('CloudProvider', () => {
       provider.createWorkspace({ session, config });
 
       const providerArg = mockDevpodUp.mock.calls[0]?.[2];
+      const branchArg = mockDevpodUp.mock.calls[0]?.[3];
       expect(providerArg).toBeUndefined();
+      expect(branchArg).toBeUndefined();
     });
   });
 });
