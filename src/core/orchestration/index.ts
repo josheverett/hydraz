@@ -1,5 +1,6 @@
 export {
   type ControllerCallbacks,
+  type SwarmOptions,
   type RunningSession,
   startSession,
   stopSession,

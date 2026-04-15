@@ -1,12 +1,9 @@
+import { spawn, execFileSync } from 'node:child_process';
 import { loadConfig } from '../config/index.js';
 import { resolveAuth, formatAuthResolution } from '../claude/resolver.js';
-import { launchClaude, mapExitToSessionState, type ExecutorHandle } from '../claude/executor.js';
-import { assemblePrompt } from '../prompts/builder.js';
+import { buildSshNodeCommand, shellEscape } from '../claude/ssh.js';
 import { createEvent, appendEvent } from '../events/index.js';
-import { persistToolInputForEvent } from '../events/tool-input-persist.js';
-import { formatStreamEvent } from '../claude/stream-display.js';
-import type { ParsedClaudeEvent } from '../claude/stream-parser.js';
-import type { DisplayVerbosity, ExecutionTarget } from '../config/schema.js';
+import type { ExecutionTarget } from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -26,6 +23,10 @@ import {
   type WorkspaceProvider,
   type WorkspaceInfo,
 } from '../providers/provider.js';
+import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
+import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
+import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
+import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -37,7 +38,6 @@ export interface ControllerCallbacks {
 export interface RunningSession {
   session: SessionMetadata;
   workspace: WorkspaceInfo;
-  executor: ExecutorHandle | null;
 }
 
 const activeSessions = new Map<string, RunningSession>();
@@ -57,14 +57,19 @@ function formatTs(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+export interface SwarmOptions {
+  workerCount?: number;
+  reviewerNames?: string[];
+}
+
 export async function startSession(
   sessionId: string,
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
+  swarmOptions: SwarmOptions = {},
 ): Promise<void> {
   const config = loadConfig();
   const session = loadSession(repoRoot, sessionId);
-  const verbosity: DisplayVerbosity = config.displayVerbosity ?? 'compact';
 
   const emitEvent = (type: Parameters<typeof createEvent>[1], message: string, extra?: Parameters<typeof createEvent>[3]) => {
     const event = createEvent(sessionId, type, message, extra);
@@ -139,106 +144,213 @@ export async function startSession(
     return;
   }
 
-  transitionState(repoRoot, sessionId, 'planning');
-  callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
-  emitEvent('swarm.started', 'Swarm initialized');
-  emitEvent('swarm.phase_changed', 'Planning phase');
+  ensureSwarmDirs(repoRoot, sessionId);
+  emitEvent('swarm.started', 'Swarm pipeline initialized');
 
-  const prompt = assemblePrompt(session);
-  emitEvent('claude.ready', 'Claude Code launching');
+  activeSessions.set(sessionId, { session, workspace });
 
-  let containerContext: { workspaceName: string; authEnv?: Record<string, string>; workingDirectory?: string } | undefined;
+  const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
+  const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
+  const reviewerPersonas = reviewerNames.map(name => ({
+    name,
+    persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
+  }));
+
+  let pipelineResult: PipelineResult;
+
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const authEnv = prepareContainerAuthEnv(config);
-    containerContext = {
-      workspaceName,
-      authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
+
+    try {
+      emitEvent('swarm.container_setup', 'Copying Hydraz into container');
+      scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      transitionState(repoRoot, sessionId, 'failed', msg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.failed', `Container setup failed: ${msg}`);
+      callbacks.onError?.(msg);
+      activeSessions.delete(sessionId);
+      return;
+    }
+
+    const optionsJson = JSON.stringify({
+      repoRoot: workspace.directory,
+      sessionId,
+      sessionName: session.name,
+      task: session.task,
       workingDirectory: workspace.directory,
-    };
+      config,
+      workerCount,
+      reviewerPersonas,
+      maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
+      maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+    });
+
+    const ssh = buildSshNodeCommand(
+      workspaceName,
+      CONTAINER_RUNNER_SCRIPT,
+      [optionsJson],
+      Object.keys(authEnv).length > 0 ? authEnv : undefined,
+    );
+
+    const sshExitCode = await new Promise<number | null>((resolve) => {
+      const child = spawn(ssh.cmd, ssh.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      if (ssh.stdinScript) {
+        child.stdin?.write(ssh.stdinScript);
+      }
+      child.stdin?.end();
+
+      let buffer = '';
+      child.stdout?.on('data', (data: Buffer) => {
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === 'phase') {
+              try {
+                transitionState(repoRoot, sessionId, parsed.phase);
+                callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+              } catch {
+                // phase transition may fail if already in a terminal state
+              }
+            } else if (parsed.type === 'event') {
+              emitEvent(parsed.eventType as Parameters<typeof createEvent>[1], parsed.message);
+            }
+          } catch {
+            callbacks.onStreamLine?.(line);
+          }
+        }
+      });
+
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString().trim();
+        if (text) callbacks.onError?.(text);
+      });
+
+      child.on('close', (code) => resolve(code));
+      child.on('error', (err) => {
+        callbacks.onError?.(`SSH error: ${err.message}`);
+        resolve(1);
+      });
+    });
+
+    try {
+      const resultJson = sshExec(workspaceName, `cat ${RESULT_PATH}`);
+      pipelineResult = JSON.parse(resultJson);
+    } catch {
+      pipelineResult = {
+        success: false,
+        phase: 'failed',
+        outerLoopsUsed: 0,
+        consensusRoundsUsed: 0,
+        approved: false,
+        error: `Container pipeline exited with code ${sshExitCode} and result could not be read`,
+      };
+    }
+  } else {
+    pipelineResult = await runSwarmPipeline({
+      repoRoot,
+      sessionId,
+      sessionName: session.name,
+      task: session.task,
+      workingDirectory: workspace.directory,
+      config,
+      workerCount,
+      reviewerPersonas,
+      maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
+      maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      callbacks: {
+        onPhaseChange: (phase) => {
+          try {
+            transitionState(repoRoot, sessionId, phase);
+            callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+          } catch {
+            // phase transition may fail if already in a terminal state
+          }
+        },
+        onEvent: (type, message) => {
+          emitEvent(type as Parameters<typeof createEvent>[1], message);
+        },
+        onError: (message) => {
+          callbacks.onError?.(message);
+        },
+      },
+    });
   }
 
-  const executor = launchClaude({
-    workingDirectory: workspace.directory,
-    prompt,
-    config,
-    containerContext,
-    onStreamEvent: (event: ParsedClaudeEvent) => {
-      const formatted = formatStreamEvent(event, verbosity);
-      if (formatted) {
-        callbacks.onStreamLine?.(formatted);
-      }
-
-      if (event.kind === 'tool_call') {
-        const persistedInput = persistToolInputForEvent(event.toolName, event.toolInput);
-        appendEvent(repoRoot, createEvent(sessionId, 'swarm.phase_changed',
-          `${event.toolName}: ${persistedInput}`,
-        ));
-      }
-    },
-  });
-
-  activeSessions.set(sessionId, { session, workspace, executor });
-
-  const result = await executor.waitForExit();
   activeSessions.delete(sessionId);
 
   const currentSession = loadSession(repoRoot, sessionId);
-  let stateMapping: ReturnType<typeof mapExitToSessionState> | null = null;
   if (!isTerminalState(currentSession.state)) {
-    stateMapping = mapExitToSessionState(result);
-  }
+    if (pipelineResult.success && pipelineResult.approved) {
+      transitionState(repoRoot, sessionId, 'delivering');
+      emitEvent('swarm.delivery_started', 'Delivery starting');
 
-  let containerDelivery: Awaited<ReturnType<typeof finalizeGitHubContainerDelivery>> | null = null;
-  if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
-    try {
-      containerDelivery = await finalizeGitHubContainerDelivery({
-        session,
-        workspace,
-        repoRoot,
-        provider,
-        token: config.github.token,
-        createPullRequest: stateMapping?.state === 'completed',
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      containerDelivery = {
-        action: 'preserved',
-        message: `Workspace preserved after GitHub delivery failure: ${message}`,
-      };
-    }
+      if (isContainerExecutionTarget(session.executionTarget) && config.github.token) {
+        const deliveryWorkspaceName = `hydraz-${session.id}`;
+        try {
+          const pushAuthEnv = prepareContainerAuthEnv(config);
+          const pushScript = [
+            'set -eu',
+            ...Object.entries(pushAuthEnv).map(([k, v]) => `export ${k}=${shellEscape(v)}`),
+            `cd ${shellEscape(workspace.directory)}`,
+            `git push origin ${shellEscape(session.branchName)}`,
+          ].join('\n') + '\n';
 
-    if (stateMapping?.state === 'completed' && containerDelivery.action !== 'destroyed') {
-      stateMapping = {
-        state: 'failed',
-        message: containerDelivery.message,
-      };
-    }
-  }
+          execFileSync('ssh', [`${deliveryWorkspaceName}.devpod`, 'sh', '-s'], {
+            input: pushScript,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 120_000,
+            encoding: 'utf-8',
+          });
+          emitEvent('branch.pushed', `Branch pushed: ${session.branchName}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          callbacks.onError?.(`Branch push failed: ${msg}`);
+        }
 
-  if (stateMapping) {
-    transitionState(repoRoot, sessionId, stateMapping.state, stateMapping.message);
-    callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+        try {
+          const containerDelivery = await finalizeGitHubContainerDelivery({
+            session,
+            workspace,
+            repoRoot,
+            provider,
+            token: config.github.token,
+            createPullRequest: true,
+          });
 
-    if (stateMapping.state === 'completed') {
+          if (containerDelivery.prUrl) {
+            emitEvent('pull_request.created', `Pull request: ${containerDelivery.prUrl}`);
+          }
+
+          if (containerDelivery.action === 'destroyed') {
+            emitEvent('workspace.destroyed', containerDelivery.message);
+          } else {
+            emitEvent('workspace.preserved', containerDelivery.message);
+            callbacks.onError?.(
+              `${containerDelivery.message}\n` +
+              `To access and manually recover: devpod ssh hydraz-${session.id}`);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          emitEvent('workspace.preserved', `Workspace preserved after delivery failure: ${message}`);
+        }
+      }
+
+      transitionState(repoRoot, sessionId, 'completed');
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.completed', 'Session completed successfully');
+      emitEvent('swarm.delivery_completed', 'Delivery complete');
     } else {
-      emitEvent('session.failed', stateMapping.message ?? 'Session failed');
-    }
-  }
-
-  if (isContainerExecutionTarget(session.executionTarget) && containerDelivery) {
-    if (containerDelivery.prUrl) {
-      emitEvent('pull_request.created', `Pull request: ${containerDelivery.prUrl}`);
-    }
-
-    if (containerDelivery.action === 'destroyed') {
-      emitEvent('workspace.destroyed', containerDelivery.message);
-    } else {
-      emitEvent('workspace.preserved', containerDelivery.message);
-      callbacks.onError?.(
-        `${containerDelivery.message}\n` +
-        `To access and manually recover: devpod ssh hydraz-${session.id}`);
+      const failMsg = pipelineResult.error ?? 'Pipeline did not produce an approved result';
+      transitionState(repoRoot, sessionId, 'failed', failMsg);
+      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+      emitEvent('session.failed', failMsg);
     }
   }
 }
@@ -248,11 +360,7 @@ export function stopSession(
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
 ): void {
-  const running = activeSessions.get(sessionId);
-  if (running?.executor) {
-    running.executor.kill();
-    activeSessions.delete(sessionId);
-  }
+  activeSessions.delete(sessionId);
 
   const session = loadSession(repoRoot, sessionId);
   if (['completed', 'stopped', 'failed'].includes(session.state)) {

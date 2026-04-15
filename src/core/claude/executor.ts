@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { AssembledPrompt } from '../prompts/builder.js';
 import type { HydrazConfig } from '../config/schema.js';
 import { prepareClaudeEnv } from '../providers/auth.js';
 import { parseStreamLine, type ParsedClaudeEvent } from './stream-parser.js';
@@ -13,7 +12,7 @@ export interface ContainerContext {
 
 export interface ExecutorOptions {
   workingDirectory: string;
-  prompt: AssembledPrompt;
+  prompt: string;
   config: HydrazConfig;
   containerContext?: ContainerContext;
   onStreamEvent?: (event: ParsedClaudeEvent) => void;
@@ -39,14 +38,14 @@ export interface ExecutorResult {
   turns?: number;
 }
 
-export function buildClaudeArgs(prompt: AssembledPrompt): string[] {
+export function buildClaudeArgs(prompt: string): string[] {
   return [
     '--print',
     '--model', 'claude-opus-4-6',
     '--output-format', 'stream-json',
     '--verbose',
     '--dangerously-skip-permissions',
-    prompt.fullText,
+    prompt,
   ];
 }
 
@@ -126,6 +125,9 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
             lastResult = event;
             setTimeout(() => {
               if (!child.killed) child.kill('SIGTERM');
+              setTimeout(() => {
+                if (!child.killed) child.kill('SIGKILL');
+              }, 5000);
             }, 1000);
           }
           options.onStreamEvent?.(event);
@@ -170,31 +172,11 @@ export function launchClaude(options: ExecutorOptions): ExecutorHandle {
     kill: () => {
       if (!child.killed) {
         child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!child.killed) child.kill('SIGKILL');
+        }, 5000);
       }
     },
     waitForExit,
-  };
-}
-
-export function mapExitToSessionState(result: ExecutorResult): {
-  state: 'completed' | 'failed';
-  message?: string;
-} {
-  if (result.success) {
-    return { state: 'completed' };
-  }
-
-  const stderrSuffix = result.stderr ? `\nstderr: ${result.stderr}` : '';
-
-  if (result.signal) {
-    return {
-      state: 'failed',
-      message: `Claude Code process killed by signal: ${result.signal}${stderrSuffix}`,
-    };
-  }
-
-  return {
-    state: 'failed',
-    message: `Claude Code process exited with code ${result.exitCode}${stderrSuffix}`,
   };
 }

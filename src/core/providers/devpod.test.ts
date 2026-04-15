@@ -12,6 +12,8 @@ import {
   sshExec,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  scpToContainer,
+  getDistRoot,
 } from './devpod.js';
 
 vi.mock('node:child_process', () => ({
@@ -232,5 +234,60 @@ describe('copyWorktreeIncludesInContainer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
     expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDistRoot', () => {
+  it('returns the directory two levels above the module file (src/ in test, dist/ in production)', () => {
+    const root = getDistRoot();
+    const basename = root.split('/').pop();
+    expect(['src', 'dist']).toContain(basename);
+  });
+
+  it('does not return the project root', () => {
+    const root = getDistRoot();
+    expect(root).not.toMatch(/\/hydraz$/);
+    expect(root).not.toContain('node_modules');
+  });
+});
+
+describe('scpToContainer', () => {
+  it('uses tar|ssh pipe via sh -c for efficient transfer', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('my-ws', '/local/dist', '/tmp/hydraz-dist');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'sh',
+      ['-c', expect.stringContaining('tar')],
+      expect.any(Object),
+    );
+  });
+
+  it('pipes tar output to ssh targeting the correct devpod host', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('ssh');
+    expect(cmd).toContain('hydraz-abc123.devpod');
+  });
+
+  it('includes rm and mkdir in the remote command for idempotent transfer', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('rm -rf /tmp/hydraz-dist');
+    expect(cmd).toContain('mkdir -p /tmp/hydraz-dist');
+  });
+
+  it('writes a package.json with type:module into the remote path for ESM support', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('package.json');
+    expect(cmd).toContain('"type":"module"');
+  });
+
+  it('throws when the transfer fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
+    expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
   });
 });

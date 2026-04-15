@@ -6,7 +6,6 @@ export {
   buildClaudeArgs,
   buildClaudeEnv,
   launchClaude,
-  mapExitToSessionState,
 } from './executor.js';
 export {
   shellEscape,
@@ -22,5 +21,4 @@ export {
   type ParsedClaudeEvent,
   parseStreamLine,
 } from './stream-parser.js';
-export { formatStreamEvent } from './stream-display.js';
 export type { DisplayVerbosity } from '../config/schema.js';

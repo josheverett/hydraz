@@ -3,6 +3,7 @@ import { registerAttachCommand } from './attach.js';
 import { registerCleanCommand } from './clean.js';
 import { registerConfigCommand } from './config.js';
 import { registerEventsCommand } from './events.js';
+import { registerHelloWorldCommand } from './hello-world.js';
 import { registerMcpCommand } from './mcp.js';
 import { registerPersonasCommand } from './personas.js';
 import { registerResumeCommand } from './resume.js';
@@ -15,6 +16,7 @@ import { registerStopCommand } from './stop.js';
 export function registerCommands(program: Command): void {
   registerConfigCommand(program);
   registerRunCommand(program);
+  registerHelloWorldCommand(program);
   registerAttachCommand(program);
   registerSessionsCommand(program);
   registerStatusCommand(program);

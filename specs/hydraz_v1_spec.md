@@ -1,3 +1,5 @@
+PHASE 1 (V1) IS COMPLETE. THE HOMEBREW DISTRIBUTION PORTION HAS BEEN DEFERRED.
+
 # Hydraz v1 Specification
 
 ## 0. Current State (read this first)

@@ -1,45 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import type { ExecutionTarget } from '../config/schema.js';
+import type { SwarmPhase } from '../swarm/types.js';
+import {
+  SWARM_ACTIVE_STATES,
+  SWARM_TERMINAL_STATES,
+  SWARM_RESUMABLE_STATES,
+  SWARM_VALID_TRANSITIONS,
+  isValidSwarmTransition,
+  isSwarmActiveState,
+  isSwarmTerminalState,
+} from '../swarm/state.js';
 
-export type SessionState =
-  | 'created'
-  | 'starting'
-  | 'planning'
-  | 'implementing'
-  | 'verifying'
-  | 'completed'
-  | 'blocked'
-  | 'stopped'
-  | 'failed';
+export type SessionState = SwarmPhase;
 
-export const ACTIVE_STATES: readonly SessionState[] = [
-  'created',
-  'starting',
-  'planning',
-  'implementing',
-  'verifying',
-];
+export const ACTIVE_STATES: readonly SessionState[] = SWARM_ACTIVE_STATES;
 
-export const TERMINAL_STATES: readonly SessionState[] = [
-  'completed',
-  'blocked',
-  'stopped',
-  'failed',
-];
+export const TERMINAL_STATES: readonly SessionState[] = SWARM_TERMINAL_STATES;
 
-export const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = {
-  created: ['starting', 'stopped'],
-  starting: ['planning', 'blocked', 'stopped', 'failed'],
-  planning: ['implementing', 'completed', 'blocked', 'stopped', 'failed'],
-  implementing: ['verifying', 'completed', 'blocked', 'stopped', 'failed'],
-  verifying: ['completed', 'implementing', 'blocked', 'stopped', 'failed'],
-  completed: [],
-  blocked: ['created'],
-  stopped: ['created'],
-  failed: ['created'],
-};
+export const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = SWARM_VALID_TRANSITIONS;
 
-export const RESUMABLE_STATES: readonly SessionState[] = ['stopped', 'blocked', 'failed'];
+export const RESUMABLE_STATES: readonly SessionState[] = SWARM_RESUMABLE_STATES;
 
 export const ARTIFACT_FILES = [
   'intake.md',
@@ -97,15 +77,15 @@ export function createSession(params: {
 }
 
 export function isValidTransition(from: SessionState, to: SessionState): boolean {
-  return VALID_TRANSITIONS[from].includes(to);
+  return isValidSwarmTransition(from, to);
 }
 
 export function isActiveState(state: SessionState): boolean {
-  return (ACTIVE_STATES as readonly string[]).includes(state);
+  return isSwarmActiveState(state);
 }
 
 export function isTerminalState(state: SessionState): boolean {
-  return (TERMINAL_STATES as readonly string[]).includes(state);
+  return isSwarmTerminalState(state);
 }
 
 export class SessionError extends Error {

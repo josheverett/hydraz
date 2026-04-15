@@ -73,8 +73,8 @@ describe('isValidTransition', () => {
     expect(isValidTransition('created', 'starting')).toBe(true);
   });
 
-  it('allows starting → planning', () => {
-    expect(isValidTransition('starting', 'planning')).toBe(true);
+  it('allows starting → investigating', () => {
+    expect(isValidTransition('starting', 'investigating')).toBe(true);
   });
 
   it('allows any active state → stopped', () => {
@@ -84,21 +84,21 @@ describe('isValidTransition', () => {
   });
 
   it('allows any active state → failed', () => {
-    for (const state of ACTIVE_STATES.filter((s) => s !== 'created')) {
+    for (const state of ACTIVE_STATES) {
       expect(isValidTransition(state, 'failed')).toBe(true);
     }
   });
 
-  it('allows planning → completed (simple tasks)', () => {
-    expect(isValidTransition('planning', 'completed')).toBe(true);
+  it('allows delivering → completed', () => {
+    expect(isValidTransition('delivering', 'completed')).toBe(true);
   });
 
-  it('allows implementing → completed (skipping verification)', () => {
-    expect(isValidTransition('implementing', 'completed')).toBe(true);
+  it('allows architect-reviewing → planning (consensus loop)', () => {
+    expect(isValidTransition('architect-reviewing', 'planning')).toBe(true);
   });
 
-  it('allows verifying → implementing (retry)', () => {
-    expect(isValidTransition('verifying', 'implementing')).toBe(true);
+  it('allows reviewing → architecting (architectural feedback)', () => {
+    expect(isValidTransition('reviewing', 'architecting')).toBe(true);
   });
 
   it('blocks transitions from terminal states', () => {
@@ -108,8 +108,8 @@ describe('isValidTransition', () => {
   });
 
   it('blocks skipping phases', () => {
-    expect(isValidTransition('created', 'implementing')).toBe(false);
-    expect(isValidTransition('planning', 'verifying')).toBe(false);
+    expect(isValidTransition('created', 'investigating')).toBe(false);
+    expect(isValidTransition('planning', 'syncing')).toBe(false);
   });
 });
 

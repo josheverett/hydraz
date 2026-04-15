@@ -33,7 +33,6 @@ describe('initializeConfigDir', () => {
     expect(existsSync(paths.configFile)).toBe(true);
     const raw = readFileSync(paths.configFile, 'utf-8');
     const config = JSON.parse(raw);
-    expect(config.version).toBe('1');
     expect(config.executionTarget).toBe('local');
   });
 

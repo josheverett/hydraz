@@ -66,7 +66,7 @@ describe('findOrphanedWorkspaces', () => {
   it('ignores active sessions', () => {
     mockListSessions.mockReturnValue([
       makeSession({ state: 'planning' }),
-      makeSession({ id: 'sess-002', state: 'implementing' }),
+      makeSession({ id: 'sess-002', state: 'syncing' }),
     ]);
     mockDevpodStatus.mockReturnValue('Running');
 
