@@ -10,6 +10,7 @@ import { getProvider } from './controller.js';
 import { createNewSession, initRepoState } from '../sessions/index.js';
 import { suggestBranchName } from '../branches/index.js';
 import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
+import { shellEscape } from '../claude/ssh.js';
 import { launchClaude, type ContainerContext } from '../claude/executor.js';
 import { CONTAINER_DIST_PATH } from '../swarm/pipeline-runner.js';
 
@@ -237,6 +238,18 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
       emitStep(steps, onStep, { name: 'Verification', status: 'fail', detail: `contents: "${verify.actualContents}"` });
     } else {
       emitStep(steps, onStep, { name: 'Verification', status: 'fail', detail: `${fileName} not found` });
+    }
+  }
+
+  if (isContainer && verifyOk) {
+    try {
+      sshExec(workspaceName,
+        `cd ${shellEscape(workspace.directory)} && git add -A && git commit -m 'hello-world' && git push origin ${shellEscape(branchName)}`);
+      emitStep(steps, onStep, { name: 'Push', status: 'ok', detail: branchName });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      emitStep(steps, onStep, { name: 'Push', status: 'fail', detail: msg });
+      verifyOk = false;
     }
   }
 
