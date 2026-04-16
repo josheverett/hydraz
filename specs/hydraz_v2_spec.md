@@ -855,7 +855,7 @@ All at Claude Opus pricing.
 ### 19.2 With loops
 
 Each consensus round adds 2 invocations (planner + architect review).
-Each outer loop adds: 1 architect + 1 planner + up to 10 consensus rounds + N workers + 3 reviewers.
+Each outer loop adds: up to 10 consensus rounds (2 invocations each) + N workers + 3 reviewers.
 
 Worst case with all bounds hit: significant. Per-stage cost tracking is essential so users can see where spend goes.
 
