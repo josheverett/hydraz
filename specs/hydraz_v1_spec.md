@@ -1600,7 +1600,7 @@ The `executionTarget` type expands from `'local' | 'cloud'` to `'local' | 'local
 - **`cloud`** — same container model and same `LocalContainerProvider` implementation, remote host via DevPod with GCP provider. A thin `CloudProvider` wrapper is acceptable if it delegates to the same implementation — DevPod abstracts the infrastructure.
 
 ### Git lifecycle: bare metal vs container (verified)
-Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/josh/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
+Git worktrees use absolute paths in their `.git` file (e.g. `gitdir: /Users/someone/.hydraz/repos/.../workspaces/...`). These paths don't translate across the Docker mount boundary — a worktree created on the host has broken git state inside the container. This is a known unresolved issue in both `devcontainers/cli` (issue #796) and DevPod (issues #512, #1597).
 
 The solution: **all git operations in container mode happen inside the container, not on the host.** This creates two distinct git strategies:
 
