@@ -5,11 +5,18 @@ import { Command } from 'commander';
 import { registerCommands } from './commands/index.js';
 import { runInteractive } from './interactive.js';
 
+declare const __HYDRAZ_VERSION__: string | undefined;
+
 function readPackageVersion(): string {
-  const cliDir = dirname(fileURLToPath(import.meta.url));
-  const packagePath = join(cliDir, '..', '..', 'package.json');
-  const pkg = JSON.parse(readFileSync(packagePath, 'utf-8')) as { version: string };
-  return pkg.version;
+  try {
+    const cliDir = dirname(fileURLToPath(import.meta.url));
+    const packagePath = join(cliDir, '..', '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf-8')) as { version: string };
+    return pkg.version;
+  } catch {
+    if (typeof __HYDRAZ_VERSION__ !== 'undefined') return __HYDRAZ_VERSION__;
+    return 'unknown';
+  }
 }
 
 export function createProgram(): Command {

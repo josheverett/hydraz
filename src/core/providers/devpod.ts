@@ -174,8 +174,12 @@ export function verifyBranchPushed(
 }
 
 export function getDistRoot(): string {
-  const thisFile = fileURLToPath(import.meta.url);
-  return resolve(dirname(thisFile), '..', '..');
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    return resolve(dirname(thisFile), '..', '..');
+  } catch {
+    throw new Error('Cannot determine dist root: import.meta.url unavailable (SEA binary does not support container mode)');
+  }
 }
 
 export function scpToContainer(
