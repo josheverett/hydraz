@@ -284,13 +284,37 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 - **Verbose/debug mode**: `--verbose` flag with exhaustive debug logging, `--branch` flag for container clone override, container flow fixes (git remote URL cloning, docker provider forcing, `.worktreeinclude` SCP from host to container)
 
-### Deferred to v2.2.0
+### v2.2.0 Backlog
 
+**P0 — Ship-blocking for non-experimental:**
+- **Serial worker execution (default)**: workers should execute serially by default, with parallel mode opt-in via `--parallel`. Parallel workers on greenfield or heavily overlapping codebases produce merge conflicts because there's no existing file boundary to partition. Serial execution lets each worker build on the previous one's commits. This is a prerequisite for worker count intelligence.
+- **Prompt calibration for proportionality and approval bias**: add proportionality sections to investigator, architect, and planner prompts (match depth to task complexity). Rework architect-review prompt (default verdict APPROVED, only reject for concrete problems that would cause implementation to fail). Rework reviewer prompt (explicit anti-approval-bias language, concrete definition of valid rejections vs. stylistic preferences, default verdict APPROVED).
+- **Credentials out of `process.argv`**: the serialized options JSON (containing OAuth token and GitHub PAT) is passed as a CLI argument to pipeline-runner and is visible in `ps aux`. Move to stdin pipe or temp file with 0600 permissions.
+
+**P1 — High impact:**
+- **Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.
+- **Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.
+- **Signal handling and graceful shutdown**: no SIGINT handler. Ctrl+C kills the process without transitioning the session to `stopped` or cleaning up the DevPod workspace. Orphaned cloud VMs burn money silently.
+- **Zombie DevPod workspace cleanup on failure**: failed sessions don't reliably clean up DevPod workspaces. `hydraz clean` should auto-detect and force-delete all orphaned workspaces. Consider cleanup-on-start (detect and warn about existing zombies).
+
+**P2 — Quality of life:**
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
-- **Architect council**: parallel architects with synthesis (see spec non-goals)
-- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
-- **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
-- **Verification phase**: post-review test execution with inner retry loop (see spec §18)
+- **Consensus loop complexity awareness**: the architect-planner loop should fast-path for simple tasks instead of deliberating for multiple rounds on a trivial task. Complexity-aware bounds or a lightweight planner bypass for trivial tasks.
+- **Verification phase**: post-review test execution with inner retry loop (see spec §18).
+- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy.
+
+**P3 — CLI convenience and developer experience:**
+- **`hydraz ssh [session]`**: resolve the DevPod workspace name from session metadata and SSH in. Eliminates the need to type `devpod ssh hydraz-<uuid>` manually.
+- **`hydraz logs [session]`**: tail artifacts and events from the container (or local session dir) without manually finding paths.
+- **`hydraz artifacts [session]`**: list or display swarm artifacts (investigation brief, architecture, plan, worker briefs, reviews) for a session without navigating `~/.hydraz` paths manually.
+- **`hydraz cost [session]`**: per-session cost summary (total tokens, estimated cost, per-stage breakdown). The executor already tracks `inputTokens`, `outputTokens`, `cost`, `durationMs`.
+- **`hydraz diff [session]`**: show the aggregate diff of what the swarm produced. For container sessions, SSH in and `git diff main..HEAD`. For local, diff the worktree.
+- **Remove dead `container-auth-file.ts`**: fully tested (8 tests), imported by nothing. Orphaned by the container-side orchestration rewrite.
+
+**P4 — Future / architectural:**
+- **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller.
+- **Architect council**: parallel architects with synthesis (see spec non-goals).
+- **Detach/background for cloud mode**: closing the laptop kills the SSH connection and the entire pipeline. Needs server-side orchestration (run the orchestrator inside the container so it survives client disconnect).
 
 ### Known doc discrepancies
 
