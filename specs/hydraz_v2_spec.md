@@ -108,7 +108,7 @@ Behind the scenes, the swarm investigates the codebase, designs a solution, plan
 - Container-per-worker isolation (deferred; local worktrees first)
 - Permission scoping per worker role (deferred; `--dangerously-skip-permissions` remains for now)
 - Variable reviewer panel size (fixed at 3 for v2)
-- Architect council (parallel architects with synthesis; deferred to v2.1 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
+- Architect council (parallel architects with synthesis; deferred to v2.2 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
 - Homebrew distribution (deferred from v1)
 
 ---
@@ -539,7 +539,7 @@ Inside the container, the pipeline runs identically to local bare-metal mode -- 
 
 ## 9. Resume and Checkpoint Strategy
 
-**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it currently resets to `created` and reruns the full pipeline from scratch. Wiring resume is deferred to v2.1.0.
+**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it currently resets to `created` and reruns the full pipeline from scratch. Wiring resume is deferred to v2.2.0.
 
 **Target behavior (when wired):** Each pipeline stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. When a session is resumed, the orchestrator reads the ledger and re-enters the pipeline at the appropriate point:
 

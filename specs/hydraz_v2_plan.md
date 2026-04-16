@@ -281,13 +281,17 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - `src/core/orchestration/hello-world.ts`: orchestration logic
 - Reuses `launchClaude` + `ContainerContext` from executor, `scpToContainer`/`sshExec` from devpod, `getProvider` from controller
 
-### Deferred to v2.1.0
+### Shipped in v2.1.0
+
+- **Verbose/debug mode**: `--verbose` flag with exhaustive debug logging, `--branch` flag for container clone override, container flow fixes (git remote URL cloning, docker provider forcing, `.worktreeinclude` SCP from host to container)
+
+### Deferred to v2.2.0
 
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
 - **Architect council**: parallel architects with synthesis (see spec non-goals)
 - **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
-- **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
 - **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
+- **Verification phase**: post-review test execution with inner retry loop (see spec §18)
 
 ### Known doc discrepancies
 
@@ -301,7 +305,11 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - ~~README re-audited against final architecture~~ (done)
 
 **Open:**
-- **Container git-push regression**: `finalizeGitHubContainerDelivery` in `delivery.ts` checks `githubBranchExists` but nothing in v2 pushes the branch from inside the container. Workers commit locally but the branch is never pushed to the remote. This worked in v1. Fix: after the pipeline SSH exits successfully, the controller should SSH into the container and run `git push origin <branch>` before calling `finalizeGitHubContainerDelivery`.
+
+(none)
+
+**Resolved:**
+- ~~**Container git-push regression**: believed to be a code bug but was actually a GitHub token permissions issue — the push logic works correctly when the token has write access~~
 
 ---
 
