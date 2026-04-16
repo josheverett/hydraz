@@ -18,7 +18,7 @@ describe('getHydrazHome', () => {
 
 describe('repoHash', () => {
   it('returns a 12-character hex string', () => {
-    const hash = repoHash('/Users/josh/workspace/myrepo');
+    const hash = repoHash('/Users/someone/workspace/some-repo');
     expect(hash).toMatch(/^[0-9a-f]{12}$/);
   });
 
@@ -37,8 +37,8 @@ describe('repoHash', () => {
 
 describe('repoSlug', () => {
   it('combines repo name and hash', () => {
-    const slug = repoSlug('/Users/josh/workspace/travelagent-ai');
-    expect(slug).toMatch(/^travelagent-ai-[0-9a-f]{12}$/);
+    const slug = repoSlug('/Users/someone/workspace/some-repo');
+    expect(slug).toMatch(/^some-repo-[0-9a-f]{12}$/);
   });
 });
 
