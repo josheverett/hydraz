@@ -97,8 +97,12 @@ describe('isValidTransition', () => {
     expect(isValidTransition('architect-reviewing', 'planning')).toBe(true);
   });
 
-  it('allows reviewing → architecting (architectural feedback)', () => {
-    expect(isValidTransition('reviewing', 'architecting')).toBe(true);
+  it('allows reviewing → planning (outer loop feedback)', () => {
+    expect(isValidTransition('reviewing', 'planning')).toBe(true);
+  });
+
+  it('blocks reviewing → architecting (not a valid pipeline path)', () => {
+    expect(isValidTransition('reviewing', 'architecting')).toBe(false);
   });
 
   it('blocks transitions from terminal states', () => {
