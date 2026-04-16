@@ -194,8 +194,10 @@ export async function startSession(
     const ssh = buildSshNodeCommand(
       workspaceName,
       CONTAINER_RUNNER_SCRIPT,
-      [optionsJson],
+      [],
       Object.keys(authEnv).length > 0 ? authEnv : undefined,
+      undefined,
+      optionsJson,
     );
 
     const sshExitCode = await new Promise<number | null>((resolve) => {

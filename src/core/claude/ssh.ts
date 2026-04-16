@@ -30,6 +30,7 @@ export function buildSshNodeCommand(
   scriptArgs: string[],
   authEnv?: Record<string, string>,
   workingDirectory?: string,
+  stdinData?: string,
 ): SshCommand {
   const scriptLines = ['set -eu'];
 
@@ -39,6 +40,10 @@ export function buildSshNodeCommand(
 
   if (authEnv && Object.keys(authEnv).length > 0) {
     scriptLines.push(...buildExportStatements(authEnv));
+  }
+
+  if (stdinData) {
+    scriptLines.push(`export HYDRAZ_PIPELINE_OPTIONS=${shellEscape(stdinData)}`);
   }
 
   const escapedArgs = scriptArgs.map(shellEscape);

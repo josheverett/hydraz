@@ -75,10 +75,10 @@ export async function executePipeline(
   return result;
 }
 
-export async function runMain(args: string[]): Promise<void> {
-  const json = args[2];
+export async function runMain(): Promise<void> {
+  const json = process.env.HYDRAZ_PIPELINE_OPTIONS;
   if (!json) {
-    process.stderr.write('Usage: node pipeline-runner.js <options-json>\n');
+    process.stderr.write('Missing HYDRAZ_PIPELINE_OPTIONS environment variable\n');
     process.exit(1);
     return;
   }
@@ -106,5 +106,5 @@ try {
   isMain = Boolean(process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
 } catch { /* import.meta.url unavailable in SEA/CJS mode */ }
 if (isMain) {
-  runMain(process.argv);
+  runMain();
 }

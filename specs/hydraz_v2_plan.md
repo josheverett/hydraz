@@ -289,7 +289,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 **P0 — Ship-blocking for non-experimental:**
 - ~~**Serial worker execution (default)**: workers execute serially by default, with parallel mode opt-in via `--parallel`.~~ (done in v2.2.0)
 - ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
-- **Credentials out of `process.argv`**: the serialized options JSON (containing OAuth token and GitHub PAT) is passed as a CLI argument to pipeline-runner and is visible in `ps aux`. Move to stdin pipe or temp file with 0600 permissions.
+- ~~**Credentials out of `process.argv`**: options JSON moved from CLI argument to `HYDRAZ_PIPELINE_OPTIONS` env var, not visible in `ps aux`.~~ (done in v2.2.0)
 
 **P1 — High impact:**
 - **Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.
