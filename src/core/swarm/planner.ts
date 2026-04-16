@@ -2,6 +2,7 @@ import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { readTaskLedger, readOwnershipMap } from './artifacts.js';
 import { buildPlannerPrompt } from './prompts/planner.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface PlannerResult {
   success: boolean;
@@ -33,8 +34,10 @@ export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): P
     prompt,
     config: ctx.config,
   });
+  registerExecutorHandle(executor);
 
   const executorResult = await executor.waitForExit();
+  unregisterExecutorHandle(executor);
 
   if (!executorResult.success) {
     return {

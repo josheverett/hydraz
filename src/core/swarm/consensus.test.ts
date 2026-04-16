@@ -12,8 +12,17 @@ import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 vi.mock('../claude/executor.js', () => ({ launchClaude: vi.fn() }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
+
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -141,5 +150,17 @@ describe('runConsensus', () => {
     });
     const reviewCallArgs = mockLaunchClaude.mock.calls[1]![0]!;
     expect(reviewCallArgs.prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should register and unregister executor handles for both planner and architect review', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx(), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+    });
+
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(mockUnregister).toHaveBeenCalledTimes(2);
   });
 });

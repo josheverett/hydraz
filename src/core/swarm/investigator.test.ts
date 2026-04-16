@@ -14,9 +14,17 @@ vi.mock('../claude/executor.js', () => ({
   launchClaude: vi.fn(),
 }));
 
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -202,6 +210,19 @@ describe('runInvestigation', () => {
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should register executor handle before waitForExit and unregister after', async () => {
+    mockSuccessfulClaude();
+    writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings.');
+
+    await runInvestigation(makeCtx());
+
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockUnregister).toHaveBeenCalledTimes(1);
+    const handle = mockLaunchClaude.mock.results[0]!.value;
+    expect(mockRegister).toHaveBeenCalledWith(handle);
+    expect(mockUnregister).toHaveBeenCalledWith(handle);
   });
 
 });

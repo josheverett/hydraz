@@ -1,6 +1,7 @@
 import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { ExecutionContext } from './types.js';
 import { buildReviewerPrompt } from './prompts/reviewer.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface SingleReviewResult {
   reviewerName: string;
@@ -42,8 +43,10 @@ async function runSingleReviewer(
     prompt,
     config: ctx.config,
   });
+  registerExecutorHandle(executor);
 
   const executorResult = await executor.waitForExit();
+  unregisterExecutorHandle(executor);
 
   return {
     reviewerName: reviewerInfo.name,

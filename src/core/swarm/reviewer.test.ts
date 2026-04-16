@@ -11,8 +11,17 @@ import { buildReviewerPrompt } from './prompts/reviewer.js';
 import type { ExecutionContext } from './types.js';
 
 vi.mock('../claude/executor.js', () => ({ launchClaude: vi.fn() }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
+
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -116,5 +125,18 @@ describe('runReviewPanel', () => {
     await runReviewPanel(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
+  });
+
+  it('should register and unregister executor handles for all reviewers', async () => {
+    mockAllReviewersSucceed();
+    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      const handle = mockLaunchClaude.mock.results[i]!.value;
+      expect(mockRegister).toHaveBeenCalledWith(handle);
+      expect(mockUnregister).toHaveBeenCalledWith(handle);
+    }
   });
 });

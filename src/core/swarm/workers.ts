@@ -3,6 +3,7 @@ import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { readWorkerBrief } from './artifacts.js';
 import { createWorktree } from '../providers/worktree.js';
 import { buildWorkerPrompt } from './prompts/worker.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface WorkerResult {
   workerId: string;
@@ -64,8 +65,10 @@ async function runSingleWorker(
     prompt,
     config: ctx.config,
   });
+  registerExecutorHandle(executor);
 
   const executorResult = await executor.waitForExit();
+  unregisterExecutorHandle(executor);
 
   return {
     workerId,

@@ -28,6 +28,7 @@ import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
 import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
 import { processHydrazIncludes } from '../swarm/repo-config.js';
+import { registerSession, unregisterSession, registerSshChild } from './shutdown.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -150,6 +151,7 @@ export async function startSession(
   emitEvent('swarm.started', 'Swarm pipeline initialized');
 
   activeSessions.set(sessionId, { session, workspace });
+  registerSession(sessionId, repoRoot, provider, workspace, callbacks);
 
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
   const parallel = swarmOptions.parallel ?? false;
@@ -174,6 +176,7 @@ export async function startSession(
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.failed', `Container setup failed: ${msg}`);
       callbacks.onError?.(msg);
+      unregisterSession(sessionId);
       activeSessions.delete(sessionId);
       return;
     }
@@ -216,6 +219,7 @@ export async function startSession(
 
     const sshExitCode = await new Promise<number | null>((resolve) => {
       const child = spawn(ssh.cmd, ssh.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      registerSshChild(child);
       if (ssh.stdinScript) {
         child.stdin?.write(ssh.stdinScript);
       }
@@ -303,6 +307,7 @@ export async function startSession(
     });
   }
 
+  unregisterSession(sessionId);
   activeSessions.delete(sessionId);
 
   const currentSession = loadSession(repoRoot, sessionId);

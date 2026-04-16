@@ -17,12 +17,19 @@ vi.mock('../providers/worktree.js', () => ({
   })),
   destroyWorktree: vi.fn(),
 }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
 
 import { launchClaude } from '../claude/executor.js';
 import { createWorktree } from '../providers/worktree.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 const mockLaunchClaude = vi.mocked(launchClaude);
 const mockCreateWorktree = vi.mocked(createWorktree);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -250,5 +257,26 @@ describe('runWorkerFanout', () => {
     await runWorkerFanout(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
+  });
+
+  it('should register and unregister executor handles for all workers', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      const handle = mockLaunchClaude.mock.results[i]!.value;
+      expect(mockRegister).toHaveBeenCalledWith(handle);
+      expect(mockUnregister).toHaveBeenCalledWith(handle);
+    }
+  });
+
+  it('should register all handles in parallel mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
   });
 });

@@ -7,6 +7,7 @@ import { readPlan, getSwarmDir } from './artifacts.js';
 import { runPlanner } from './planner.js';
 import { buildArchitectPlanReviewPrompt } from './prompts/architect-review.js';
 import { parseReviewVerdict } from './review-aggregate.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface ConsensusResult {
   success: boolean;
@@ -81,8 +82,10 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       prompt: reviewPrompt,
       config: ctx.config,
     });
+    registerExecutorHandle(reviewExecutor);
 
     const reviewResult = await reviewExecutor.waitForExit();
+    unregisterExecutorHandle(reviewExecutor);
 
     if (!reviewResult.success) {
       return {

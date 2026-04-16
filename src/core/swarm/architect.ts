@@ -2,6 +2,7 @@ import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { ExecutionContext } from './types.js';
 import { readArchitectureDesign, getSwarmDir } from './artifacts.js';
 import { buildArchitectPrompt } from './prompts/architect.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface ArchitectResult {
   success: boolean;
@@ -22,8 +23,10 @@ export async function runArchitect(ctx: ExecutionContext, opts: ArchitectOptions
     prompt,
     config: ctx.config,
   });
+  registerExecutorHandle(executor);
 
   const executorResult = await executor.waitForExit();
+  unregisterExecutorHandle(executor);
 
   if (!executorResult.success) {
     return {

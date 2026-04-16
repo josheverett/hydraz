@@ -2,6 +2,7 @@ import { launchClaude, type ExecutorResult } from '../claude/executor.js';
 import type { ExecutionContext } from './types.js';
 import { readInvestigationBrief, getSwarmDir } from './artifacts.js';
 import { buildInvestigatorPrompt } from './prompts/investigator.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface InvestigationResult {
   success: boolean;
@@ -18,8 +19,10 @@ export async function runInvestigation(ctx: ExecutionContext): Promise<Investiga
     prompt,
     config: ctx.config,
   });
+  registerExecutorHandle(executor);
 
   const executorResult = await executor.waitForExit();
+  unregisterExecutorHandle(executor);
 
   if (!executorResult.success) {
     return {

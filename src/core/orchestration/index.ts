@@ -13,3 +13,11 @@ export {
   findOrphanedWorkspaces,
   destroyOrphanedWorkspace,
 } from './cleanup.js';
+export {
+  registerSession,
+  unregisterSession,
+  registerSshChild,
+  registerExecutorHandle,
+  unregisterExecutorHandle,
+  gracefulShutdown,
+} from './shutdown.js';
