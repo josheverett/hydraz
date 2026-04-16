@@ -2,13 +2,14 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container/cloud mode ready for manual testing.
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18).
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
 - Review content aggregation: pipeline reads actual review files from disk instead of passing empty strings
 - SIGKILL fallback: executor sends SIGKILL after 5s if SIGTERM doesn't terminate the process
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees instead of trying to create duplicates
+- Container worktree includes: `.worktreeinclude` files (e.g., `.env`) only exist on the host, not in the container's git clone. Added `scpFilesToContainer` to transfer them from host to container repo root before the in-container copy to worktree
 - Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions
 - Container context plumbing: `containerContext` was threaded through pipeline to all stage executors, then removed when container-side orchestration was implemented (pipeline runs inside the container, so no per-stage SSH needed)
 
@@ -191,6 +192,15 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
        │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
+┌─────────────┐
+│  Verify      │  [v2.2] Run tests + optional E2E per review criteria
+│  (planned)   │
+└──────┬──────┘
+       │ pass, or fail with retry exhausted (deliver with warning)
+       │
+       ├── test failures ──► single fix-up worker ──► re-verify (max 2-3 attempts)
+       │
+       ▼
 ┌─────────────┐
 │  Delivery    │  PR creation, cleanup
 └─────────────┘
@@ -784,13 +794,35 @@ src/core/swarm/
 
 3. **Reviewer persona storage location**: Recommendation: `~/.config/hydraz/reviewers/` alongside the existing persona directory.
 
+### Planned for v2.2: Verification phase
+
+A post-review verification phase that actually runs tests (and optionally headless E2E) before delivery. This was explicitly deferred in v2.0 ("workers own TDD, no separate verification stage") but experience shows that workers passing their own tests is not sufficient — integrated code needs verification after merge.
+
+**Design decisions made:**
+
+1. **Position in pipeline**: After the review panel approves, before delivery. The review panel already provides the gate for code quality; the verifier provides the gate for correctness.
+
+2. **Test criteria source**: Reviewers emit test criteria as part of their review output. The verifier executes criteria it receives rather than deciding what to verify from scratch. This keeps the verifier focused and avoids scope creep.
+
+3. **Inner loop, not outer loop**: The verifier has its own tight retry cycle (verify → single-worker fix → re-verify), similar to how consensus has its own inner loop within planning. This avoids the heavyweight outer loop (which rewinds all the way to planning) for simple test failures.
+
+4. **Single worker for fix-ups**: If verification fails, exactly one worker is spawned to fix the failures, regardless of how many workers were configured for the run. Fanning out to N workers for test fixes would cause merge conflicts and contradictory fixes.
+
+5. **Retry cap**: 2-3 verification attempts max. On exhaustion, deliver with a warning rather than blocking. The PR lands with a note that verification did not pass — the human can decide whether to merge.
+
+6. **E2E / headless browser**: Not visual verification — functional E2E (e.g., "hit the login flow, confirm it doesn't 500"). The verifier intelligently decides when E2E is warranted based on review criteria (e.g., "UI changed" → E2E; "backend-only" → unit tests sufficient). This is a stretch goal within v2.2, not a requirement for the initial implementation.
+
+7. **Artifacts**: `swarm/verification/result.md` (test output, pass/fail), `swarm/verification/criteria.md` (from reviewers). Fix-up worker gets `swarm/verification/result.md` as input.
+
+**What this does NOT change**: The existing outer loop (review → planning → workers → merge → review) remains for architectural and implementation feedback. The verifier loop is orthogonal — it runs only after the review panel has already approved the code.
+
 ### Resolved
 
 1. **Orchestrator model**: TypeScript supervisor, not a Claude process.
 2. **Worker count**: User-controlled, default 3.
 3. **Backward compatibility**: None. Clean major version break.
 4. **Personas**: Applied to reviewers only. Workers get identical prompts.
-5. **Verification**: Workers own TDD. No separate verification stage.
+5. **Verification**: Workers own TDD for v2.0. Separate verification phase planned for v2.2 (see above).
 6. **Consensus bounds**: 10 rounds, architect final say.
 7. **Outer loop bounds**: 5 iterations, then fail.
 8. **Feedback routing**: Reviewers categorize as architectural vs implementation.
