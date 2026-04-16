@@ -16,10 +16,10 @@
 >
 > **Post-implementation update:** The core pipeline (Phases 1-9 complete, Phase 10 partial) is working
 > for local bare-metal mode. Container-side orchestration is implemented: the host copies `dist/` into the
-> container via SCP, runs `pipeline-runner.ts` via SSH, and reads the result after exit. The pipeline runs
+> container via `tar | ssh` pipe, runs `pipeline-runner.ts` via SSH, and reads the result after exit. The pipeline runs
 > identically to local bare-metal mode inside the container -- all Claude invocations are local, no
 > per-stage SSH needed. The `containerContext` plumbing that was previously threaded through each stage
-> has been removed.
+> has been removed. Container hello-world verified end-to-end in v2.1.0. Verification phase designed for v2.2 (see spec §18).
 
 ---
 
@@ -34,7 +34,7 @@ All of the following were discussed and confirmed with the project owner:
 - **Worker count**: User-controlled via `--workers N`, default 3.
 - **Backward compatibility**: None. Major version bump, breaking changes expected.
 - **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
-- **Verification**: Workers themselves are responsible for TDD, tests, lint, build. No separate verification stage. The review panel focuses on design quality, not "do tests pass."
+- **Verification**: Workers themselves are responsible for TDD, tests, lint, build for v2.0. No separate verification stage in v2.0. A post-review verification phase with inner retry loop is planned for v2.2 (see spec §18).
 - **Consensus bounds**: Architect-planner loop max 10 rounds (architect has final say at cap). Outer review loop max 5 iterations.
 - **Review feedback routing**: Reviewers categorize findings as architectural (back to architect) vs implementation (back to workers for targeted fixes).
 
@@ -58,7 +58,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **54 test files** (v1 base + v2 swarm module tests).
+- **57 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -129,11 +129,20 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 └──────┬──────┘
        │ approved, or categorized feedback
        │
-       ├── architectural issues ──► back to Architect (step 2, skip investigation)
-       ├── implementation issues ──► back to Workers (targeted fixes)
+       ├── architectural issues ──► back to Planner (re-plan with refreshed architecture)
+       ├── implementation issues ──► back to Planner (re-plan with feedback)
        │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
+┌─────────────┐
+│  Verify      │  [v2.2] Run tests + optional E2E per review criteria
+│  (planned)   │
+└──────┬──────┘
+       │ pass, or fail with retry exhausted (deliver with warning)
+       │
+       ├── test failures ──► single fix-up worker ──► re-verify (max 2-3 attempts)
+       │
+       ▼
 ┌─────────────┐
 │  Delivery    │  PR creation, cleanup
 └─────────────┘

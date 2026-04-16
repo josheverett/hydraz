@@ -22,7 +22,7 @@ All of the following were discussed and confirmed with the project owner:
 - **Worker count**: User-controlled via `--workers N`, default 3.
 - **Backward compatibility**: None. Major version bump, breaking changes expected.
 - **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
-- **Verification**: Workers themselves are responsible for TDD, tests, lint, build. No separate verification stage. The review panel focuses on design quality, not "do tests pass."
+- **Verification**: Workers themselves are responsible for TDD, tests, lint, build for v2.0. No separate verification stage in v2.0. A post-review verification phase with inner retry loop is planned for v2.2 (see spec §18).
 - **Consensus bounds**: Architect-planner loop max 10 rounds (architect has final say at cap). Outer review loop max 5 iterations.
 - **Review feedback routing**: Reviewers categorize findings as architectural (back to architect) vs implementation (back to workers for targeted fixes).
 
@@ -46,7 +46,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **54 test files** (v1 base + v2 swarm module tests).
+- **57 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -224,7 +224,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - Missing phase emissions: pipeline emits all state machine phases
 - Container context plumbing (removed -- superseded by container-side orchestration)
 
-**Container/cloud mode: PASSED.** Container-side orchestration verified end-to-end (cloud test 11). Full swarm pipeline ran inside a GCP-backed DevPod container: investigation, architecture, planning, consensus, workers, merge, review -- 3 outer loops to approval. Branch delivery has a regression (see known issues).
+**Container/cloud mode: PASSED.** Container-side orchestration verified end-to-end (cloud test 11). Full swarm pipeline ran inside a GCP-backed DevPod container: investigation, architecture, planning, consensus, workers, merge, review -- 3 outer loops to approval. Container hello-world also verified end-to-end (v2.1.0).
 
 ### Post-phase: Complexity reduction (4 rounds) [DONE]
 
@@ -262,7 +262,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - `src/core/orchestration/controller.ts`: container mode uses `tar | ssh` + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
 - `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
-### Hello World mode [IN PROGRESS]
+### Hello World mode [DONE]
 
 First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for infrastructure sanity checks. Exercises the full infrastructure path (auth, workspace, DevPod/container setup, dist copy) but bypasses the swarm pipeline, running a single Claude instance with a deterministic task.
 
@@ -279,7 +279,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 **Implementation:**
 - `src/cli/commands/hello-world.ts`: CLI command registration
 - `src/core/orchestration/hello-world.ts`: orchestration logic
-- Reuses `launchClaude` + `ContainerContext` from executor, `scpToContainer`/`sshExec` from devpod, `getProvider` from controller
+- Reuses `launchClaude` from executor, `scpToContainer`/`scpFilesToContainer`/`sshExec` from devpod, `getProvider` from controller
 
 ### Shipped in v2.1.0
 
@@ -308,7 +308,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 (none)
 
-**Resolved:**
+**Previously open, now resolved:**
 - ~~**Container git-push regression**: believed to be a code bug but was actually a GitHub token permissions issue — the push logic works correctly when the token has write access~~
 
 ---

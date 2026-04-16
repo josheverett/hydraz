@@ -187,8 +187,8 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
 └──────┬──────┘
        │ approved, or categorized feedback
        │
-       ├── architectural issues ──► back to Architect (step 2, skip investigation)
-       ├── implementation issues ──► back to Workers (targeted fixes)
+       ├── architectural issues ──► back to Planner (re-plan with refreshed architecture)
+       ├── implementation issues ──► back to Planner (re-plan with feedback)
        │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
@@ -315,11 +315,11 @@ The orchestrator aggregates reviews in memory (not persisted to disk). If any re
 - Flows back through planner -> consensus -> workers -> merge -> review
 - Investigation is NOT re-run (the repo structure facts from step 1 remain valid)
 
-**Implementation feedback** (back to Workers, targeted fixes):
-- Only workers whose owned files are implicated by findings receive the feedback
-- Workers get: their original brief + reviewer feedback + "fix these specific issues"
-- Other workers are not re-launched
-- After fixes: re-merge -> re-review
+**Implementation feedback** (back to Planner):
+- The outer loop rewinds to planning (consensus), not directly to targeted workers
+- The planner re-plans with the review feedback and refreshed architecture (if applicable)
+- New worker fan-out, merge, and review follow
+- This is the same outer loop path as architectural feedback; the feedback route distinction affects whether the in-memory architecture design is refreshed from disk before re-planning
 
 **Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures). Note: the pipeline internally returns `phase: 'blocked'` for exhaustion, but the controller overrides this to `failed` for the session state.
 
