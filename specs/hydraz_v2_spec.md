@@ -309,17 +309,18 @@ The orchestrator aggregates reviews in memory (not persisted to disk). If any re
 
 ### 4.8 Feedback loop routing
 
-**Architectural feedback** (back to Architect, step 2):
-- The architect receives: original task + investigation + previous architecture + reviewer feedback
-- Produces revised architecture
-- Flows back through planner -> consensus -> workers -> merge -> review
+**Architectural feedback** (back to Planner with refreshed architecture):
+- The orchestrator re-reads the architecture design from disk before re-planning
+- The outer loop rewinds to planning (consensus) with the refreshed architecture
+- Flows through planner -> consensus -> workers -> merge -> review
+- The architect is NOT re-invoked; the refresh is a disk re-read, not a new Claude invocation
 - Investigation is NOT re-run (the repo structure facts from step 1 remain valid)
 
 **Implementation feedback** (back to Planner):
 - The outer loop rewinds to planning (consensus), not directly to targeted workers
-- The planner re-plans with the review feedback and refreshed architecture (if applicable)
+- The planner re-plans with the review feedback
 - New worker fan-out, merge, and review follow
-- This is the same outer loop path as architectural feedback; the feedback route distinction affects whether the in-memory architecture design is refreshed from disk before re-planning
+- This is the same outer loop path as architectural feedback; the only distinction is that architectural feedback refreshes the in-memory architecture design from disk before re-planning
 
 **Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures). Note: the pipeline internally returns `phase: 'blocked'` for exhaustion, but the controller overrides this to `failed` for the session state.
 
@@ -600,6 +601,8 @@ hydraz run --container "<task>"          # Run in local Docker container via Dev
 hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 ```
 
+- `--session <name>`: Session name (auto-generated from task if omitted; carried from v1)
+- `--branch <name>`: Branch name (auto-generated from session name if omitted; carried from v1)
 - `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
 - `--workers N`: Number of parallel workers (default 3)
 - `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
@@ -845,7 +848,7 @@ A post-review verification phase that actually runs tests (and optionally headle
 | Architect review | 1 |
 | Workers | N (default 3) |
 | Reviewers | 3 |
-| **Total** | **N + 6** (default 10) |
+| **Total** | **N + 7** (default 10) |
 
 All at Claude Opus pricing.
 

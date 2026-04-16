@@ -58,6 +58,8 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--session <name>` | Session name | Auto-generated from task |
+| `--branch <name>` | Branch name | Auto-generated from session |
 | `--swarm` | No-op (swarm pipeline always runs) | Always on |
 | `--workers <N>` | Number of parallel workers | 3 |
 | `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
@@ -70,7 +72,7 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 ```bash
 hydraz                 # interactive mode — start sessions, attach, review
 hydraz run "<task>"    # launch a task directly
-hydraz hello-world     # infrastructure sanity check (supports --local, --container, --cloud, --verbose)
+hydraz hello-world     # infrastructure sanity check (supports --local, --container, --cloud, --verbose, --branch)
 
 hydraz sessions        # list all sessions in this repo
 hydraz status          # show current session state and swarm phase

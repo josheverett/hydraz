@@ -233,17 +233,18 @@ The orchestrator aggregates reviews. If any reviewer requests changes, both feed
 
 When reviewers flag issues:
 
-**Architectural feedback** (back to Architect, step 2):
-- The architect receives: original task + investigation + previous architecture + reviewer feedback
-- Produces revised architecture
-- Flows back through planner -> consensus -> workers -> merge -> review
+**Architectural feedback** (back to Planner with refreshed architecture):
+- The orchestrator re-reads the architecture design from disk before re-planning
+- The outer loop rewinds to planning (consensus) with the refreshed architecture
+- Flows through planner -> consensus -> workers -> merge -> review
+- The architect is NOT re-invoked; the refresh is a disk re-read, not a new Claude invocation
 - Investigation is NOT re-run (repo facts haven't changed from the workers' perspective; the investigation brief from step 1 remains valid)
 
 **Implementation feedback** (back to Planner):
 - The outer loop rewinds to planning (consensus), not directly to targeted workers
 - The planner re-plans with the review feedback
 - New worker fan-out, merge, and review follow
-- This is the same outer loop path as architectural feedback; the distinction is that architectural feedback refreshes the in-memory architecture design from disk before re-planning
+- This is the same outer loop path as architectural feedback; the only distinction is that architectural feedback refreshes the in-memory architecture design from disk before re-planning
 
 **Bounds:**
 - Max 5 outer loops total (across both architectural and implementation feedback)
