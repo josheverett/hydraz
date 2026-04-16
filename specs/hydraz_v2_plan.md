@@ -291,6 +291,55 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
 - ~~**Credentials out of `process.argv`**: options JSON moved from CLI argument to `HYDRAZ_PIPELINE_OPTIONS` env var, not visible in `ps aux`.~~ (done in v2.2.0)
 
+### Repo-level configuration (`.hydraz/` directory convention)
+
+**Goal**: Support repo-specific hydraz configuration via a committed `.hydraz/` directory in target repos. This enables repos to declare host-to-container file mappings, repo-specific prompt content for swarm agents, and repo-specific secrets — all via a standardized, committed directory convention.
+
+**Context**: The `.hydraz/` directory convention was established in the travelagent-ai monorepo (PR #20859 against `staging`). That PR creates the target-repo side of the convention: the directory structure, `config.json` schema, `HYDRAZ.md` content, and `.worktreeinclude` integration. This phase implements the hydraz CLI support for parsing and acting on these conventions during session startup and container setup.
+
+**Important distinction**: The `.hydraz/` directory in a target repo is *repo-owned configuration*, committed by repo owners — analogous to `.devcontainer/`. This is distinct from `~/.hydraz/`, which stores hydraz-generated session data, worktrees, and workspace state. The principle "no hydraz-generated files are placed in target repos" remains true.
+
+**`.hydraz/` directory layout (in target repo):**
+```
+.hydraz/
+  config.json    # Repo-specific hydraz configuration (hydrazincludes, future keys)
+  HYDRAZ.md      # Repo-specific prompt content injected into all swarm agent prompts
+  .env           # Repo-specific secrets (listed in .worktreeinclude for worktree propagation)
+```
+
+**`config.json` schema:**
+```json
+{
+  "hydrazincludes": [
+    { "host": "~/.aigl", "container": "~/.aigl" }
+  ]
+}
+```
+
+**Key changes:**
+- Parse `.hydraz/config.json` from the target repo root during session startup
+- Implement `hydrazincludes` SCP: for each entry, copy the host path into the container at the specified container path via the existing `tar | ssh` pipe mechanism (same as `scpToContainer`)
+- Implement `HYDRAZ.md` prompt injection: read `.hydraz/HYDRAZ.md` from the target repo and inject its contents into all role prompts (investigator, architect, planner, workers, reviewers)
+- `.hydraz/.env` support: repos list `.hydraz/.env` in their `.worktreeinclude` file, leveraging the existing worktree-include mechanism — no new hydraz code needed for this
+
+**`hydrazincludes` mechanics:**
+- Each entry maps a host path to a container path
+- Tilde (`~`) expansion on both host and container sides
+- SCP via the existing `tar | ssh` pipe mechanism (same as `scpToContainer` in `devpod.ts`)
+- Fires during container setup, after DevPod workspace creation and dist copy but before pipeline execution
+- Graceful handling of missing host paths (warn and skip, don't fail the session)
+- Not applicable in local bare-metal mode (no host/container boundary)
+
+**`HYDRAZ.md` prompt injection:**
+- Read from `.hydraz/HYDRAZ.md` in the target repo root (local mode) or container-local repo root (container mode)
+- Injected into all role prompts: investigator, architect, planner, workers, reviewers
+- Positioned after core role instructions but before task-specific content
+- If the file doesn't exist, no injection (silent no-op)
+- Content is expected to be concise and universally relevant to any agent working in the repo
+
+**Dependencies**: Container-side orchestration (done), prompt system (done), `scpToContainer` (done)
+**Risks**: Low. The `.hydraz/` convention is already proven in the travelagent-ai repo. The hydraz CLI implementation is straightforward: config parsing, SCP, and prompt injection.
+
 **P1 — High impact:**
 - **Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.
 - **Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.

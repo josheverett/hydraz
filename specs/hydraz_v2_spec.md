@@ -529,10 +529,11 @@ Each worker gets its own git worktree via `createWorktree()` in `src/core/provid
 The entire swarm pipeline runs inside a single DevPod container. The host:
 1. Creates the DevPod workspace and worktree (existing provider code)
 2. Copies Hydraz `dist/` into the container via `tar | ssh` pipe (`/tmp/hydraz-dist/`)
-3. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
-4. Streams structured JSON events from SSH stdout for real-time phase tracking
-5. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
-6. Handles delivery (PR creation) and cleanup on the host side
+3. Copies `hydrazincludes` paths from host into container (if `.hydraz/config.json` exists in the target repo — see §12.3)
+4. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
+5. Streams structured JSON events from SSH stdout for real-time phase tracking
+6. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
+7. Handles delivery (PR creation) and cleanup on the host side
 
 Inside the container, the pipeline runs identically to local bare-metal mode -- all Claude invocations, artifact I/O, and worktree operations are container-local. Workers use local worktrees inside the container, same as bare-metal mode. Per-worker DevPod workspaces are not used; one container hosts all workers.
 
@@ -654,6 +655,36 @@ These can be overridden per-session via CLI flags (`--workers N`, `--reviewers <
 
 **Status: Not implemented.** Reviewer persona definitions are currently inline strings in the controller (`"You are ${name}. Review the code with your characteristic engineering perspective."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
 
+### 12.3 Repo-level configuration (`.hydraz/` directory)
+
+Target repos may optionally contain a committed `.hydraz/` directory with repo-specific hydraz configuration. This is *repo-owned configuration* — authored and committed by the repo's owners, analogous to `.devcontainer/`. It is distinct from `~/.hydraz/`, which stores hydraz-generated session data. The principle "no hydraz-generated files are placed in target repos" remains true.
+
+**Directory layout:**
+```
+.hydraz/
+  config.json    # Repo-specific hydraz configuration
+  HYDRAZ.md      # Repo-specific prompt content injected into all swarm agent prompts
+  .env           # Repo-specific secrets (listed in .worktreeinclude for worktree propagation)
+```
+
+All files are optional. If `.hydraz/` does not exist, hydraz operates exactly as before.
+
+**`config.json`** contains repo-specific configuration keys:
+
+```json
+{
+  "hydrazincludes": [
+    { "host": "~/.aigl", "container": "~/.aigl" }
+  ]
+}
+```
+
+- `hydrazincludes`: An array of host-to-container file mappings. Each entry specifies a host path and a container path. During container setup, hydraz copies each host path into the container at the specified container path via the existing `tar | ssh` pipe mechanism. Tilde (`~`) is expanded on both sides. Missing host paths produce a warning but do not fail the session. This key has no effect in local bare-metal mode (no host/container boundary).
+
+**`HYDRAZ.md`** contains repo-specific prompt content that is injected into all swarm agent prompts (investigator, architect, planner, workers, reviewers). The content is positioned after core role instructions but before task-specific content. If the file does not exist, no injection occurs. Content should be concise and universally relevant to any agent working in the repo — for example, directing agents to read repo-specific `CLAUDE.md` files in relevant directories.
+
+**`.hydraz/.env`** contains repo-specific secrets. Repos that use this file list `.hydraz/.env` in their `.worktreeinclude` file, leveraging the existing worktree-include mechanism for propagation into worktrees and containers. No new hydraz code is needed for `.env` support.
+
 ---
 
 ## 13. Claude Code Invocation Details
@@ -680,6 +711,8 @@ Each pipeline role has its own prompt template in `src/core/swarm/prompts/`:
 - `reviewer.ts`: Famous-engineer persona review with categorized findings
 
 All prompts embed core engineering principles via `core-principles.ts`. Workers receive the most rigorous version (full TDD + full prove-it-first + evidence taxonomy). Other roles receive evidence discipline appropriate to their function.
+
+If the target repo contains a `.hydraz/HYDRAZ.md` file, its contents are injected into all role prompts — positioned after core role instructions but before task-specific content. This provides a repo-specific prompt injection mechanism for directing agents to repo-level conventions, guidance files, or other context. See §12.3 for details.
 
 All prompts include the model hardcode `claude-opus-4-6`. This is an opinionated product decision carried from v1.
 
