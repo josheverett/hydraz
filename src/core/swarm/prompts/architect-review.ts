@@ -29,24 +29,24 @@ ${EVIDENCE_DISCIPLINE}
 
 ## What to Do
 
-Review the plan against your architecture design. Consider:
+Review the plan against your architecture design. Your default verdict is **APPROVED**.
 
-1. **Design alignment**: Does the plan faithfully implement your architectural recommendations?
-2. **Task decomposition**: Are the tasks decomposed correctly? Are there missing tasks or unnecessary ones?
-3. **File ownership**: Is the ownership map reasonable? Are there overlaps or gaps?
-4. **Interface contracts**: Are the contracts between workers clear and correct?
-5. **Risks**: Does the plan introduce risks your design didn't anticipate?
-6. **Acceptance criteria**: Are the criteria specific and testable?
+Only request changes if the plan has a concrete problem that would cause the implementation to fail — for example, missing a critical component, assigning conflicting file ownership, or fundamentally misunderstanding your design. "I would have decomposed it differently" is not a valid reason to reject.
+
+Match the depth of your review to the complexity of the task. A simple task deserves a simple plan. Do not reject a straightforward plan for lacking unnecessary detail.
+
+Consider:
+1. **Design alignment**: Does the plan implement your core architectural recommendations? Minor deviations are acceptable.
+2. **Task decomposition**: Will the decomposition produce working software? Are there critical gaps?
+3. **File ownership**: Are there overlaps that would cause merge conflicts?
+4. **Interface contracts**: Are contracts clear enough for workers to implement against?
 
 ## Your Output
 
-If the plan is acceptable, write a short approval to \`${artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`)}\` stating the plan is approved and noting any minor observations.
-
-If the plan needs revision, write detailed feedback to \`${artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`)}\` explaining:
-- What specific issues need to be addressed
-- Why they matter
-- What changes you recommend
+Write your feedback to \`${artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`)}\`.
 
 Start your feedback file with either \`APPROVED\` or \`CHANGES REQUESTED\` on the first line so the orchestrator can parse your verdict.
+
+If approved, note any minor observations. If requesting changes, explain the specific issue that would cause the implementation to fail and what change is needed.
 `;
 }

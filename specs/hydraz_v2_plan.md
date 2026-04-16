@@ -288,7 +288,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 **P0 — Ship-blocking for non-experimental:**
 - ~~**Serial worker execution (default)**: workers execute serially by default, with parallel mode opt-in via `--parallel`.~~ (done in v2.2.0)
-- **Prompt calibration for proportionality and approval bias**: add proportionality sections to investigator, architect, and planner prompts (match depth to task complexity). Rework architect-review prompt (default verdict APPROVED, only reject for concrete problems that would cause implementation to fail). Rework reviewer prompt (explicit anti-approval-bias language, concrete definition of valid rejections vs. stylistic preferences, default verdict APPROVED).
+- ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
 - **Credentials out of `process.argv`**: the serialized options JSON (containing OAuth token and GitHub PAT) is passed as a CLI argument to pipeline-runner and is visible in `ps aux`. Move to stdin pipe or temp file with 0600 permissions.
 
 **P1 — High impact:**
