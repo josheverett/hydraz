@@ -263,8 +263,7 @@ created
   -> syncing             (workers running, orchestrator monitors)
   -> merging             (workers done, branches merged to integration)
   -> reviewing           (review panel runs in parallel)
-     -> architecting     (if architectural feedback, loop back)
-     -> fanning-out      (if implementation feedback, targeted re-work)
+     -> planning         (both feedback types rewind to planning via outer loop)
   -> delivering          (PR creation, cleanup)
   -> completed
 
