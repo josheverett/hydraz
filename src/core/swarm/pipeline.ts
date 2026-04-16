@@ -15,6 +15,7 @@ import {
   getSwarmDir,
 } from './artifacts.js';
 import { getWorkspaceDir } from '../providers/provider.js';
+import { readRepoPromptContent } from './repo-config.js';
 
 export interface PipelineCallbacks {
   onPhaseChange?: (phase: SwarmPhase) => void;
@@ -55,6 +56,7 @@ function emitEvent(options: PipelineOptions, type: string, message: string): voi
 }
 
 function buildContext(options: PipelineOptions, swarmDir: string): ExecutionContext {
+  const repoPrompt = readRepoPromptContent(options.repoRoot);
   return {
     repoRoot: options.repoRoot,
     sessionId: options.sessionId,
@@ -63,6 +65,7 @@ function buildContext(options: PipelineOptions, swarmDir: string): ExecutionCont
     workingDirectory: options.workingDirectory,
     config: options.config,
     swarmDir,
+    repoPromptContent: repoPrompt ?? undefined,
   };
 }
 

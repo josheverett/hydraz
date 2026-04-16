@@ -119,6 +119,16 @@ describe('buildInvestigatorPrompt', () => {
     const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session', '/home/user/.hydraz/repos/test/sessions/abc/swarm');
     expect(prompt).toContain('/home/user/.hydraz/repos/test/sessions/abc/swarm');
   });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session', undefined, 'Always read CLAUDE.md files in relevant directories.');
+    expect(prompt).toContain('Always read CLAUDE.md files in relevant directories.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildInvestigatorPrompt('Build the auth system', 'auth-session');
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runInvestigation', () => {
@@ -182,6 +192,16 @@ describe('runInvestigation', () => {
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
+  });
+
+  it('should include repoPromptContent in the Claude prompt when set on context', async () => {
+    mockSuccessfulClaude();
+    writeInvestigationBrief(repoRoot, sessionId, '# Investigation\nFindings.');
+
+    await runInvestigation(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }));
+
+    const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
   });
 
 });

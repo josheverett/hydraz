@@ -8,6 +8,7 @@ export function buildPlannerPrompt(
   architectureDesign: string,
   workerCount: number,
   swarmDir?: string,
+  repoPromptContent?: string,
 ): string {
   return `# Hydraz Planner
 
@@ -26,7 +27,7 @@ Match the detail of your plan to the complexity of the task. A simple task shoul
 
 When there is only 1 worker, skip interface contracts and ownership partitioning — the single worker owns everything. Focus on a clear, actionable task description.
 
-## Task
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
 

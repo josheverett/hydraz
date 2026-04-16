@@ -27,6 +27,7 @@ import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
 import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
 import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -175,6 +176,19 @@ export async function startSession(
       callbacks.onError?.(msg);
       activeSessions.delete(sessionId);
       return;
+    }
+
+    try {
+      processHydrazIncludes(
+        repoRoot,
+        workspaceName,
+        scpToContainer,
+        (msg) => emitEvent('swarm.container_setup', msg),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      emitEvent('swarm.container_setup', `hydrazincludes SCP failed (non-fatal): ${msg}`);
+      callbacks.onError?.(`hydrazincludes SCP failed: ${msg}`);
     }
 
     const optionsJson = JSON.stringify({

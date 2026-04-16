@@ -76,6 +76,16 @@ describe('buildArchitectPlanReviewPrompt', () => {
   it('should instruct writing feedback to architecture/feedback/', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1)).toContain('feedback'); });
   it('should include evidence discipline principles', () => { const p = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
   it('should include the absolute swarm directory path when provided', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, '/tmp/swarm')).toContain('/tmp/swarm'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runConsensus', () => {
@@ -120,5 +130,16 @@ describe('runConsensus', () => {
       maxRounds: 2,
     });
     expect(result.roundsUsed).toBe(2);
+  });
+
+  it('should include repoPromptContent in the architect review prompt when set on context', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+    });
+    const reviewCallArgs = mockLaunchClaude.mock.calls[1]![0]!;
+    expect(reviewCallArgs.prompt).toContain('Always read CLAUDE.md files.');
   });
 });

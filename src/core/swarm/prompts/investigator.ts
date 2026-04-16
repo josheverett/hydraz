@@ -1,7 +1,7 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
-export function buildInvestigatorPrompt(task: string, sessionName: string, swarmDir?: string): string {
+export function buildInvestigatorPrompt(task: string, sessionName: string, swarmDir?: string, repoPromptContent?: string): string {
   return `# Hydraz Investigator
 
 You are the investigator for Hydraz session "${sessionName}". Your job is to explore the repository and produce a factual brief about its structure, conventions, and constraints.
@@ -14,7 +14,7 @@ You are a read-only investigator. Do not make any changes to the repository -- d
 
 Match the depth of your investigation to what exists. If this is a greenfield project with little or no existing code, say so briefly and move on -- do not produce an elaborate report about the absence of things. A near-empty repo needs a short brief, not a thorough audit of nothing.
 
-## Task Context
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task Context
 
 The following task has been submitted for this session:
 

@@ -105,6 +105,16 @@ describe('buildArchitectPrompt', () => {
     const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, '/tmp/swarm');
     expect(prompt).toContain('/tmp/swarm');
   });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runArchitect', () => {
@@ -167,5 +177,15 @@ describe('runArchitect', () => {
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
+  });
+
+  it('should include repoPromptContent in the Claude prompt when set on context', async () => {
+    mockSuccessfulClaude();
+    writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
+
+    await runArchitect(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { investigationBrief: SAMPLE_BRIEF });
+
+    const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
   });
 });

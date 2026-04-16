@@ -56,6 +56,7 @@ async function runSingleWorker(
     opts.planContent,
     workerId,
     ctx.swarmDir,
+    ctx.repoPromptContent,
   );
 
   const executor = launchClaude({

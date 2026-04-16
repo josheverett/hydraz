@@ -69,6 +69,16 @@ describe('buildPlannerPrompt', () => {
   it('should instruct writing task-ledger.json and ownership.json', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3); expect(p).toContain('task-ledger.json'); expect(p).toContain('ownership.json'); });
   it('should include evidence discipline principles', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
   it('should include the absolute swarm directory path when provided', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, '/tmp/swarm')).toContain('/tmp/swarm'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runPlanner', () => {
@@ -123,5 +133,12 @@ describe('runPlanner', () => {
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.workingDirectory).toBe('/tmp/custom');
     expect(callArgs.config).toBe(config);
+  });
+
+  it('should include repoPromptContent in the Claude prompt when set on context', async () => {
+    mockSuccessfulClaude(); writePlannerArtifacts();
+    await runPlanner(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
   });
 });

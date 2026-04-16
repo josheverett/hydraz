@@ -9,6 +9,7 @@ export function buildReviewerPrompt(
   reviewerPersona: string,
   reviewerName: string,
   swarmDir?: string,
+  repoPromptContent?: string,
 ): string {
   return `# Hydraz Code Review — ${reviewerName}
 
@@ -38,7 +39,7 @@ As a coding agent asked to review code, you have a strong inherent bias toward f
 
 If the worker followed TDD, wrote passing tests, and the code meets the task requirements, you MUST approve. Your job is to catch serious defects, not to achieve your personal standard of perfection.
 
-## Your Persona
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Your Persona
 
 ${reviewerPersona}
 

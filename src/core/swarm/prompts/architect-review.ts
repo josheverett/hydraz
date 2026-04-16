@@ -8,12 +8,13 @@ export function buildArchitectPlanReviewPrompt(
   planContent: string,
   round: number,
   swarmDir?: string,
+  repoPromptContent?: string,
 ): string {
   return `# Hydraz Architect — Plan Review (Round ${round})
 
 You are the architect for Hydraz session "${sessionName}". You previously produced the architecture design below. The planner has now produced an execution plan based on your design. Your job is to review the plan and either approve it or provide feedback.
 
-## Task
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
 

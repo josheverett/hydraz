@@ -25,6 +25,7 @@ export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): P
     opts.architectureDesign,
     opts.workerCount,
     ctx.swarmDir,
+    ctx.repoPromptContent,
   );
 
   const executor = launchClaude({

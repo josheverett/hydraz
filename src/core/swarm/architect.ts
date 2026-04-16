@@ -15,7 +15,7 @@ export interface ArchitectOptions {
 }
 
 export async function runArchitect(ctx: ExecutionContext, opts: ArchitectOptions): Promise<ArchitectResult> {
-  const prompt = buildArchitectPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, ctx.swarmDir);
+  const prompt = buildArchitectPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, ctx.swarmDir, ctx.repoPromptContent);
 
   const executor = launchClaude({
     workingDirectory: ctx.workingDirectory,

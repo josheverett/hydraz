@@ -34,6 +34,7 @@ async function runSingleReviewer(
     reviewerInfo.persona,
     reviewerInfo.name,
     ctx.swarmDir,
+    ctx.repoPromptContent,
   );
 
   const executor = launchClaude({

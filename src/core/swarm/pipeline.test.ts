@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -342,5 +342,26 @@ describe('runSwarmPipeline', () => {
     const fanoutCall = vi.mocked(runWorkerFanout).mock.calls[0]!;
     const fanoutOpts = fanoutCall[1];
     expect(fanoutOpts.parallel).toBe(false);
+  });
+
+  it('should read HYDRAZ.md and pass repoPromptContent to stages', async () => {
+    const hydrazDir = join(repoRoot, '.hydraz');
+    mkdirSync(hydrazDir, { recursive: true });
+    writeFileSync(join(hydrazDir, 'HYDRAZ.md'), 'Always read CLAUDE.md files.', 'utf-8');
+
+    await runSwarmPipeline(makeOptions());
+
+    const investigateCtx = vi.mocked(runInvestigation).mock.calls[0]![0]!;
+    expect(investigateCtx.repoPromptContent).toBe('Always read CLAUDE.md files.');
+
+    const architectCtx = vi.mocked(runArchitect).mock.calls[0]![0]!;
+    expect(architectCtx.repoPromptContent).toBe('Always read CLAUDE.md files.');
+  });
+
+  it('should set repoPromptContent to undefined when HYDRAZ.md does not exist', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const investigateCtx = vi.mocked(runInvestigation).mock.calls[0]![0]!;
+    expect(investigateCtx.repoPromptContent).toBeUndefined();
   });
 });

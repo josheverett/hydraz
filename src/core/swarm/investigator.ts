@@ -11,7 +11,7 @@ export interface InvestigationResult {
 }
 
 export async function runInvestigation(ctx: ExecutionContext): Promise<InvestigationResult> {
-  const prompt = buildInvestigatorPrompt(ctx.task, ctx.sessionName, ctx.swarmDir);
+  const prompt = buildInvestigatorPrompt(ctx.task, ctx.sessionName, ctx.swarmDir, ctx.repoPromptContent);
 
   const executor = launchClaude({
     workingDirectory: ctx.workingDirectory,

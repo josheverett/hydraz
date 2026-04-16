@@ -93,6 +93,16 @@ describe('buildWorkerPrompt', () => {
   });
   it('should include the absolute swarm directory path when provided', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', '/tmp/swarm')).toContain('/tmp/swarm'); });
   it('should include the plan content', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nDetailed steps here.', 'worker-a')).toContain('Detailed steps here'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a');
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runWorkerFanout', () => {
@@ -233,5 +243,12 @@ describe('runWorkerFanout', () => {
     for (const call of calls) {
       expect(call[3]).toBeUndefined();
     }
+  });
+
+  it('should include repoPromptContent in worker prompts when set on context', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
+    expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
   });
 });

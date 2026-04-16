@@ -73,6 +73,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       plan!,
       round,
       ctx.swarmDir,
+      ctx.repoPromptContent,
     );
 
     const reviewExecutor = launchClaude({
