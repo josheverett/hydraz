@@ -18,6 +18,7 @@ export interface SerializablePipelineOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
   maxOuterLoops: number;
   maxConsensusRounds: number;
+  parallel: boolean;
 }
 
 export function toSerializable(options: PipelineOptions): SerializablePipelineOptions {
@@ -32,6 +33,7 @@ export function toSerializable(options: PipelineOptions): SerializablePipelineOp
     reviewerPersonas: options.reviewerPersonas,
     maxOuterLoops: options.maxOuterLoops,
     maxConsensusRounds: options.maxConsensusRounds,
+    parallel: options.parallel,
   };
 }
 
@@ -47,6 +49,7 @@ export function toPipelineOptions(serialized: SerializablePipelineOptions): Pipe
     reviewerPersonas: serialized.reviewerPersonas,
     maxOuterLoops: serialized.maxOuterLoops,
     maxConsensusRounds: serialized.maxConsensusRounds,
+    parallel: serialized.parallel,
     callbacks: {
       onPhaseChange: (phase) => {
         process.stdout.write(JSON.stringify({ type: 'phase', phase }) + '\n');

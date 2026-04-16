@@ -60,6 +60,7 @@ function formatTs(): string {
 export interface SwarmOptions {
   workerCount?: number;
   reviewerNames?: string[];
+  parallel?: boolean;
 }
 
 export async function startSession(
@@ -150,6 +151,7 @@ export async function startSession(
   activeSessions.set(sessionId, { session, workspace });
 
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
+  const parallel = swarmOptions.parallel ?? false;
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
   const reviewerPersonas = reviewerNames.map(name => ({
     name,
@@ -186,6 +188,7 @@ export async function startSession(
       reviewerPersonas,
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      parallel,
     });
 
     const ssh = buildSshNodeCommand(
@@ -264,6 +267,7 @@ export async function startSession(
       reviewerPersonas,
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      parallel,
       callbacks: {
         onPhaseChange: (phase) => {
           try {

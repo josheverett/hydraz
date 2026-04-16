@@ -161,4 +161,77 @@ describe('runWorkerFanout', () => {
     await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
   });
+
+  it('should run workers sequentially by default', async () => {
+    const callOrder: string[] = [];
+    let callIndex = 0;
+    const workerIds = Object.keys(LEDGER_3_WORKERS.workers);
+    mockLaunchClaude.mockImplementation(() => {
+      const wid = workerIds[callIndex++] ?? 'unknown';
+      callOrder.push(`launch:${wid}`);
+      return {
+        process: {} as never, pid: 12345, kill: vi.fn(),
+        waitForExit: vi.fn().mockImplementation(async () => {
+          callOrder.push(`exit:${wid}`);
+          return { exitCode: 0, signal: null, success: true, cost: 0.30 };
+        }),
+      };
+    });
+
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    expect(callOrder).toEqual([
+      'launch:worker-a', 'exit:worker-a',
+      'launch:worker-b', 'exit:worker-b',
+      'launch:worker-c', 'exit:worker-c',
+    ]);
+  });
+
+  it('should pass previous workers branch as startPoint in serial mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    const calls = mockCreateWorktree.mock.calls;
+    expect(calls[0]![3]).toBeUndefined();
+    expect(calls[1]![3]).toBe('hydraz/test-worker-a');
+    expect(calls[2]![3]).toBe('hydraz/test-worker-b');
+  });
+
+  it('should run workers concurrently when parallel is true', async () => {
+    const callOrder: string[] = [];
+    let callIndex = 0;
+    const resolvers: Array<() => void> = [];
+    const workerIds = Object.keys(LEDGER_3_WORKERS.workers);
+    mockLaunchClaude.mockImplementation(() => {
+      const wid = workerIds[callIndex++] ?? 'unknown';
+      callOrder.push(`launch:${wid}`);
+      return {
+        process: {} as never, pid: 12345, kill: vi.fn(),
+        waitForExit: vi.fn().mockImplementation(() => new Promise((resolve) => {
+          resolvers.push(() => {
+            callOrder.push(`exit:${wid}`);
+            resolve({ exitCode: 0, signal: null, success: true, cost: 0.30 });
+          });
+        })),
+      };
+    });
+
+    const fanoutPromise = runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    await vi.waitFor(() => expect(resolvers).toHaveLength(3));
+    expect(callOrder).toEqual(['launch:worker-a', 'launch:worker-b', 'launch:worker-c']);
+
+    resolvers.forEach(r => r());
+    await fanoutPromise;
+  });
+
+  it('should not pass startPoint in parallel mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    const calls = mockCreateWorktree.mock.calls;
+    for (const call of calls) {
+      expect(call[3]).toBeUndefined();
+    }
+  });
 });

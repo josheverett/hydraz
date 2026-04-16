@@ -142,6 +142,7 @@ function makeOptions(overrides: Partial<PipelineOptions> = {}): PipelineOptions 
     reviewerPersonas: DEFAULT_PERSONAS,
     maxOuterLoops: 5,
     maxConsensusRounds: 10,
+    parallel: false,
     ...overrides,
   };
 }
@@ -325,5 +326,21 @@ describe('runSwarmPipeline', () => {
 
     const conflictEvents = events.filter(e => e.type === 'swarm.merge_conflict');
     expect(conflictEvents).toHaveLength(1);
+  });
+
+  it('should pass parallel option to runWorkerFanout', async () => {
+    await runSwarmPipeline(makeOptions({ parallel: true }));
+
+    const fanoutCall = vi.mocked(runWorkerFanout).mock.calls[0]!;
+    const fanoutOpts = fanoutCall[1];
+    expect(fanoutOpts.parallel).toBe(true);
+  });
+
+  it('should default parallel to false in runWorkerFanout', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const fanoutCall = vi.mocked(runWorkerFanout).mock.calls[0]!;
+    const fanoutOpts = fanoutCall[1];
+    expect(fanoutOpts.parallel).toBe(false);
   });
 });

@@ -42,6 +42,7 @@ export interface PipelineOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
   maxOuterLoops: number;
   maxConsensusRounds: number;
+  parallel: boolean;
   callbacks?: PipelineCallbacks;
 }
 
@@ -153,6 +154,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       ownership,
       planContent,
       existingWorktrees: workerWorktrees,
+      parallel: options.parallel,
     });
 
     if (!workerWorktrees) {

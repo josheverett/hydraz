@@ -22,12 +22,14 @@ export interface FanoutOptions {
   ownership: OwnershipMap;
   planContent: string;
   existingWorktrees?: Record<string, string>;
+  parallel?: boolean;
 }
 
 async function runSingleWorker(
   workerId: string,
   ctx: ExecutionContext,
   opts: FanoutOptions,
+  startPoint?: string,
 ): Promise<WorkerResult> {
   const workerInfo = opts.ledger.workers[workerId];
   if (!workerInfo) {
@@ -43,7 +45,7 @@ async function runSingleWorker(
   if (opts.existingWorktrees?.[workerId]) {
     workingDirectory = opts.existingWorktrees[workerId];
   } else {
-    const worktree = createWorktree(ctx.repoRoot, `${ctx.sessionId}-${workerId}`, workerInfo.branch);
+    const worktree = createWorktree(ctx.repoRoot, `${ctx.sessionId}-${workerId}`, workerInfo.branch, startPoint);
     workingDirectory = worktree.directory;
   }
 
@@ -75,8 +77,21 @@ async function runSingleWorker(
 export async function runWorkerFanout(ctx: ExecutionContext, opts: FanoutOptions): Promise<FanoutResult> {
   const workerIds = Object.keys(opts.ledger.workers);
 
-  const workerPromises = workerIds.map(workerId => runSingleWorker(workerId, ctx, opts));
-  const workerResults = await Promise.all(workerPromises);
+  let workerResults: WorkerResult[];
+
+  if (opts.parallel) {
+    workerResults = await Promise.all(
+      workerIds.map(workerId => runSingleWorker(workerId, ctx, opts)),
+    );
+  } else {
+    workerResults = [];
+    let previousBranch: string | undefined;
+    for (const workerId of workerIds) {
+      const result = await runSingleWorker(workerId, ctx, opts, previousBranch);
+      workerResults.push(result);
+      previousBranch = opts.ledger.workers[workerId]?.branch;
+    }
+  }
 
   const allSucceeded = workerResults.every(r => r.success);
 

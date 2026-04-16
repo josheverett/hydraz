@@ -12,6 +12,7 @@ export function createWorktree(
   repoRoot: string,
   sessionId: string,
   branchName: string,
+  startPoint?: string,
 ): WorktreeResult {
   const workDir = getWorkspaceDir(repoRoot, sessionId);
   listCopyableWorktreeIncludes(repoRoot, workDir);
@@ -26,7 +27,9 @@ export function createWorktree(
         stdio: 'pipe',
       });
     } else {
-      execFileSync('git', ['worktree', 'add', '-b', branchName, workDir], {
+      const args = ['worktree', 'add', '-b', branchName, workDir];
+      if (startPoint) args.push(startPoint);
+      execFileSync('git', args, {
         cwd: repoRoot,
         stdio: 'pipe',
       });

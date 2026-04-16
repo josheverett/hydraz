@@ -45,6 +45,7 @@ function makeSerializedOptions(overrides: Partial<SerializablePipelineOptions> =
     reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
     maxOuterLoops: 5,
     maxConsensusRounds: 10,
+    parallel: false,
     ...overrides,
   };
 }
@@ -93,6 +94,7 @@ describe('pipeline-runner', () => {
         reviewerPersonas: personas,
         maxOuterLoops: 3,
         maxConsensusRounds: 8,
+        parallel: false,
       });
 
       expect(serialized.repoRoot).toBe('/my/repo');
@@ -105,6 +107,24 @@ describe('pipeline-runner', () => {
       expect(serialized.reviewerPersonas).toEqual(personas);
       expect(serialized.maxOuterLoops).toBe(3);
       expect(serialized.maxConsensusRounds).toBe(8);
+    });
+
+    it('should include parallel in serialized output', () => {
+      const serialized = toSerializable({
+        repoRoot: '/repo',
+        sessionId: 'abc',
+        sessionName: 'test',
+        task: 'Build it',
+        workingDirectory: '/work',
+        config: createDefaultConfig(),
+        workerCount: 3,
+        reviewerPersonas: [],
+        maxOuterLoops: 5,
+        maxConsensusRounds: 10,
+        parallel: true,
+      });
+
+      expect(serialized.parallel).toBe(true);
     });
   });
 
@@ -137,6 +157,11 @@ describe('pipeline-runner', () => {
       expect(options.callbacks?.onPhaseChange).toBeTypeOf('function');
       expect(options.callbacks?.onEvent).toBeTypeOf('function');
       expect(options.callbacks?.onError).toBeTypeOf('function');
+    });
+
+    it('should preserve parallel field through round-trip', () => {
+      const options = toPipelineOptions(makeSerializedOptions({ parallel: true }));
+      expect(options.parallel).toBe(true);
     });
   });
 
