@@ -301,11 +301,11 @@ File ownership makes conflicts unlikely. The merge phase is a safety net, not th
 Each reviewer produces a structured review with:
 - Overall assessment: `approve` or `changes-requested`
 - Categorized findings:
-  - `architectural`: design-level issues requiring re-planning (routes back to architect)
-  - `implementation`: code-level issues fixable by workers (routes back to targeted workers)
+  - `architectural`: design-level issues requiring re-planning
+  - `implementation`: code-level issues
 - Specific file/line references for each finding
 
-The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the loop-back target.
+The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the feedback route (see §4.8). Both routes rewind through re-planning; the distinction affects whether the architecture design is refreshed from disk.
 
 ### 4.8 Feedback loop routing
 
@@ -363,8 +363,7 @@ created
   -> syncing               (workers running, orchestrator monitors)
   -> merging               (workers done, branches merged to integration)
   -> reviewing             (review panel runs in parallel)
-     -> architecting       (if architectural feedback, loop back)
-     -> fanning-out        (if implementation feedback, targeted re-work)
+     -> planning           (both feedback types rewind to planning via outer loop)
   -> delivering            (PR creation, cleanup)
   -> completed
 
@@ -617,7 +616,11 @@ Note: The following commands exist but their output has NOT been updated for v2 
 - `hydraz stop`: Stops active session
 - `hydraz resume`: Resumes session (currently restarts from scratch, smart resume deferred)
 
-### 11.3 Commands unchanged from v1
+### 11.3 New commands in v2
+
+- `hydraz hello-world`: Infrastructure sanity check. Exercises the full path (auth, workspace, container setup, dist copy, single Claude invocation, file verification) without running the swarm pipeline. Supports `--local`, `--container`, `--cloud`, `--verbose`, `--branch`.
+
+### 11.4 Commands unchanged from v1
 
 - `hydraz config`
 - `hydraz attach`

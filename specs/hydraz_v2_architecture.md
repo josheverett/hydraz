@@ -36,7 +36,7 @@ All of the following were discussed and confirmed with the project owner:
 - **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
 - **Verification**: Workers themselves are responsible for TDD, tests, lint, build for v2.0. No separate verification stage in v2.0. A post-review verification phase with inner retry loop is planned for v2.2 (see spec §18).
 - **Consensus bounds**: Architect-planner loop max 10 rounds (architect has final say at cap). Outer review loop max 5 iterations.
-- **Review feedback routing**: Reviewers categorize findings as architectural (back to architect) vs implementation (back to workers for targeted fixes).
+- **Review feedback routing**: Reviewers categorize findings as architectural vs implementation. Both routes rewind to planning via the outer loop; architectural feedback additionally refreshes the architecture design from disk.
 
 ---
 
@@ -223,11 +223,11 @@ The panel is user-configurable per-session via `--reviewers`. Global config for 
 Each reviewer produces a structured review with:
 - Overall assessment (approve / changes-requested)
 - Categorized findings:
-  - `architectural`: design-level issues requiring re-planning (routes back to architect)
-  - `implementation`: code-level issues fixable by workers (routes back to targeted workers)
+  - `architectural`: design-level issues requiring re-planning
+  - `implementation`: code-level issues
 - Specific file/line references for each finding
 
-The orchestrator aggregates reviews. If any reviewer requests changes, the categorized findings determine the loop-back target.
+The orchestrator aggregates reviews. If any reviewer requests changes, both feedback types rewind to planning via the outer loop; the architectural/implementation distinction affects whether the architecture design is refreshed from disk before re-planning.
 
 ### 3.7 Feedback Loop Routing
 
@@ -239,11 +239,11 @@ When reviewers flag issues:
 - Flows back through planner -> consensus -> workers -> merge -> review
 - Investigation is NOT re-run (repo facts haven't changed from the workers' perspective; the investigation brief from step 1 remains valid)
 
-**Implementation feedback** (back to Workers, targeted fixes):
-- Only the workers whose owned files are implicated receive the feedback
-- Workers get: their original brief + reviewer feedback + "fix these specific issues"
-- Other workers are not re-launched
-- After fixes: re-merge -> re-review
+**Implementation feedback** (back to Planner):
+- The outer loop rewinds to planning (consensus), not directly to targeted workers
+- The planner re-plans with the review feedback
+- New worker fan-out, merge, and review follow
+- This is the same outer loop path as architectural feedback; the distinction is that architectural feedback refreshes the in-memory architecture design from disk before re-planning
 
 **Bounds:**
 - Max 5 outer loops total (across both architectural and implementation feedback)
@@ -513,8 +513,7 @@ Aggregate swarm metrics: total cost, total duration, stage breakdown, loop count
 
 **Key changes:**
 - Outer loop tracking lives in `src/core/swarm/pipeline.ts`; feedback routing via `determineFeedbackRoute` in `src/core/swarm/review-aggregate.ts`
-- Handle architectural feedback: re-enter at architect stage (skip investigation)
-- Handle implementation feedback: re-launch only affected workers, re-merge, re-review
+- Both feedback types rewind to planning (consensus) via the outer loop; architectural feedback additionally refreshes the in-memory architecture design from disk
 - Enforce 5-outer-loop bound; transition to `failed` if exceeded
 
 **Why eighth**: This wires together all prior stages into a complete loop. It's integration, not new capability.
