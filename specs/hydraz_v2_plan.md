@@ -22,9 +22,9 @@ All of the following were discussed and confirmed with the project owner:
 - **Worker count**: User-controlled via `--workers N`, default 3.
 - **Backward compatibility**: None. Major version bump, breaking changes expected.
 - **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
-- **Verification**: Workers themselves are responsible for TDD, tests, lint, build. No separate verification stage. The review panel focuses on design quality, not "do tests pass."
+- **Verification**: Workers themselves are responsible for TDD, tests, lint, build for v2.0. No separate verification stage in v2.0. A post-review verification phase with inner retry loop is planned for v2.2 (see spec §18).
 - **Consensus bounds**: Architect-planner loop max 10 rounds (architect has final say at cap). Outer review loop max 5 iterations.
-- **Review feedback routing**: Reviewers categorize findings as architectural (back to architect) vs implementation (back to workers for targeted fixes).
+- **Review feedback routing**: Reviewers categorize findings as architectural vs implementation. Both routes rewind to planning via the outer loop; architectural feedback additionally refreshes the architecture design from disk.
 
 ---
 
@@ -46,7 +46,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **54 test files** (v1 base + v2 swarm module tests).
+- **57 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -174,8 +174,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 
 **Key changes:**
 - Outer loop tracking lives in `src/core/swarm/pipeline.ts`; feedback routing via `determineFeedbackRoute` in `src/core/swarm/review-aggregate.ts`
-- Handle architectural feedback: re-enter at architect stage (skip investigation)
-- Handle implementation feedback: re-launch only affected workers, re-merge, re-review
+- Both feedback types rewind to planning (consensus) via the outer loop; architectural feedback additionally refreshes the in-memory architecture design from disk
 - Enforce 5-outer-loop bound; transition to `failed` if exceeded
 
 **Why eighth**: This wires together all prior stages into a complete loop. It's integration, not new capability.
@@ -224,7 +223,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - Missing phase emissions: pipeline emits all state machine phases
 - Container context plumbing (removed -- superseded by container-side orchestration)
 
-**Container/cloud mode: PASSED.** Container-side orchestration verified end-to-end (cloud test 11). Full swarm pipeline ran inside a GCP-backed DevPod container: investigation, architecture, planning, consensus, workers, merge, review -- 3 outer loops to approval. Branch delivery has a regression (see known issues).
+**Container/cloud mode: PASSED.** Container-side orchestration verified end-to-end (cloud test 11). Full swarm pipeline ran inside a GCP-backed DevPod container: investigation, architecture, planning, consensus, workers, merge, review -- 3 outer loops to approval. Container hello-world also verified end-to-end (v2.1.0).
 
 ### Post-phase: Complexity reduction (4 rounds) [DONE]
 
@@ -262,7 +261,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - `src/core/orchestration/controller.ts`: container mode uses `tar | ssh` + SSH pipeline-runner pattern; local mode calls `runSwarmPipeline` directly
 - `containerContext` removed from `ExecutionContext`, `PipelineOptions`, and all 6 stage drivers (investigator, architect, planner, consensus, workers, reviewer) -- no longer needed since the pipeline runs container-local
 
-### Hello World mode [IN PROGRESS]
+### Hello World mode [DONE]
 
 First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for infrastructure sanity checks. Exercises the full infrastructure path (auth, workspace, DevPod/container setup, dist copy) but bypasses the swarm pipeline, running a single Claude instance with a deterministic task.
 
@@ -279,15 +278,19 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 **Implementation:**
 - `src/cli/commands/hello-world.ts`: CLI command registration
 - `src/core/orchestration/hello-world.ts`: orchestration logic
-- Reuses `launchClaude` + `ContainerContext` from executor, `scpToContainer`/`sshExec` from devpod, `getProvider` from controller
+- Reuses `launchClaude` from executor, `scpToContainer`/`scpFilesToContainer`/`sshExec` from devpod, `getProvider` from controller
 
-### Deferred to v2.1.0
+### Shipped in v2.1.0
+
+- **Verbose/debug mode**: `--verbose` flag with exhaustive debug logging, `--branch` flag for container clone override, container flow fixes (git remote URL cloning, docker provider forcing, `.worktreeinclude` SCP from host to container)
+
+### Deferred to v2.2.0
 
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
 - **Architect council**: parallel architects with synthesis (see spec non-goals)
 - **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
-- **Verbose/debug mode**: surface stderr on stage failures, add `--verbose` flag for full Claude stream output during debugging
 - **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
+- **Verification phase**: post-review test execution with inner retry loop (see spec §18)
 
 ### Known doc discrepancies
 
@@ -301,7 +304,11 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - ~~README re-audited against final architecture~~ (done)
 
 **Open:**
-- **Container git-push regression**: `finalizeGitHubContainerDelivery` in `delivery.ts` checks `githubBranchExists` but nothing in v2 pushes the branch from inside the container. Workers commit locally but the branch is never pushed to the remote. This worked in v1. Fix: after the pipeline SSH exits successfully, the controller should SSH into the container and run `git push origin <branch>` before calling `finalizeGitHubContainerDelivery`.
+
+(none)
+
+**Previously open, now resolved:**
+- ~~**Container git-push regression**: believed to be a code bug but was actually a GitHub token permissions issue — the push logic works correctly when the token has write access~~
 
 ---
 

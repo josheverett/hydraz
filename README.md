@@ -58,6 +58,8 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--session <name>` | Session name | Auto-generated from task |
+| `--branch <name>` | Branch name | Auto-generated from session |
 | `--swarm` | No-op (swarm pipeline always runs) | Always on |
 | `--workers <N>` | Number of parallel workers | 3 |
 | `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
@@ -70,6 +72,7 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 ```bash
 hydraz                 # interactive mode — start sessions, attach, review
 hydraz run "<task>"    # launch a task directly
+hydraz hello-world     # infrastructure sanity check (supports --local, --container, --cloud, --verbose, --branch)
 
 hydraz sessions        # list all sessions in this repo
 hydraz status          # show current session state and swarm phase
@@ -93,7 +96,7 @@ Three independent reviewers evaluate the integrated result, each embodying a cel
 - **Sandi Metz** — code organization, naming, abstraction quality, maintainability
 - **Linus Torvalds** — simplicity, rejecting unnecessary complexity, bloat detection
 
-Reviewers categorize their findings as **architectural** (routes back to the architect for redesign) or **implementation** (routes back to the affected workers for targeted fixes). The orchestrator automatically determines the feedback route.
+Reviewers categorize their findings as **architectural** or **implementation**. Both routes rewind through re-planning via the outer loop; architectural feedback additionally refreshes the architecture design. The orchestrator automatically determines the feedback route.
 
 Configurable per-session via `--reviewers`.
 

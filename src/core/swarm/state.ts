@@ -40,7 +40,7 @@ export const SWARM_VALID_TRANSITIONS: Record<SwarmPhase, readonly SwarmPhase[]> 
   'fanning-out': ['syncing', 'failed', 'blocked', 'stopped'],
   syncing: ['merging', 'failed', 'blocked', 'stopped'],
   merging: ['reviewing', 'failed', 'blocked', 'stopped'],
-  reviewing: ['delivering', 'architecting', 'fanning-out', 'failed', 'blocked', 'stopped'],
+  reviewing: ['delivering', 'planning', 'failed', 'blocked', 'stopped'],
   delivering: ['completed', 'failed', 'blocked', 'stopped'],
   completed: [],
   failed: ['created'],

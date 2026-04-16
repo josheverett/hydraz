@@ -14,6 +14,7 @@ import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
 import { shellEscape } from '../claude/ssh.js';
 import { launchClaude, type ContainerContext } from '../claude/executor.js';
 import { CONTAINER_DIST_PATH } from '../swarm/pipeline-runner.js';
+import { debug, debugExec, debugOutput, debugTiming } from '../debug.js';
 
 export interface HelloWorldStep {
   name: string;
@@ -38,6 +39,7 @@ export interface VerifyResult {
 export interface HelloWorldOptions {
   executionTarget: ExecutionTarget;
   repoRoot: string;
+  branchOverride?: string;
   onStep?: (step: HelloWorldStep) => void;
 }
 
@@ -94,13 +96,19 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
   const steps: HelloWorldStep[] = [];
   const isContainer = isContainerExecutionTarget(executionTarget);
 
+  debug(`runHelloWorld: executionTarget=${executionTarget} repoRoot=${repoRoot}`);
+  debug(`runHelloWorld: timestamp=${timestamp} fileName=${fileName} isContainer=${isContainer}`);
+
   if (!configExists()) {
+    debug('runHelloWorld: config dir does not exist, initializing');
     initializeConfigDir();
   }
   initRepoState(repoRoot);
   const config = loadConfig();
+  debug(`runHelloWorld: config loaded — authMode=${config.claudeAuth.mode} branchPrefix=${config.branchNaming.prefix}`);
 
   const auth = resolveAuth();
+  debug(`runHelloWorld: auth resolved=${auth.resolved} mode=${auth.modeDescription}`);
   if (!auth.resolved) {
     emitStep(steps, onStep, { name: 'Auth', status: 'fail', detail: auth.errors.join('; ') });
     return { passed: false, steps, timestamp };
@@ -109,12 +117,14 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
 
   if (isContainer) {
     const containerAuth = validateContainerAuth(config);
+    debug(`runHelloWorld: containerAuth valid=${containerAuth.valid}`);
     if (!containerAuth.valid) {
       emitStep(steps, onStep, { name: 'Container auth', status: 'fail', detail: containerAuth.error });
       return { passed: false, steps, timestamp };
     }
 
     const ghReady = getGitHubAutomationReadiness(config, repoRoot);
+    debug(`runHelloWorld: githubAutomation ok=${ghReady.ok}`);
     if (!ghReady.ok) {
       emitStep(steps, onStep, { name: 'GitHub config', status: 'fail', detail: ghReady.error });
       return { passed: false, steps, timestamp };
@@ -122,6 +132,7 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
   }
 
   const provider = getProvider(executionTarget);
+  debug(`runHelloWorld: provider type=${provider.type}`);
   const providerCheck = provider.checkAvailability();
   if (!providerCheck.available) {
     emitStep(steps, onStep, { name: 'Provider', status: 'fail', detail: providerCheck.error });
@@ -130,6 +141,10 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
 
   const sessionName = `hello-world-${timestamp}`;
   const branchName = suggestBranchName(sessionName, config.branchNaming.prefix);
+  debug(`runHelloWorld: sessionName=${sessionName} branchName=${branchName}`);
+
+  const task = generateHelloWorldTask(timestamp);
+  debug(`runHelloWorld: task="${task}"`);
 
   let workspace;
   const wsStart = Date.now();
@@ -140,10 +155,12 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
       branchName,
       personas: config.defaultPersonas,
       executionTarget,
-      task: generateHelloWorldTask(timestamp),
+      task,
     });
+    debug(`runHelloWorld: session created id=${session.id}`);
 
-    workspace = provider.createWorkspace({ session, config });
+    workspace = provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
+    debugTiming('runHelloWorld: createWorkspace', timed(wsStart));
     emitStep(steps, onStep, {
       name: 'Workspace',
       status: 'ok',
@@ -152,17 +169,22 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    debugTiming('runHelloWorld: createWorkspace (failed)', timed(wsStart));
     emitStep(steps, onStep, { name: 'Workspace', status: 'fail', detail: msg, durationMs: timed(wsStart) });
     return { passed: false, steps, timestamp };
   }
 
   const workspaceName = `hydraz-${workspace.sessionId}`;
+  debug(`runHelloWorld: workspaceName=${workspaceName} directory=${workspace.directory}`);
   let containerContext: ContainerContext | undefined;
 
   if (isContainer) {
+    const distRoot = getDistRoot();
+    debug(`runHelloWorld: scpToContainer localPath=${distRoot} remotePath=${CONTAINER_DIST_PATH}`);
     const scpStart = Date.now();
     try {
-      scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
+      scpToContainer(workspaceName, distRoot, CONTAINER_DIST_PATH);
+      debugTiming('runHelloWorld: scpToContainer', timed(scpStart));
       emitStep(steps, onStep, {
         name: 'Container setup',
         status: 'ok',
@@ -171,12 +193,14 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      debugTiming('runHelloWorld: scpToContainer (failed)', timed(scpStart));
       emitStep(steps, onStep, { name: 'Container setup', status: 'fail', detail: msg, durationMs: timed(scpStart) });
       try { provider.destroyWorkspace(repoRoot, workspace); } catch {}
       return { passed: false, steps, timestamp };
     }
 
     const authEnv = prepareContainerAuthEnv(config);
+    debug(`runHelloWorld: containerAuthEnv keys=[${Object.keys(authEnv).join(', ')}]`);
     containerContext = {
       workspaceName,
       authEnv: Object.keys(authEnv).length > 0 ? authEnv : undefined,
@@ -184,17 +208,20 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     };
   }
 
+  debug(`runHelloWorld: launching Claude in ${isContainer ? 'container' : 'local'} mode`);
   const claudeStart = Date.now();
   try {
     const handle = launchClaude({
       workingDirectory: workspace.directory,
-      prompt: generateHelloWorldTask(timestamp),
+      prompt: task,
       config,
       containerContext,
     });
     const result = await handle.waitForExit();
+    debugTiming('runHelloWorld: Claude execution', timed(claudeStart));
 
     if (!result.success) {
+      debug(`runHelloWorld: Claude failed — exit=${result.exitCode} stderr=${result.stderr?.slice(0, 500)}`);
       emitStep(steps, onStep, {
         name: 'Claude',
         status: 'fail',
@@ -212,15 +239,19 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    debugTiming('runHelloWorld: Claude execution (failed)', timed(claudeStart));
     emitStep(steps, onStep, { name: 'Claude', status: 'fail', detail: msg, durationMs: timed(claudeStart) });
     try { provider.destroyWorkspace(repoRoot, workspace); } catch {}
     return { passed: false, steps, timestamp };
   }
 
   let verifyOk = false;
+  const verifyPath = `${workspace.directory}/${fileName}`;
+  debug(`runHelloWorld: verifying file at ${verifyPath}`);
   if (isContainer) {
     try {
-      const contents = sshExec(workspaceName, `cat ${workspace.directory}/${fileName}`).trim();
+      const contents = sshExec(workspaceName, `cat ${verifyPath}`).trim();
+      debugOutput('runHelloWorld: file contents', contents);
       verifyOk = contents === EXPECTED_CONTENTS;
       if (verifyOk) {
         emitStep(steps, onStep, { name: 'Verification', status: 'ok', detail: fileName });
@@ -228,10 +259,12 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
         emitStep(steps, onStep, { name: 'Verification', status: 'fail', detail: `contents: "${contents}"` });
       }
     } catch {
+      debug(`runHelloWorld: verification failed — file not found`);
       emitStep(steps, onStep, { name: 'Verification', status: 'fail', detail: `${fileName} not found` });
     }
   } else {
     const verify = verifyLocalFile(workspace.directory, fileName);
+    debug(`runHelloWorld: local verify found=${verify.found} match=${verify.contentsMatch}`);
     if (verify.found && verify.contentsMatch) {
       verifyOk = true;
       emitStep(steps, onStep, { name: 'Verification', status: 'ok', detail: fileName });
@@ -254,20 +287,26 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
         `git push origin ${shellEscape(branchName)}`,
       ].join('\n') + '\n';
 
+      debug(`runHelloWorld: push script branch=${branchName}`);
+      debugExec('ssh', [`${workspaceName}.devpod`, 'sh', '-s']);
+      const pushStart = Date.now();
       execFileSync('ssh', [`${workspaceName}.devpod`, 'sh', '-s'], {
         input: pushScript,
         stdio: ['pipe', 'pipe', 'pipe'],
         timeout: 120_000,
         encoding: 'utf-8',
       });
+      debugTiming('runHelloWorld: push', Date.now() - pushStart);
       emitStep(steps, onStep, { name: 'Push', status: 'ok', detail: branchName });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      debug(`runHelloWorld: push failed — ${msg}`);
       emitStep(steps, onStep, { name: 'Push', status: 'fail', detail: msg });
       verifyOk = false;
     }
   }
 
+  debug('runHelloWorld: cleanup');
   try {
     provider.destroyWorkspace(repoRoot, workspace);
     emitStep(steps, onStep, { name: 'Cleanup', status: 'ok' });
@@ -276,5 +315,6 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     emitStep(steps, onStep, { name: 'Cleanup', status: 'fail', detail: msg });
   }
 
+  debug(`runHelloWorld: complete — passed=${verifyOk}`);
   return { passed: verifyOk, steps, timestamp, fileName };
 }

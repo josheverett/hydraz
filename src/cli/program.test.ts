@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createProgram } from './program.js';
+
+const packageJson = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf-8'),
+) as { version: string };
 
 const EXPECTED_COMMANDS = [
   'config',
@@ -25,7 +32,7 @@ describe('createProgram', () => {
 
   it('has the correct version from package.json', () => {
     const program = createProgram();
-    expect(program.version()).toBe('2.0.0');
+    expect(program.version()).toBe(packageJson.version);
   });
 
   it('has a description', () => {

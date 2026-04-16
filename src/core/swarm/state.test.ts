@@ -59,12 +59,16 @@ describe('swarm state machine', () => {
   });
 
   describe('outer loop transitions', () => {
-    it('should allow reviewing -> architecting (architectural feedback)', () => {
-      expect(isValidSwarmTransition('reviewing', 'architecting')).toBe(true);
+    it('should allow reviewing -> planning (both feedback types rewind to planning)', () => {
+      expect(isValidSwarmTransition('reviewing', 'planning')).toBe(true);
     });
 
-    it('should allow reviewing -> fanning-out (implementation feedback)', () => {
-      expect(isValidSwarmTransition('reviewing', 'fanning-out')).toBe(true);
+    it('should reject reviewing -> architecting (pipeline rewinds to planning, not architect)', () => {
+      expect(isValidSwarmTransition('reviewing', 'architecting')).toBe(false);
+    });
+
+    it('should reject reviewing -> fanning-out (pipeline rewinds to planning, not fan-out)', () => {
+      expect(isValidSwarmTransition('reviewing', 'fanning-out')).toBe(false);
     });
   });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LocalContainerProvider } from './local-container.js';
+import { CloudProvider } from './cloud.js';
 import { createSession } from '../sessions/schema.js';
 import { createDefaultConfig } from '../config/schema.js';
 
@@ -12,6 +13,7 @@ vi.mock('../repo/detect.js', () => ({
     repo: 'hello-world',
     httpsUrl: 'https://github.com/octocat/hello-world.git',
   })),
+  getCurrentBranch: vi.fn(() => 'feature/devcontainer'),
 }));
 
 vi.mock('./worktree-include.js', () => ({
@@ -27,11 +29,12 @@ vi.mock('./devpod.js', () => ({
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
   createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
   copyWorktreeIncludesInContainer: vi.fn(),
+  scpFilesToContainer: vi.fn(),
   setupContainerGitSsh: vi.fn(),
   sshExec: vi.fn(),
 }));
 
-import { hasGitRemote, getGitHubRepo } from '../repo/detect.js';
+import { hasGitRemote, getGitHubRepo, getCurrentBranch } from '../repo/detect.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -41,6 +44,7 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  scpFilesToContainer,
   sshExec,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
@@ -53,9 +57,11 @@ const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
 const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
+const mockScpFiles = vi.mocked(scpFilesToContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
+const mockGetCurrentBranch = vi.mocked(getCurrentBranch);
 const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
 
 function makeSession(name: string = 'test-session', executionTarget: 'local-container' | 'cloud' = 'local-container') {
@@ -93,6 +99,7 @@ beforeEach(() => {
   mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
+  mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
 });
 
 describe('LocalContainerProvider', () => {
@@ -126,15 +133,19 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('launches devpod with the main repo root, not a worktree', () => {
+    it('launches devpod with the git remote URL, docker provider, and current branch', () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
       provider.createWorkspace({ session, config });
 
-      const devpodUpArgs = mockDevpodUp.mock.calls[0];
-      expect(devpodUpArgs?.[0]).toBe('/fake/repo');
+      expect(mockDevpodUp).toHaveBeenCalledWith(
+        'git@github.com:octocat/hello-world.git',
+        expect.stringContaining('hydraz-'),
+        'docker',
+        'feature/devcontainer',
+      );
     });
 
     it('creates worktree inside the container via SSH', () => {
@@ -169,6 +180,42 @@ describe('LocalContainerProvider', () => {
         expect.stringContaining('/tmp/hydraz-worktrees/'),
         ['agent/.env'],
       );
+    });
+
+    it('SCPs worktree include files from host to container before copying within container', () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      expect(mockScpFiles).toHaveBeenCalledWith(
+        expect.stringContaining('hydraz-'),
+        '/fake/repo',
+        expect.stringContaining('/workspaces/'),
+        ['agent/.env'],
+      );
+    });
+
+    it('does not SCP when there are no worktree include files', () => {
+      mockListCopyableIncludes.mockReturnValue([]);
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      expect(mockScpFiles).not.toHaveBeenCalled();
+    });
+
+    it('tears down devpod if SCP of worktree include files fails', () => {
+      mockScpFiles.mockImplementation(() => { throw new Error('scp failed'); });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow('scp failed');
+      expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
     it('fails before launching devpod when .worktreeinclude validation rejects a symlink', () => {
@@ -291,6 +338,37 @@ describe('LocalContainerProvider', () => {
       const provider = new LocalContainerProvider();
 
       expect(() => provider.destroyWorkspace('/fake/repo', fakeWorkspace)).not.toThrow();
+    });
+  });
+});
+
+describe('CloudProvider', () => {
+  it('has type "cloud"', () => {
+    const provider = new CloudProvider();
+    expect(provider.type).toBe('cloud');
+  });
+
+  describe('checkAvailability', () => {
+    it('does not require Docker', () => {
+      mockCheckDocker.mockReturnValue(false);
+      const provider = new CloudProvider();
+      const result = provider.checkAvailability();
+      expect(result.available).toBe(true);
+    });
+  });
+
+  describe('createWorkspace', () => {
+    it('does not force docker provider or branch for devpod up', () => {
+      const provider = new CloudProvider();
+      const session = makeSession('cloud-session', 'cloud');
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      const providerArg = mockDevpodUp.mock.calls[0]?.[2];
+      const branchArg = mockDevpodUp.mock.calls[0]?.[3];
+      expect(providerArg).toBeUndefined();
+      expect(branchArg).toBeUndefined();
     });
   });
 });

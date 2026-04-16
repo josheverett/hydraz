@@ -13,8 +13,11 @@ import {
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
   scpToContainer,
+  scpFilesToContainer,
   getDistRoot,
+  devpodUp,
 } from './devpod.js';
+import { setVerbose } from '../debug.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
@@ -27,6 +30,7 @@ let testDir: string;
 
 beforeEach(() => {
   testDir = mkdtempSync(join(tmpdir(), 'hydraz-devpod-test-'));
+  setVerbose(false);
   vi.clearAllMocks();
 });
 
@@ -289,5 +293,137 @@ describe('scpToContainer', () => {
   it('throws when the transfer fails', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
     expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
+  });
+});
+
+describe('scpFilesToContainer', () => {
+  it('uses tar|ssh pipe via sh -c to transfer specific files', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['agent/.env']);
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'sh',
+      ['-c', expect.stringContaining('tar')],
+      expect.any(Object),
+    );
+  });
+
+  it('includes all specified files in the tar command', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['agent/.env', 'deep/nested/.env']);
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain("'agent/.env'");
+    expect(cmd).toContain("'deep/nested/.env'");
+  });
+
+  it('extracts into the container repo path', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain("'/workspaces/my-ws'");
+  });
+
+  it('tars from the host repo root directory', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain("'/host/repo'");
+  });
+
+  it('targets the correct devpod host', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('hydraz-abc123', '/host/repo', '/workspaces/hydraz-abc123', ['.env']);
+    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain('hydraz-abc123.devpod');
+  });
+
+  it('does not invoke any command when there are no files', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', []);
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it('throws when the transfer fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
+    expect(() => scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env'])).toThrow('ssh: connection refused');
+  });
+});
+
+describe('devpodUp', () => {
+  it('uses a 900 second timeout for first-time devcontainer builds', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.timeout).toBe(900_000);
+  });
+
+  it('uses stdio inherit when verbose is enabled for real-time streaming', () => {
+    setVerbose(true);
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.stdio).toBe('inherit');
+  });
+
+  it('uses stdio pipe when verbose is disabled', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.stdio).toBe('pipe');
+  });
+
+  it('passes the source and workspace name to devpod up', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc'],
+      expect.any(Object),
+    );
+  });
+
+  it('includes --provider flag when provider is specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--provider', 'docker'],
+      expect.any(Object),
+    );
+  });
+
+  it('omits --provider flag when provider is not specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--provider');
+  });
+
+  it('appends branch to source URL with @ syntax when branch is specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args[1]).toBe('git@github.com:org/repo.git@feature/devcontainer');
+  });
+
+  it('uses bare source URL when branch is not specified', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args[1]).toBe('git@github.com:org/repo.git');
+  });
+
+  it('passes --debug to devpod when verbose is enabled', () => {
+    setVerbose(true);
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('--debug');
+  });
+
+  it('omits --debug when verbose is disabled', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--debug');
   });
 });

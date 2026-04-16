@@ -2,13 +2,14 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container/cloud mode ready for manual testing.
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18).
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
 - Review content aggregation: pipeline reads actual review files from disk instead of passing empty strings
 - SIGKILL fallback: executor sends SIGKILL after 5s if SIGTERM doesn't terminate the process
 - Worker worktree reuse: implementation feedback loops re-use existing worktrees instead of trying to create duplicates
+- Container worktree includes: `.worktreeinclude` files (e.g., `.env`) only exist on the host, not in the container's git clone. Added `scpFilesToContainer` to transfer them from host to container repo root before the in-container copy to worktree
 - Missing phase emissions: pipeline now emits all state machine phases (including `architect-reviewing` and `syncing`) to prevent invalid transitions
 - Container context plumbing: `containerContext` was threaded through pipeline to all stage executors, then removed when container-side orchestration was implemented (pipeline runs inside the container, so no per-stage SSH needed)
 
@@ -107,7 +108,7 @@ Behind the scenes, the swarm investigates the codebase, designs a solution, plan
 - Container-per-worker isolation (deferred; local worktrees first)
 - Permission scoping per worker role (deferred; `--dangerously-skip-permissions` remains for now)
 - Variable reviewer panel size (fixed at 3 for v2)
-- Architect council (parallel architects with synthesis; deferred to v2.1 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
+- Architect council (parallel architects with synthesis; deferred to v2.2 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
 - Homebrew distribution (deferred from v1)
 
 ---
@@ -186,11 +187,20 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
 └──────┬──────┘
        │ approved, or categorized feedback
        │
-       ├── architectural issues ──► back to Architect (step 2, skip investigation)
-       ├── implementation issues ──► back to Workers (targeted fixes)
+       ├── architectural issues ──► back to Planner (re-plan with refreshed architecture)
+       ├── implementation issues ──► back to Planner (re-plan with feedback)
        │   (max 5 outer loops total, then fail)
        │
        ▼ (approved)
+┌─────────────┐
+│  Verify      │  [v2.2] Run tests + optional E2E per review criteria
+│  (planned)   │
+└──────┬──────┘
+       │ pass, or fail with retry exhausted (deliver with warning)
+       │
+       ├── test failures ──► single fix-up worker ──► re-verify (max 2-3 attempts)
+       │
+       ▼
 ┌─────────────┐
 │  Delivery    │  PR creation, cleanup
 └─────────────┘
@@ -291,25 +301,26 @@ File ownership makes conflicts unlikely. The merge phase is a safety net, not th
 Each reviewer produces a structured review with:
 - Overall assessment: `approve` or `changes-requested`
 - Categorized findings:
-  - `architectural`: design-level issues requiring re-planning (routes back to architect)
-  - `implementation`: code-level issues fixable by workers (routes back to targeted workers)
+  - `architectural`: design-level issues requiring re-planning
+  - `implementation`: code-level issues
 - Specific file/line references for each finding
 
-The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the loop-back target.
+The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the feedback route (see §4.8). Both routes rewind through re-planning; the distinction affects whether the architecture design is refreshed from disk.
 
 ### 4.8 Feedback loop routing
 
-**Architectural feedback** (back to Architect, step 2):
-- The architect receives: original task + investigation + previous architecture + reviewer feedback
-- Produces revised architecture
-- Flows back through planner -> consensus -> workers -> merge -> review
+**Architectural feedback** (back to Planner with refreshed architecture):
+- The orchestrator re-reads the architecture design from disk before re-planning
+- The outer loop rewinds to planning (consensus) with the refreshed architecture
+- Flows through planner -> consensus -> workers -> merge -> review
+- The architect is NOT re-invoked; the refresh is a disk re-read, not a new Claude invocation
 - Investigation is NOT re-run (the repo structure facts from step 1 remain valid)
 
-**Implementation feedback** (back to Workers, targeted fixes):
-- Only workers whose owned files are implicated by findings receive the feedback
-- Workers get: their original brief + reviewer feedback + "fix these specific issues"
-- Other workers are not re-launched
-- After fixes: re-merge -> re-review
+**Implementation feedback** (back to Planner):
+- The outer loop rewinds to planning (consensus), not directly to targeted workers
+- The planner re-plans with the review feedback
+- New worker fan-out, merge, and review follow
+- This is the same outer loop path as architectural feedback; the only distinction is that architectural feedback refreshes the in-memory architecture design from disk before re-planning
 
 **Bounds**: Max 5 outer loops total (across both architectural and implementation feedback). If the cap is hit, the session transitions to `failed` (the controller maps all pipeline non-success outcomes to `failed`; `blocked` is reserved for pre-flight issues like auth/provider failures). Note: the pipeline internally returns `phase: 'blocked'` for exhaustion, but the controller overrides this to `failed` for the session state.
 
@@ -353,8 +364,7 @@ created
   -> syncing               (workers running, orchestrator monitors)
   -> merging               (workers done, branches merged to integration)
   -> reviewing             (review panel runs in parallel)
-     -> architecting       (if architectural feedback, loop back)
-     -> fanning-out        (if implementation feedback, targeted re-work)
+     -> planning           (both feedback types rewind to planning via outer loop)
   -> delivering            (PR creation, cleanup)
   -> completed
 
@@ -529,7 +539,7 @@ Inside the container, the pipeline runs identically to local bare-metal mode -- 
 
 ## 9. Resume and Checkpoint Strategy
 
-**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it currently resets to `created` and reruns the full pipeline from scratch. Wiring resume is deferred to v2.1.0.
+**Status: Design defined, not yet wired.** `determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it currently resets to `created` and reruns the full pipeline from scratch. Wiring resume is deferred to v2.2.0.
 
 **Target behavior (when wired):** Each pipeline stage produces durable artifacts. The `task-ledger.json` is the canonical checkpoint. When a session is resumed, the orchestrator reads the ledger and re-enters the pipeline at the appropriate point:
 
@@ -591,6 +601,8 @@ hydraz run --container "<task>"          # Run in local Docker container via Dev
 hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 ```
 
+- `--session <name>`: Session name (auto-generated from task if omitted; carried from v1)
+- `--branch <name>`: Branch name (auto-generated from session name if omitted; carried from v1)
 - `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
 - `--workers N`: Number of parallel workers (default 3)
 - `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
@@ -607,7 +619,11 @@ Note: The following commands exist but their output has NOT been updated for v2 
 - `hydraz stop`: Stops active session
 - `hydraz resume`: Resumes session (currently restarts from scratch, smart resume deferred)
 
-### 11.3 Commands unchanged from v1
+### 11.3 New commands in v2
+
+- `hydraz hello-world`: Infrastructure sanity check. Exercises the full path (auth, workspace, container setup, dist copy, single Claude invocation, file verification) without running the swarm pipeline. Supports `--local`, `--container`, `--cloud`, `--verbose`, `--branch`.
+
+### 11.4 Commands unchanged from v1
 
 - `hydraz config`
 - `hydraz attach`
@@ -784,13 +800,35 @@ src/core/swarm/
 
 3. **Reviewer persona storage location**: Recommendation: `~/.config/hydraz/reviewers/` alongside the existing persona directory.
 
+### Planned for v2.2: Verification phase
+
+A post-review verification phase that actually runs tests (and optionally headless E2E) before delivery. This was explicitly deferred in v2.0 ("workers own TDD, no separate verification stage") but experience shows that workers passing their own tests is not sufficient — integrated code needs verification after merge.
+
+**Design decisions made:**
+
+1. **Position in pipeline**: After the review panel approves, before delivery. The review panel already provides the gate for code quality; the verifier provides the gate for correctness.
+
+2. **Test criteria source**: Reviewers emit test criteria as part of their review output. The verifier executes criteria it receives rather than deciding what to verify from scratch. This keeps the verifier focused and avoids scope creep.
+
+3. **Inner loop, not outer loop**: The verifier has its own tight retry cycle (verify → single-worker fix → re-verify), similar to how consensus has its own inner loop within planning. This avoids the heavyweight outer loop (which rewinds all the way to planning) for simple test failures.
+
+4. **Single worker for fix-ups**: If verification fails, exactly one worker is spawned to fix the failures, regardless of how many workers were configured for the run. Fanning out to N workers for test fixes would cause merge conflicts and contradictory fixes.
+
+5. **Retry cap**: 2-3 verification attempts max. On exhaustion, deliver with a warning rather than blocking. The PR lands with a note that verification did not pass — the human can decide whether to merge.
+
+6. **E2E / headless browser**: Not visual verification — functional E2E (e.g., "hit the login flow, confirm it doesn't 500"). The verifier intelligently decides when E2E is warranted based on review criteria (e.g., "UI changed" → E2E; "backend-only" → unit tests sufficient). This is a stretch goal within v2.2, not a requirement for the initial implementation.
+
+7. **Artifacts**: `swarm/verification/result.md` (test output, pass/fail), `swarm/verification/criteria.md` (from reviewers). Fix-up worker gets `swarm/verification/result.md` as input.
+
+**What this does NOT change**: The existing outer loop (review → planning → workers → merge → review) remains for architectural and implementation feedback. The verifier loop is orthogonal — it runs only after the review panel has already approved the code.
+
 ### Resolved
 
 1. **Orchestrator model**: TypeScript supervisor, not a Claude process.
 2. **Worker count**: User-controlled, default 3.
 3. **Backward compatibility**: None. Clean major version break.
 4. **Personas**: Applied to reviewers only. Workers get identical prompts.
-5. **Verification**: Workers own TDD. No separate verification stage.
+5. **Verification**: Workers own TDD for v2.0. Separate verification phase planned for v2.2 (see above).
 6. **Consensus bounds**: 10 rounds, architect final say.
 7. **Outer loop bounds**: 5 iterations, then fail.
 8. **Feedback routing**: Reviewers categorize as architectural vs implementation.
@@ -810,14 +848,14 @@ src/core/swarm/
 | Architect review | 1 |
 | Workers | N (default 3) |
 | Reviewers | 3 |
-| **Total** | **N + 6** (default 10) |
+| **Total** | **N + 7** (default 10) |
 
 All at Claude Opus pricing.
 
 ### 19.2 With loops
 
 Each consensus round adds 2 invocations (planner + architect review).
-Each outer loop adds: 1 architect + 1 planner + up to 10 consensus rounds + N workers + 3 reviewers.
+Each outer loop adds: up to 10 consensus rounds (2 invocations each) + N workers + 3 reviewers.
 
 Worst case with all bounds hit: significant. Per-stage cost tracking is essential so users can see where spend goes.
 

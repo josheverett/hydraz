@@ -98,7 +98,10 @@ export async function runMain(args: string[]): Promise<void> {
   }
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+let isMain = false;
+try {
+  isMain = Boolean(process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
+} catch { /* import.meta.url unavailable in SEA/CJS mode */ }
 if (isMain) {
   runMain(process.argv);
 }
