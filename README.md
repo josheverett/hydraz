@@ -22,13 +22,13 @@ Stand in a repo, describe a task, walk away. A real multi-process swarm — powe
 Hydraz is a deterministic TypeScript orchestrator that drives a pipeline of independent Claude Code processes:
 
 ```
-Investigate → Architect → Plan (with consensus loop) → Parallel Workers → Merge → Review Panel → Deliver
+Investigate → Architect → Plan (with consensus loop) → Workers → Merge → Review Panel → Deliver
 ```
 
 1. An **investigator** explores the repo and documents its structure
 2. An **architect** designs the solution based on the investigation
-3. A **planner** decomposes the work into parallel tasks; the architect reviews the plan until both agree (up to 10 rounds)
-4. **N parallel workers** (default 3) implement their assigned tasks in isolated worktrees, each using strict TDD
+3. A **planner** decomposes the work into tasks; the architect reviews the plan until both agree (up to 10 rounds)
+4. **N workers** (default 3, serial by default) implement their assigned tasks in isolated worktrees, each using strict TDD — each worker builds on the previous worker's branch
 5. The orchestrator **merges** worker branches into an integration branch
 6. A **review panel** of 3 famous-engineer personas (Carmack, Metz, Torvalds) independently reviews the result
 7. If changes are needed, the right part of the pipeline re-runs automatically (up to 5 iterations)
@@ -51,6 +51,7 @@ hydraz
 ```bash
 hydraz run "fix the auth timeout regression"
 hydraz run --workers 5 "build the user management system"
+hydraz run --parallel "build the user management system"
 hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 ```
 
@@ -61,7 +62,8 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 | `--session <name>` | Session name | Auto-generated from task |
 | `--branch <name>` | Branch name | Auto-generated from session |
 | `--swarm` | No-op (swarm pipeline always runs) | Always on |
-| `--workers <N>` | Number of parallel workers | 3 |
+| `--workers <N>` | Number of workers | 3 |
+| `--parallel` | Run workers concurrently instead of serially | Off (serial) |
 | `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
 | `--local` | Run locally (bare metal) | Default |
 | `--container` | Run locally in a Docker container | |

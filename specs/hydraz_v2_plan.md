@@ -287,7 +287,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 ### v2.2.0 Backlog
 
 **P0 — Ship-blocking for non-experimental:**
-- **Serial worker execution (default)**: workers should execute serially by default, with parallel mode opt-in via `--parallel`. Parallel workers on greenfield or heavily overlapping codebases produce merge conflicts because there's no existing file boundary to partition. Serial execution lets each worker build on the previous one's commits. This is a prerequisite for worker count intelligence.
+- ~~**Serial worker execution (default)**: workers execute serially by default, with parallel mode opt-in via `--parallel`.~~ (done in v2.2.0)
 - **Prompt calibration for proportionality and approval bias**: add proportionality sections to investigator, architect, and planner prompts (match depth to task complexity). Rework architect-review prompt (default verdict APPROVED, only reject for concrete problems that would cause implementation to fail). Rework reviewer prompt (explicit anti-approval-bias language, concrete definition of valid rejections vs. stylistic preferences, default verdict APPROVED).
 - **Credentials out of `process.argv`**: the serialized options JSON (containing OAuth token and GitHub PAT) is passed as a CLI argument to pipeline-runner and is visible in `ps aux`. Move to stdin pipe or temp file with 0600 permissions.
 
@@ -374,3 +374,15 @@ It introduces zero parallelism and zero loop complexity. It's one Claude invocat
 4. **Merge conflicts despite ownership**: Even with ownership, workers may make incompatible changes to shared files or interfaces. Mitigation: interface contracts in the plan + merge-phase conflict resolution.
 
 5. **Review panel consistency**: Reviewers may produce inconsistent or unstructured output. Mitigation: structured output format in the prompt + parsing fallbacks.
+
+---
+
+## 6. Manual E2E Verification
+
+After all v2.2.0 code changes are complete, run a full manual end-to-end test before tagging the release. At minimum:
+
+- [ ] Local bare-metal: `hydraz run "<task>"` — full pipeline to completion
+- [ ] Local bare-metal with `--parallel`: verify parallel worker execution still works
+- [ ] Container/cloud mode (if changes touched container paths): `hydraz run --container "<task>"` or `--cloud`
+- [ ] `hydraz hello-world --local` sanity check
+- [ ] Verify serial worker chaining: confirm later workers build on earlier workers' commits (inspect git log on integration branch)

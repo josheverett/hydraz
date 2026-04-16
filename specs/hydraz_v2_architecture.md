@@ -112,7 +112,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
        │
        ▼ (plan approved)
 ┌──────┴──────┐
-│   Workers    │  N instances in parallel (default 3)
+│   Workers    │  N instances, serial by default (default 3, --parallel for concurrent)
 │  (fan-out)   │  each in own worktree, strict TDD, prove-it methodology
 └──────┬──────┘
        │ code on worker branches
@@ -180,7 +180,7 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 ### 3.4 Worker Isolation
 
 **Local mode (v2 starting point):**
-- Each worker gets its own git worktree via `createWorktree()`, branched from the same base commit (pinned at session start)
+- Each worker gets its own git worktree via `createWorktree()`. In serial mode (default), each worker branches from the previous worker's branch so later workers build on earlier workers' commits. In parallel mode (`--parallel`), all workers branch from the same base commit.
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (the session's primary branch)
 

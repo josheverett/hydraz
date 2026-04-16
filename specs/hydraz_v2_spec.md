@@ -170,7 +170,7 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
        │
        ▼ (plan approved)
 ┌──────┴──────┐
-│   Workers    │  N instances in parallel (default 3)
+│   Workers    │  N instances, serial by default (default 3, --parallel for concurrent)
 │  (fan-out)   │  each in own worktree, strict TDD, prove-it methodology
 └──────┬──────┘
        │ code on worker branches
@@ -262,10 +262,10 @@ Each round produces durable artifacts:
 
 **Input**: Plan + worker brief + ownership scope + interface contracts
 **Output**: Code commits on worker branch + `swarm/workers/<id>/progress.md`
-**Process**: N Claude instances in parallel (default 3, user-controlled via `--workers N`)
+**Process**: N Claude instances, serial by default (default 3, user-controlled via `--workers N`, `--parallel` for concurrent execution)
 
 Each worker:
-- Gets its own git worktree, branched from the same base commit
+- Gets its own git worktree, branched from the previous worker's branch (serial mode) or the same base commit (parallel mode)
 - Receives an identical core prompt emphasizing strict TDD, prove-it methodology, atomic commits
 - Is differentiated only by its task brief and file ownership, not by persona
 - Must stay within its owned files/paths -- must not modify files outside its ownership scope
@@ -516,12 +516,13 @@ Files in the `shared` list may be modified by any worker. Workers are instructed
 
 ### 8.1 Local mode (v2 starting point)
 
-Each worker gets its own git worktree via the existing `createWorktree()` in `src/core/providers/worktree.ts`, branched from the same base commit pinned at session start.
+Each worker gets its own git worktree via `createWorktree()` in `src/core/providers/worktree.ts`. In serial mode (default), each worker branches from the previous worker's branch, so later workers build on earlier workers' commits. In parallel mode (`--parallel`), all workers branch from the same base commit.
 
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (session's primary branch)
 - All worktrees share the git object store (cheap on disk)
 - Workers run as separate `claude --print` processes in their respective worktree directories
+- Serial execution reduces merge conflicts on greenfield or overlapping codebases
 
 ### 8.2 Container/cloud mode
 
@@ -594,7 +595,8 @@ Aggregate swarm metrics:
 
 ```bash
 hydraz run "<task>"                      # Launch swarm pipeline (swarm always runs; --swarm is a no-op)
-hydraz run --workers 5 "<task>"          # 5 parallel workers
+hydraz run --workers 5 "<task>"          # 5 workers (serial by default)
+hydraz run --parallel "<task>"           # Run workers in parallel instead of serial
 hydraz run --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
 hydraz run --local "<task>"              # Run locally (bare metal, default)
 hydraz run --container "<task>"          # Run in local Docker container via DevPod
@@ -604,7 +606,8 @@ hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 - `--session <name>`: Session name (auto-generated from task if omitted; carried from v1)
 - `--branch <name>`: Branch name (auto-generated from session name if omitted; carried from v1)
 - `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
-- `--workers N`: Number of parallel workers (default 3)
+- `--workers N`: Number of workers (default 3, serial by default)
+- `--parallel`: Run workers concurrently instead of serially (opt-in)
 - `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
 - `--local` / `--container` / `--cloud`: Execution target selection (carried from v1)
 
