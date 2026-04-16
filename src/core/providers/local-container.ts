@@ -16,6 +16,7 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  scpFilesToContainer,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { getGitHubRepo, hasGitRemote, getCurrentBranch } from '../repo/detect.js';
@@ -119,6 +120,9 @@ export class LocalContainerProvider implements WorkspaceProvider {
       debug(`createWorkspace: worktreePath=${worktreePath} branch=${session.branchName}`);
       const safeIncludes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
       debug(`createWorkspace: copying ${safeIncludes.length} include files into worktree`);
+      if (safeIncludes.length > 0) {
+        scpFilesToContainer(workspaceName, session.repoRoot, containerRepoPath, safeIncludes);
+      }
       copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {
       devpodDelete(workspaceName);

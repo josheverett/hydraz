@@ -29,6 +29,7 @@ vi.mock('./devpod.js', () => ({
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
   createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
   copyWorktreeIncludesInContainer: vi.fn(),
+  scpFilesToContainer: vi.fn(),
   setupContainerGitSsh: vi.fn(),
   sshExec: vi.fn(),
 }));
@@ -43,6 +44,7 @@ import {
   verifyClaudeInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  scpFilesToContainer,
   sshExec,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
@@ -55,6 +57,7 @@ const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
 const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
+const mockScpFiles = vi.mocked(scpFilesToContainer);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
@@ -177,6 +180,42 @@ describe('LocalContainerProvider', () => {
         expect.stringContaining('/tmp/hydraz-worktrees/'),
         ['agent/.env'],
       );
+    });
+
+    it('SCPs worktree include files from host to container before copying within container', () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      expect(mockScpFiles).toHaveBeenCalledWith(
+        expect.stringContaining('hydraz-'),
+        '/fake/repo',
+        expect.stringContaining('/workspaces/'),
+        ['agent/.env'],
+      );
+    });
+
+    it('does not SCP when there are no worktree include files', () => {
+      mockListCopyableIncludes.mockReturnValue([]);
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      provider.createWorkspace({ session, config });
+
+      expect(mockScpFiles).not.toHaveBeenCalled();
+    });
+
+    it('tears down devpod if SCP of worktree include files fails', () => {
+      mockScpFiles.mockImplementation(() => { throw new Error('scp failed'); });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      expect(() => provider.createWorkspace({ session, config })).toThrow('scp failed');
+      expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
     it('fails before launching devpod when .worktreeinclude validation rejects a symlink', () => {

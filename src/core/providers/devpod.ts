@@ -192,6 +192,26 @@ export function scpToContainer(
   debugTiming('scpToContainer', Date.now() - start);
 }
 
+export function scpFilesToContainer(
+  workspaceName: string,
+  hostRepoRoot: string,
+  containerRepoPath: string,
+  files: string[],
+): void {
+  if (files.length === 0) {
+    return;
+  }
+
+  const sshTarget = `${workspaceName}.devpod`;
+  const escapedFiles = files.map((f) => shellEscape(f)).join(' ');
+  const remoteCmd = `tar -C ${shellEscape(containerRepoPath)} -xf -`;
+  const shCmd = `tar -C ${shellEscape(hostRepoRoot)} --no-xattrs -cf - ${escapedFiles} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
+  debugExec('sh', ['-c', shCmd]);
+  const start = Date.now();
+  execFileSync('sh', ['-c', shCmd], EXEC_OPTIONS);
+  debugTiming('scpFilesToContainer', Date.now() - start);
+}
+
 export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
   debugExec('ssh', [`${workspaceName}.devpod`, 'claude --version']);
   const start = Date.now();
