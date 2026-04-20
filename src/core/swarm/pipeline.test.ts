@@ -364,4 +364,21 @@ describe('runSwarmPipeline', () => {
     const investigateCtx = vi.mocked(runInvestigation).mock.calls[0]![0]!;
     expect(investigateCtx.repoPromptContent).toBeUndefined();
   });
+
+  it('should pass onEvent callback to runConsensus that forwards to pipeline callbacks', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const consensusCall = vi.mocked(runConsensus).mock.calls[0]!;
+    const consensusOpts = consensusCall[1];
+    expect(consensusOpts.onEvent).toBeInstanceOf(Function);
+
+    consensusOpts.onEvent!('swarm.consensus_round_started', 'Consensus round 1 of 10');
+    expect(events).toContainEqual({
+      type: 'swarm.consensus_round_started',
+      message: 'Consensus round 1 of 10',
+    });
+  });
 });

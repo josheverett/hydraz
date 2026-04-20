@@ -127,6 +127,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       architectureDesign,
       workerCount: options.workerCount,
       maxRounds: options.maxConsensusRounds,
+      onEvent: (type, message) => emitEvent(options, type, message),
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;

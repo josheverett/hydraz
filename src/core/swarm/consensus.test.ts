@@ -163,4 +163,127 @@ describe('runConsensus', () => {
     expect(mockRegister).toHaveBeenCalledTimes(2);
     expect(mockUnregister).toHaveBeenCalledTimes(2);
   });
+
+  describe('event streaming', () => {
+    it('should emit consensus_round_started event at the beginning of each round', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_round_started',
+        expect.stringContaining('1'),
+      );
+    });
+
+    it('should emit consensus_planner_completed event after planner succeeds', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_planner_completed',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit consensus_review_started event before architect review', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_started',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit consensus_review_completed with approved verdict when plan is approved', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_completed',
+        expect.stringMatching(/approved/i),
+      );
+    });
+
+    it('should emit consensus_review_completed with changes-requested when plan is rejected', async () => {
+      mockClaudeSequence([
+        { success: true, writePlanArtifacts: true },
+        { success: true, writeFeedback: true, feedbackRound: 1 },
+        { success: true, writePlanArtifacts: true },
+      ]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        maxRounds: 2,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_completed',
+        expect.stringMatching(/changes/i),
+      );
+    });
+
+    it('should emit consensus_planner_failed event when planner fails', async () => {
+      mockClaudeSequence([{ success: false }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_planner_failed',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit correct event sequence for multi-round consensus', async () => {
+      mockClaudeSequence([
+        { success: true, writePlanArtifacts: true },
+        { success: true, writeFeedback: true, feedbackRound: 1 },
+        { success: true, writePlanArtifacts: true },
+      ]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        maxRounds: 2,
+        onEvent,
+      });
+
+      const eventTypes = onEvent.mock.calls.map((c: [string, string]) => c[0]);
+      expect(eventTypes).toEqual([
+        'swarm.consensus_round_started',
+        'swarm.consensus_planner_completed',
+        'swarm.consensus_review_started',
+        'swarm.consensus_review_completed',
+        'swarm.consensus_round_started',
+        'swarm.consensus_planner_completed',
+      ]);
+    });
+  });
 });
