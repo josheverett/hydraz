@@ -12,8 +12,17 @@ import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 vi.mock('../claude/executor.js', () => ({ launchClaude: vi.fn() }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
+
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -76,6 +85,16 @@ describe('buildArchitectPlanReviewPrompt', () => {
   it('should instruct writing feedback to architecture/feedback/', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1)).toContain('feedback'); });
   it('should include evidence discipline principles', () => { const p = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
   it('should include the absolute swarm directory path when provided', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, '/tmp/swarm')).toContain('/tmp/swarm'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runConsensus', () => {
@@ -120,5 +139,151 @@ describe('runConsensus', () => {
       maxRounds: 2,
     });
     expect(result.roundsUsed).toBe(2);
+  });
+
+  it('should include repoPromptContent in the architect review prompt when set on context', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+    });
+    const reviewCallArgs = mockLaunchClaude.mock.calls[1]![0]!;
+    expect(reviewCallArgs.prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should register and unregister executor handles for both planner and architect review', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx(), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+    });
+
+    expect(mockRegister).toHaveBeenCalledTimes(2);
+    expect(mockUnregister).toHaveBeenCalledTimes(2);
+  });
+
+  describe('event streaming', () => {
+    it('should emit consensus_round_started event at the beginning of each round', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_round_started',
+        expect.stringContaining('1'),
+      );
+    });
+
+    it('should emit consensus_planner_completed event after planner succeeds', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_planner_completed',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit consensus_review_started event before architect review', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_started',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit consensus_review_completed with approved verdict when plan is approved', async () => {
+      mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_completed',
+        expect.stringMatching(/approved/i),
+      );
+    });
+
+    it('should emit consensus_review_completed with changes-requested when plan is rejected', async () => {
+      mockClaudeSequence([
+        { success: true, writePlanArtifacts: true },
+        { success: true, writeFeedback: true, feedbackRound: 1 },
+        { success: true, writePlanArtifacts: true },
+      ]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        maxRounds: 2,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_review_completed',
+        expect.stringMatching(/changes/i),
+      );
+    });
+
+    it('should emit consensus_planner_failed event when planner fails', async () => {
+      mockClaudeSequence([{ success: false }]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        onEvent,
+      });
+      expect(onEvent).toHaveBeenCalledWith(
+        'swarm.consensus_planner_failed',
+        expect.stringContaining('round 1'),
+      );
+    });
+
+    it('should emit correct event sequence for multi-round consensus', async () => {
+      mockClaudeSequence([
+        { success: true, writePlanArtifacts: true },
+        { success: true, writeFeedback: true, feedbackRound: 1 },
+        { success: true, writePlanArtifacts: true },
+      ]);
+      const onEvent = vi.fn();
+      await runConsensus(makeCtx(), {
+        investigationBrief: SAMPLE_BRIEF,
+        architectureDesign: SAMPLE_DESIGN,
+        workerCount: 3,
+        maxRounds: 2,
+        onEvent,
+      });
+
+      const eventTypes = onEvent.mock.calls.map((c) => c[0]);
+      expect(eventTypes).toEqual([
+        'swarm.consensus_round_started',
+        'swarm.consensus_planner_completed',
+        'swarm.consensus_review_started',
+        'swarm.consensus_review_completed',
+        'swarm.consensus_round_started',
+        'swarm.consensus_planner_completed',
+      ]);
+    });
   });
 });

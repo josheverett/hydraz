@@ -76,6 +76,16 @@ describe('createWorktree', () => {
   it('throws on invalid repo root', () => {
     expect(() => createWorktree('/nonexistent', 'session-1', 'hydraz/test')).toThrow();
   });
+
+  it('creates a worktree from a specific startPoint', () => {
+    execSync('git checkout -b hydraz/base', { cwd: testRepo, stdio: 'pipe' });
+    writeFileSync(join(testRepo, 'base-file.txt'), 'from base branch');
+    execSync('git add . && git commit -m "base commit"', { cwd: testRepo, stdio: 'pipe' });
+    execSync('git checkout -', { cwd: testRepo, stdio: 'pipe' });
+
+    const result = createWorktree(testRepo, 'session-startpoint', 'hydraz/chained', 'hydraz/base');
+    expect(existsSync(join(result.directory, 'base-file.txt'))).toBe(true);
+  });
 });
 
 describe('destroyWorktree', () => {

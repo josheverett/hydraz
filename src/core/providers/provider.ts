@@ -14,6 +14,7 @@ export interface CreateWorkspaceParams {
   session: SessionMetadata;
   config: HydrazConfig;
   branchOverride?: string;
+  onHeartbeat?: (label: string, elapsedMs: number) => void;
 }
 
 export interface ProviderCheckResult {
@@ -23,7 +24,7 @@ export interface ProviderCheckResult {
 
 export interface WorkspaceProvider {
   readonly type: ExecutionTarget;
-  createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo;
+  createWorkspace(params: CreateWorkspaceParams): Promise<WorkspaceInfo>;
   destroyWorkspace(repoRoot: string, workspace: WorkspaceInfo): void;
   checkAvailability(): ProviderCheckResult;
 }

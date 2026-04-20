@@ -27,6 +27,9 @@ import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
 import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
 import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
+import { registerSession, unregisterSession, registerSshChild } from './shutdown.js';
+import { findAllOrphanedWorkspaces } from './cleanup.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -60,6 +63,7 @@ function formatTs(): string {
 export interface SwarmOptions {
   workerCount?: number;
   reviewerNames?: string[];
+  parallel?: boolean;
 }
 
 export async function startSession(
@@ -127,9 +131,26 @@ export async function startSession(
     return;
   }
 
+  try {
+    const orphans = findAllOrphanedWorkspaces(repoRoot);
+    if (orphans.total > 0) {
+      const msg = `Warning: ${orphans.total} orphaned DevPod workspace(s) detected. Run 'hydraz clean' to remove them.`;
+      emitEvent('session.warning', msg);
+      callbacks.onError?.(msg);
+    }
+  } catch {
+    // non-fatal — don't block session start if orphan detection fails
+  }
+
   let workspace: WorkspaceInfo;
   try {
-    workspace = provider.createWorkspace({ session, config });
+    workspace = await provider.createWorkspace({
+      session,
+      config,
+      onHeartbeat: (label, elapsedMs) => {
+        emitEvent('workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      },
+    });
     const updated = loadSession(repoRoot, sessionId);
     updated.workspaceDir = workspace.directory;
     saveSession(repoRoot, updated);
@@ -148,8 +169,10 @@ export async function startSession(
   emitEvent('swarm.started', 'Swarm pipeline initialized');
 
   activeSessions.set(sessionId, { session, workspace });
+  registerSession(sessionId, repoRoot, provider, workspace, callbacks);
 
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
+  const parallel = swarmOptions.parallel ?? false;
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
   const reviewerPersonas = reviewerNames.map(name => ({
     name,
@@ -164,15 +187,36 @@ export async function startSession(
 
     try {
       emitEvent('swarm.container_setup', 'Copying Hydraz into container');
-      scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
+      await scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH, (label, elapsedMs) => {
+        emitEvent('swarm.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       transitionState(repoRoot, sessionId, 'failed', msg);
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.failed', `Container setup failed: ${msg}`);
       callbacks.onError?.(msg);
+      try {
+        provider.destroyWorkspace(repoRoot, workspace);
+      } catch {
+        // best-effort cleanup
+      }
+      unregisterSession(sessionId);
       activeSessions.delete(sessionId);
       return;
+    }
+
+    try {
+      processHydrazIncludes(
+        repoRoot,
+        workspaceName,
+        scpToContainer,
+        (msg) => emitEvent('swarm.container_setup', msg),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      emitEvent('swarm.container_setup', `hydrazincludes SCP failed (non-fatal): ${msg}`);
+      callbacks.onError?.(`hydrazincludes SCP failed: ${msg}`);
     }
 
     const optionsJson = JSON.stringify({
@@ -186,21 +230,32 @@ export async function startSession(
       reviewerPersonas,
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      parallel,
     });
 
     const ssh = buildSshNodeCommand(
       workspaceName,
       CONTAINER_RUNNER_SCRIPT,
-      [optionsJson],
+      [],
       Object.keys(authEnv).length > 0 ? authEnv : undefined,
+      undefined,
+      optionsJson,
     );
 
+    const SSH_HEARTBEAT_INTERVAL_MS = 30_000;
     const sshExitCode = await new Promise<number | null>((resolve) => {
       const child = spawn(ssh.cmd, ssh.args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      registerSshChild(child);
       if (ssh.stdinScript) {
         child.stdin?.write(ssh.stdinScript);
       }
       child.stdin?.end();
+
+      const sshStartTime = Date.now();
+      const heartbeatInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - sshStartTime) / 1000);
+        emitEvent('swarm.heartbeat', `Pipeline running... (${elapsed}s)`);
+      }, SSH_HEARTBEAT_INTERVAL_MS);
 
       let buffer = '';
       child.stdout?.on('data', (data: Buffer) => {
@@ -232,8 +287,12 @@ export async function startSession(
         if (text) callbacks.onError?.(text);
       });
 
-      child.on('close', (code) => resolve(code));
+      child.on('close', (code) => {
+        clearInterval(heartbeatInterval);
+        resolve(code);
+      });
       child.on('error', (err) => {
+        clearInterval(heartbeatInterval);
         callbacks.onError?.(`SSH error: ${err.message}`);
         resolve(1);
       });
@@ -264,6 +323,7 @@ export async function startSession(
       reviewerPersonas,
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
+      parallel,
       callbacks: {
         onPhaseChange: (phase) => {
           try {
@@ -283,6 +343,7 @@ export async function startSession(
     });
   }
 
+  unregisterSession(sessionId);
   activeSessions.delete(sessionId);
 
   const currentSession = loadSession(repoRoot, sessionId);
@@ -351,6 +412,10 @@ export async function startSession(
       transitionState(repoRoot, sessionId, 'failed', failMsg);
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.failed', failMsg);
+      if (isContainerExecutionTarget(session.executionTarget)) {
+        callbacks.onError?.(
+          `Workspace preserved for inspection: devpod ssh hydraz-${session.id}`);
+      }
     }
   }
 }

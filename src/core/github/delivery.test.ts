@@ -50,7 +50,7 @@ const workspace = {
 const provider = {
   type: 'local-container' as const,
   checkAvailability: () => ({ available: true }),
-  createWorkspace: () => workspace,
+  createWorkspace: async () => workspace,
   destroyWorkspace: vi.fn(),
 };
 

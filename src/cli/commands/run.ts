@@ -21,7 +21,8 @@ export function registerRunCommand(program: Command): void {
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud')
     .option('--swarm', 'No-op (swarm pipeline always runs)')
-    .option('--workers <count>', 'Number of parallel workers (default: 3)')
+    .option('--workers <count>', 'Number of workers (default: 3)')
+    .option('--parallel', 'Run workers in parallel (default: serial)')
     .option('--reviewers <names>', 'Comma-separated reviewer persona names (default: carmack,metz,torvalds)')
     .action(async (task: string, options: {
       session?: string;
@@ -31,6 +32,7 @@ export function registerRunCommand(program: Command): void {
       cloud?: boolean;
       swarm?: boolean;
       workers?: string;
+      parallel?: boolean;
       reviewers?: string;
     }) => {
       const repo = detectRepo();
@@ -110,6 +112,7 @@ export function registerRunCommand(program: Command): void {
       }, {
         workerCount,
         reviewerNames,
+        parallel: options.parallel,
       });
     });
 }

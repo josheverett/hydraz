@@ -45,6 +45,7 @@ function makeSerializedOptions(overrides: Partial<SerializablePipelineOptions> =
     reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
     maxOuterLoops: 5,
     maxConsensusRounds: 10,
+    parallel: false,
     ...overrides,
   };
 }
@@ -69,6 +70,7 @@ describe('pipeline-runner', () => {
         reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
         maxOuterLoops: 5,
         maxConsensusRounds: 10,
+        parallel: false,
         callbacks: { onPhaseChange: () => {} },
       });
 
@@ -93,6 +95,7 @@ describe('pipeline-runner', () => {
         reviewerPersonas: personas,
         maxOuterLoops: 3,
         maxConsensusRounds: 8,
+        parallel: false,
       });
 
       expect(serialized.repoRoot).toBe('/my/repo');
@@ -105,6 +108,24 @@ describe('pipeline-runner', () => {
       expect(serialized.reviewerPersonas).toEqual(personas);
       expect(serialized.maxOuterLoops).toBe(3);
       expect(serialized.maxConsensusRounds).toBe(8);
+    });
+
+    it('should include parallel in serialized output', () => {
+      const serialized = toSerializable({
+        repoRoot: '/repo',
+        sessionId: 'abc',
+        sessionName: 'test',
+        task: 'Build it',
+        workingDirectory: '/work',
+        config: createDefaultConfig(),
+        workerCount: 3,
+        reviewerPersonas: [],
+        maxOuterLoops: 5,
+        maxConsensusRounds: 10,
+        parallel: true,
+      });
+
+      expect(serialized.parallel).toBe(true);
     });
   });
 
@@ -137,6 +158,11 @@ describe('pipeline-runner', () => {
       expect(options.callbacks?.onPhaseChange).toBeTypeOf('function');
       expect(options.callbacks?.onEvent).toBeTypeOf('function');
       expect(options.callbacks?.onError).toBeTypeOf('function');
+    });
+
+    it('should preserve parallel field through round-trip', () => {
+      const options = toPipelineOptions(makeSerializedOptions({ parallel: true }));
+      expect(options.parallel).toBe(true);
     });
   });
 
@@ -212,37 +238,44 @@ describe('pipeline-runner', () => {
   describe('runMain', () => {
     let exitSpy: ReturnType<typeof vi.spyOn>;
     let stderrSpy: ReturnType<typeof vi.spyOn>;
+    const origEnv = process.env;
 
     beforeEach(() => {
       vi.clearAllMocks();
       exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      process.env = { ...origEnv };
+      delete process.env.HYDRAZ_PIPELINE_OPTIONS;
     });
 
     afterEach(() => {
       exitSpy.mockRestore();
       stderrSpy.mockRestore();
+      process.env = origEnv;
       try { rmSync(RESULT_PATH, { force: true }); } catch {}
     });
 
-    it('should exit 1 with usage message when no JSON argument provided', async () => {
-      await runMain(['node', 'pipeline-runner.js']);
+    it('should exit 1 with error when HYDRAZ_PIPELINE_OPTIONS is not set', async () => {
+      await runMain();
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Usage'));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('HYDRAZ_PIPELINE_OPTIONS'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
-    it('should exit 1 with error when JSON argument is invalid', async () => {
-      await runMain(['node', 'pipeline-runner.js', '{not valid json']);
+    it('should exit 1 with error when HYDRAZ_PIPELINE_OPTIONS is invalid JSON', async () => {
+      process.env.HYDRAZ_PIPELINE_OPTIONS = '{not valid json';
+
+      await runMain();
 
       expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid JSON'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
-    it('should parse options, run the pipeline, and exit 0 on success', async () => {
+    it('should parse options from env, run the pipeline, and exit 0 on success', async () => {
       const options = makeSerializedOptions({ repoRoot: '/container', sessionId: 'main-test' });
+      process.env.HYDRAZ_PIPELINE_OPTIONS = JSON.stringify(options);
 
-      await runMain(['node', 'pipeline-runner.js', JSON.stringify(options)]);
+      await runMain();
 
       expect(ensureSwarmDirs).toHaveBeenCalledWith('/container', 'main-test');
       expect(runSwarmPipeline).toHaveBeenCalledTimes(1);
@@ -256,7 +289,8 @@ describe('pipeline-runner', () => {
       vi.mocked(runSwarmPipeline).mockRejectedValueOnce(new Error('Pipeline exploded'));
 
       const options = makeSerializedOptions();
-      await runMain(['node', 'pipeline-runner.js', JSON.stringify(options)]);
+      process.env.HYDRAZ_PIPELINE_OPTIONS = JSON.stringify(options);
+      await runMain();
 
       expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Pipeline exploded'));
       expect(exitSpy).toHaveBeenCalledWith(1);

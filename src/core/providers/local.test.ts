@@ -50,10 +50,10 @@ describe('LocalProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('creates a worktree directory', () => {
+    it('creates a worktree directory', async () => {
       const session = makeSession();
       const config = createDefaultConfig();
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
 
       expect(existsSync(workspace.directory)).toBe(true);
       expect(workspace.type).toBe('local');
@@ -61,39 +61,39 @@ describe('LocalProvider', () => {
       expect(workspace.branchName).toBe(session.branchName);
     });
 
-    it('creates the session branch', () => {
+    it('creates the session branch', async () => {
       const session = makeSession();
       const config = createDefaultConfig();
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       const branches = execSync('git branch', { cwd: testRepo, encoding: 'utf-8' });
       expect(branches).toContain('hydraz/test-session');
     });
 
-    it('worktree contains repo files', () => {
+    it('worktree contains repo files', async () => {
       const session = makeSession();
       const config = createDefaultConfig();
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
 
       expect(existsSync(join(workspace.directory, 'README.md'))).toBe(true);
     });
   });
 
   describe('destroyWorkspace', () => {
-    it('removes the worktree directory', () => {
+    it('removes the worktree directory', async () => {
       const session = makeSession();
       const config = createDefaultConfig();
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
 
       expect(existsSync(workspace.directory)).toBe(true);
       provider.destroyWorkspace(testRepo, workspace);
       expect(existsSync(workspace.directory)).toBe(false);
     });
 
-    it('does not throw for already-removed workspace', () => {
+    it('does not throw for already-removed workspace', async () => {
       const session = makeSession();
       const config = createDefaultConfig();
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
       provider.destroyWorkspace(testRepo, workspace);
 
       expect(() => provider.destroyWorkspace(testRepo, workspace)).not.toThrow();

@@ -7,6 +7,7 @@ import { readPlan, getSwarmDir } from './artifacts.js';
 import { runPlanner } from './planner.js';
 import { buildArchitectPlanReviewPrompt } from './prompts/architect-review.js';
 import { parseReviewVerdict } from './review-aggregate.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 export interface ConsensusResult {
   success: boolean;
@@ -21,6 +22,7 @@ export interface ConsensusOptions {
   architectureDesign: string;
   workerCount: number;
   maxRounds?: number;
+  onEvent?: (type: string, message: string) => void;
 }
 
 function readFeedback(repoRoot: string, sessionId: string, round: number): string | null {
@@ -35,6 +37,8 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
   const maxRounds = opts.maxRounds ?? CONSENSUS_MAX_ROUNDS;
 
   for (let round = 1; round <= maxRounds; round++) {
+    opts.onEvent?.('swarm.consensus_round_started', `Consensus round ${round}/${maxRounds}`);
+
     const plannerResult = await runPlanner(ctx, {
       investigationBrief: opts.investigationBrief,
       architectureDesign: currentDesign + (previousFeedback
@@ -44,6 +48,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     });
 
     if (!plannerResult.success) {
+      opts.onEvent?.('swarm.consensus_planner_failed', `Planner failed (round ${round})`);
       return {
         success: false,
         roundsUsed: round,
@@ -52,6 +57,8 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         error: `Planner failed in round ${round}: ${plannerResult.error}`,
       };
     }
+
+    opts.onEvent?.('swarm.consensus_planner_completed', `Planner completed (round ${round})`);
 
     const ledger = plannerResult.ledger!;
     const ownership = plannerResult.ownership!;
@@ -66,6 +73,8 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       };
     }
 
+    opts.onEvent?.('swarm.consensus_review_started', `Architect reviewing plan (round ${round})`);
+
     const reviewPrompt = buildArchitectPlanReviewPrompt(
       ctx.task,
       ctx.sessionName,
@@ -73,6 +82,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       plan!,
       round,
       ctx.swarmDir,
+      ctx.repoPromptContent,
     );
 
     const reviewExecutor = launchClaude({
@@ -80,8 +90,10 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       prompt: reviewPrompt,
       config: ctx.config,
     });
+    registerExecutorHandle(reviewExecutor);
 
     const reviewResult = await reviewExecutor.waitForExit();
+    unregisterExecutorHandle(reviewExecutor);
 
     if (!reviewResult.success) {
       return {
@@ -96,6 +108,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     const feedback = readFeedback(ctx.repoRoot, ctx.sessionId, round);
 
     if (!feedback || parseReviewVerdict(feedback) === 'approve') {
+      opts.onEvent?.('swarm.consensus_review_completed', `Architect approved plan (round ${round})`);
       return {
         success: true,
         roundsUsed: round,
@@ -104,6 +117,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       };
     }
 
+    opts.onEvent?.('swarm.consensus_review_completed', `Architect requested changes (round ${round})`);
     previousFeedback = feedback;
   }
 

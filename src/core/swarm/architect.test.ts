@@ -14,9 +14,17 @@ vi.mock('../claude/executor.js', () => ({
   launchClaude: vi.fn(),
 }));
 
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -105,6 +113,16 @@ describe('buildArchitectPrompt', () => {
     const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, '/tmp/swarm');
     expect(prompt).toContain('/tmp/swarm');
   });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runArchitect', () => {
@@ -167,5 +185,28 @@ describe('runArchitect', () => {
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
+  });
+
+  it('should include repoPromptContent in the Claude prompt when set on context', async () => {
+    mockSuccessfulClaude();
+    writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
+
+    await runArchitect(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { investigationBrief: SAMPLE_BRIEF });
+
+    const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should register executor handle before waitForExit and unregister after', async () => {
+    mockSuccessfulClaude();
+    writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
+
+    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockUnregister).toHaveBeenCalledTimes(1);
+    const handle = mockLaunchClaude.mock.results[0]!.value;
+    expect(mockRegister).toHaveBeenCalledWith(handle);
+    expect(mockUnregister).toHaveBeenCalledWith(handle);
   });
 });

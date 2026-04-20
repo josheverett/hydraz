@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18).
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18). Repo-level configuration (`.hydraz/` directory convention) implemented: `config.json` parsing, `hydrazincludes` SCP, `HYDRAZ.md` prompt injection into all role prompts (see §12.3).
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
@@ -170,7 +170,7 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
        │
        ▼ (plan approved)
 ┌──────┴──────┐
-│   Workers    │  N instances in parallel (default 3)
+│   Workers    │  N instances, serial by default (default 3, --parallel for concurrent)
 │  (fan-out)   │  each in own worktree, strict TDD, prove-it methodology
 └──────┬──────┘
        │ code on worker branches
@@ -262,10 +262,10 @@ Each round produces durable artifacts:
 
 **Input**: Plan + worker brief + ownership scope + interface contracts
 **Output**: Code commits on worker branch + `swarm/workers/<id>/progress.md`
-**Process**: N Claude instances in parallel (default 3, user-controlled via `--workers N`)
+**Process**: N Claude instances, serial by default (default 3, user-controlled via `--workers N`, `--parallel` for concurrent execution)
 
 Each worker:
-- Gets its own git worktree, branched from the same base commit
+- Gets its own git worktree, branched from the previous worker's branch (serial mode) or the same base commit (parallel mode)
 - Receives an identical core prompt emphasizing strict TDD, prove-it methodology, atomic commits
 - Is differentiated only by its task brief and file ownership, not by persona
 - Must stay within its owned files/paths -- must not modify files outside its ownership scope
@@ -516,22 +516,24 @@ Files in the `shared` list may be modified by any worker. Workers are instructed
 
 ### 8.1 Local mode (v2 starting point)
 
-Each worker gets its own git worktree via the existing `createWorktree()` in `src/core/providers/worktree.ts`, branched from the same base commit pinned at session start.
+Each worker gets its own git worktree via `createWorktree()` in `src/core/providers/worktree.ts`. In serial mode (default), each worker branches from the previous worker's branch, so later workers build on earlier workers' commits. In parallel mode (`--parallel`), all workers branch from the same base commit.
 
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (session's primary branch)
 - All worktrees share the git object store (cheap on disk)
 - Workers run as separate `claude --print` processes in their respective worktree directories
+- Serial execution reduces merge conflicts on greenfield or overlapping codebases
 
 ### 8.2 Container/cloud mode
 
 The entire swarm pipeline runs inside a single DevPod container. The host:
 1. Creates the DevPod workspace and worktree (existing provider code)
 2. Copies Hydraz `dist/` into the container via `tar | ssh` pipe (`/tmp/hydraz-dist/`)
-3. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
-4. Streams structured JSON events from SSH stdout for real-time phase tracking
-5. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
-6. Handles delivery (PR creation) and cleanup on the host side
+3. Copies `hydrazincludes` paths from host into container (if `.hydraz/config.json` exists in the target repo — see §12.3)
+4. SSHs in and runs `node /tmp/hydraz-dist/core/swarm/pipeline-runner.js '<options-json>'` with auth env vars
+5. Streams structured JSON events from SSH stdout for real-time phase tracking
+6. Reads the pipeline result from `/tmp/hydraz-pipeline-result.json` via SSH after exit
+7. Handles delivery (PR creation) and cleanup on the host side
 
 Inside the container, the pipeline runs identically to local bare-metal mode -- all Claude invocations, artifact I/O, and worktree operations are container-local. Workers use local worktrees inside the container, same as bare-metal mode. Per-worker DevPod workspaces are not used; one container hosts all workers.
 
@@ -562,13 +564,16 @@ Extend the existing JSONL event system with swarm-specific events:
 - `swarm.investigate_started`, `swarm.investigate_completed`
 - `swarm.architect_started`, `swarm.architect_completed`
 - `swarm.plan_started`, `swarm.plan_completed`
-- `swarm.consensus_round` (with round number)
+- `swarm.consensus_round` (with round number, emitted by pipeline after consensus completes)
+- `swarm.consensus_round_started`, `swarm.consensus_planner_completed`, `swarm.consensus_planner_failed`
+- `swarm.consensus_review_started`, `swarm.consensus_review_completed` (with verdict)
 - `swarm.worker_launched`, `swarm.worker_completed`, `swarm.worker_failed`
 - `swarm.merge_started`, `swarm.merge_completed`, `swarm.merge_conflict`
 - `swarm.review_started`, `swarm.review_completed`
 - `swarm.review_feedback` (with category: architectural | implementation)
 - `swarm.outer_loop` (with iteration number)
 - `swarm.delivery_started`, `swarm.delivery_completed`
+- `workspace.heartbeat`, `swarm.heartbeat` (periodic heartbeats during long-running operations)
 
 ### 10.2 Metrics
 
@@ -594,7 +599,8 @@ Aggregate swarm metrics:
 
 ```bash
 hydraz run "<task>"                      # Launch swarm pipeline (swarm always runs; --swarm is a no-op)
-hydraz run --workers 5 "<task>"          # 5 parallel workers
+hydraz run --workers 5 "<task>"          # 5 workers (serial by default)
+hydraz run --parallel "<task>"           # Run workers in parallel instead of serial
 hydraz run --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
 hydraz run --local "<task>"              # Run locally (bare metal, default)
 hydraz run --container "<task>"          # Run in local Docker container via DevPod
@@ -604,7 +610,8 @@ hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 - `--session <name>`: Session name (auto-generated from task if omitted; carried from v1)
 - `--branch <name>`: Branch name (auto-generated from session name if omitted; carried from v1)
 - `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
-- `--workers N`: Number of parallel workers (default 3)
+- `--workers N`: Number of workers (default 3, serial by default)
+- `--parallel`: Run workers concurrently instead of serially (opt-in)
 - `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
 - `--local` / `--container` / `--cloud`: Execution target selection (carried from v1)
 
@@ -651,6 +658,38 @@ These can be overridden per-session via CLI flags (`--workers N`, `--reviewers <
 
 **Status: Not implemented.** Reviewer persona definitions are currently inline strings in the controller (`"You are ${name}. Review the code with your characteristic engineering perspective."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
 
+### 12.3 Repo-level configuration (`.hydraz/` directory)
+
+**Status: Implemented.** `src/core/swarm/repo-config.ts` provides `loadRepoConfig` (parses `.hydraz/config.json`), `readRepoPromptContent` (reads `.hydraz/HYDRAZ.md`), and `processHydrazIncludes` (SCP of `hydrazincludes` entries during container setup). The controller calls `processHydrazIncludes` during container startup. The pipeline reads `HYDRAZ.md` and passes `repoPromptContent` to all stage executors via `ExecutionContext`. All 6 prompt templates inject the content as a "Repo-Specific Instructions" section. `.hydraz/.env` propagation uses the existing `.worktreeinclude` mechanism with no new code.
+
+Target repos may optionally contain a committed `.hydraz/` directory with repo-specific hydraz configuration. This is *repo-owned configuration* — authored and committed by the repo's owners, analogous to `.devcontainer/`. It is distinct from `~/.hydraz/`, which stores hydraz-generated session data. The principle "no hydraz-generated files are placed in target repos" remains true.
+
+**Directory layout:**
+```
+.hydraz/
+  config.json    # Repo-specific hydraz configuration
+  HYDRAZ.md      # Repo-specific prompt content injected into all swarm agent prompts
+  .env           # Repo-specific secrets (listed in .worktreeinclude for worktree propagation)
+```
+
+All files are optional. If `.hydraz/` does not exist, hydraz operates exactly as before.
+
+**`config.json`** contains repo-specific configuration keys:
+
+```json
+{
+  "hydrazincludes": [
+    { "host": "~/.aigl", "container": "~/.aigl" }
+  ]
+}
+```
+
+- `hydrazincludes`: An array of host-to-container file mappings. Each entry specifies a host path and a container path. During container setup, hydraz copies each host path into the container at the specified container path via the existing `tar | ssh` pipe mechanism. Tilde (`~`) is expanded on both sides. Missing host paths produce a warning but do not fail the session. This key has no effect in local bare-metal mode (no host/container boundary).
+
+**`HYDRAZ.md`** contains repo-specific prompt content that is injected into all swarm agent prompts (investigator, architect, planner, workers, reviewers). The content is positioned after core role instructions but before task-specific content. If the file does not exist, no injection occurs. Content should be concise and universally relevant to any agent working in the repo — for example, directing agents to read repo-specific `CLAUDE.md` files in relevant directories.
+
+**`.hydraz/.env`** contains repo-specific secrets. Repos that use this file list `.hydraz/.env` in their `.worktreeinclude` file, leveraging the existing worktree-include mechanism for propagation into worktrees and containers. No new hydraz code is needed for `.env` support.
+
 ---
 
 ## 13. Claude Code Invocation Details
@@ -677,6 +716,8 @@ Each pipeline role has its own prompt template in `src/core/swarm/prompts/`:
 - `reviewer.ts`: Famous-engineer persona review with categorized findings
 
 All prompts embed core engineering principles via `core-principles.ts`. Workers receive the most rigorous version (full TDD + full prove-it-first + evidence taxonomy). Other roles receive evidence discipline appropriate to their function.
+
+If the target repo contains a `.hydraz/HYDRAZ.md` file, its contents are injected into all role prompts — positioned after core role instructions but before task-specific content. This provides a repo-specific prompt injection mechanism for directing agents to repo-level conventions, guidance files, or other context. See §12.3 for details.
 
 All prompts include the model hardcode `claude-opus-4-6`. This is an opinionated product decision carried from v1.
 

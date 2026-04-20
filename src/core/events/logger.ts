@@ -20,6 +20,7 @@ export type EventType =
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped'
+  | 'session.warning'
   | 'workspace.created'
   | 'branch.created'
   | 'claude.ready'
@@ -34,6 +35,11 @@ export type EventType =
   | 'swarm.plan_started'
   | 'swarm.plan_completed'
   | 'swarm.consensus_round'
+  | 'swarm.consensus_round_started'
+  | 'swarm.consensus_planner_completed'
+  | 'swarm.consensus_planner_failed'
+  | 'swarm.consensus_review_started'
+  | 'swarm.consensus_review_completed'
   | 'swarm.worker_launched'
   | 'swarm.worker_completed'
   | 'swarm.worker_failed'
@@ -52,7 +58,9 @@ export type EventType =
   | 'branch.pushed'
   | 'pull_request.created'
   | 'workspace.destroyed'
-  | 'workspace.preserved';
+  | 'workspace.preserved'
+  | 'workspace.heartbeat'
+  | 'swarm.heartbeat';
 
 export function createEvent(
   sessionId: string,

@@ -107,6 +107,7 @@ export interface ExecutionContext {
   workingDirectory: string;
   config: import('../config/schema.js').HydrazConfig;
   swarmDir: string;
+  repoPromptContent?: string;
 }
 
 export interface SwarmConfig {

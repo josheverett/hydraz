@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -142,6 +142,7 @@ function makeOptions(overrides: Partial<PipelineOptions> = {}): PipelineOptions 
     reviewerPersonas: DEFAULT_PERSONAS,
     maxOuterLoops: 5,
     maxConsensusRounds: 10,
+    parallel: false,
     ...overrides,
   };
 }
@@ -325,5 +326,59 @@ describe('runSwarmPipeline', () => {
 
     const conflictEvents = events.filter(e => e.type === 'swarm.merge_conflict');
     expect(conflictEvents).toHaveLength(1);
+  });
+
+  it('should pass parallel option to runWorkerFanout', async () => {
+    await runSwarmPipeline(makeOptions({ parallel: true }));
+
+    const fanoutCall = vi.mocked(runWorkerFanout).mock.calls[0]!;
+    const fanoutOpts = fanoutCall[1];
+    expect(fanoutOpts.parallel).toBe(true);
+  });
+
+  it('should default parallel to false in runWorkerFanout', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const fanoutCall = vi.mocked(runWorkerFanout).mock.calls[0]!;
+    const fanoutOpts = fanoutCall[1];
+    expect(fanoutOpts.parallel).toBe(false);
+  });
+
+  it('should read HYDRAZ.md and pass repoPromptContent to stages', async () => {
+    const hydrazDir = join(repoRoot, '.hydraz');
+    mkdirSync(hydrazDir, { recursive: true });
+    writeFileSync(join(hydrazDir, 'HYDRAZ.md'), 'Always read CLAUDE.md files.', 'utf-8');
+
+    await runSwarmPipeline(makeOptions());
+
+    const investigateCtx = vi.mocked(runInvestigation).mock.calls[0]![0]!;
+    expect(investigateCtx.repoPromptContent).toBe('Always read CLAUDE.md files.');
+
+    const architectCtx = vi.mocked(runArchitect).mock.calls[0]![0]!;
+    expect(architectCtx.repoPromptContent).toBe('Always read CLAUDE.md files.');
+  });
+
+  it('should set repoPromptContent to undefined when HYDRAZ.md does not exist', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const investigateCtx = vi.mocked(runInvestigation).mock.calls[0]![0]!;
+    expect(investigateCtx.repoPromptContent).toBeUndefined();
+  });
+
+  it('should pass onEvent callback to runConsensus that forwards to pipeline callbacks', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: { onEvent: (type, message) => events.push({ type, message }) },
+    }));
+
+    const consensusCall = vi.mocked(runConsensus).mock.calls[0]!;
+    const consensusOpts = consensusCall[1];
+    expect(consensusOpts.onEvent).toBeInstanceOf(Function);
+
+    consensusOpts.onEvent!('swarm.consensus_round_started', 'Consensus round 1 of 10');
+    expect(events).toContainEqual({
+      type: 'swarm.consensus_round_started',
+      message: 'Consensus round 1 of 10',
+    });
   });
 });

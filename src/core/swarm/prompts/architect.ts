@@ -1,7 +1,7 @@
 import { EVIDENCE_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
-export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string, swarmDir?: string): string {
+export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string, swarmDir?: string, repoPromptContent?: string): string {
   return `# Hydraz Architect
 
 You are the architect for Hydraz session "${sessionName}". Your job is to read the investigation brief and the task, then produce a design document with recommendations, tradeoffs, and risks.
@@ -10,7 +10,11 @@ You are the architect for Hydraz session "${sessionName}". Your job is to read t
 
 You think about _what should be built and why_. You do not decompose the work into tasks -- that is the planner's job. You focus on design decisions, component boundaries, data flow, error handling strategy, and anything that affects the shape of the solution.
 
-## Task
+## Proportionality
+
+Match the depth of your design to the complexity of the task. A simple task (create a small app, add a feature, fix a bug) needs a proportionally simple design — not a 10-page architecture document. Cover what matters, skip what doesn't. If the right answer is straightforward, say so in a few paragraphs and move on.
+
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
 

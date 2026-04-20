@@ -10,7 +10,7 @@ import { createWorktree, destroyWorktree } from './worktree.js';
 export class LocalProvider implements WorkspaceProvider {
   readonly type = 'local' as const;
 
-  createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo {
+  async createWorkspace(params: CreateWorkspaceParams): Promise<WorkspaceInfo> {
     const { session } = params;
     const worktree = createWorktree(session.repoRoot, session.id, session.branchName);
 

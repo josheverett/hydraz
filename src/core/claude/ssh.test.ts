@@ -155,10 +155,26 @@ describe('buildSshNodeCommand', () => {
   });
 
   it('includes shell-escaped script arguments', () => {
-    const result = buildSshNodeCommand('ws', '/tmp/runner.js', ['{"task":"fix it"}', '--verbose']);
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', ['--verbose']);
     const script = result.stdinScript ?? '';
-    expect(script).toContain("'{\"task\":\"fix it\"}'");
     expect(script).toContain("'--verbose'");
+  });
+
+  it('does not embed stdinData on the exec node command line', () => {
+    const sensitiveJson = '{"config":{"claudeAuth":{"oauthToken":"secret-token-123"}}}';
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', [], undefined, undefined, sensitiveJson);
+    const script = result.stdinScript ?? '';
+    const execLine = script.split('\n').find(l => l.startsWith('exec node'));
+    expect(execLine).not.toContain('secret-token-123');
+    expect(execLine).not.toContain(sensitiveJson);
+  });
+
+  it('exports stdinData as HYDRAZ_PIPELINE_OPTIONS env var', () => {
+    const json = '{"task":"fix it"}';
+    const result = buildSshNodeCommand('ws', '/tmp/runner.js', [], undefined, undefined, json);
+    const script = result.stdinScript ?? '';
+    expect(script).toContain('HYDRAZ_PIPELINE_OPTIONS');
+    expect(script).toContain(json);
   });
 
   it('exports auth env when provided', () => {

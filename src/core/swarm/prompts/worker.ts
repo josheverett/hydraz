@@ -8,12 +8,13 @@ export function buildWorkerPrompt(
   planContent: string,
   workerId: string,
   swarmDir?: string,
+  repoPromptContent?: string,
 ): string {
   return `# Hydraz Worker — ${workerId}
 
 You are ${workerId} in Hydraz session "${sessionName}". You are one of several parallel workers, each implementing a scoped slice of the overall task in an isolated worktree.
 
-## Overall Task
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Overall Task
 
 ${task}
 

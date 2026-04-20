@@ -82,4 +82,13 @@ describe('createProgram', () => {
     expect(optionNames).toContain('--session');
     expect(optionNames).toContain('--branch');
   });
+
+  it('run command has --parallel option', () => {
+    const program = createProgram();
+    const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
+    expect(runCmd).toBeDefined();
+
+    const optionNames = runCmd!.options.map((opt) => opt.long);
+    expect(optionNames).toContain('--parallel');
+  });
 });

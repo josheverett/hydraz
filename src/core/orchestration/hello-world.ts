@@ -159,7 +159,7 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     });
     debug(`runHelloWorld: session created id=${session.id}`);
 
-    workspace = provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
+    workspace = await provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
     debugTiming('runHelloWorld: createWorkspace', timed(wsStart));
     emitStep(steps, onStep, {
       name: 'Workspace',

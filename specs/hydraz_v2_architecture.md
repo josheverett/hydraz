@@ -58,7 +58,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **57 test files** (v1 base + v2 swarm module tests).
+- **60 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -112,7 +112,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
        │
        ▼ (plan approved)
 ┌──────┴──────┐
-│   Workers    │  N instances in parallel (default 3)
+│   Workers    │  N instances, serial by default (default 3, --parallel for concurrent)
 │  (fan-out)   │  each in own worktree, strict TDD, prove-it methodology
 └──────┬──────┘
        │ code on worker branches
@@ -180,13 +180,13 @@ Each role is a fresh, stateless `claude --print` invocation with a role-specific
 ### 3.4 Worker Isolation
 
 **Local mode (v2 starting point):**
-- Each worker gets its own git worktree via `createWorktree()`, branched from the same base commit (pinned at session start)
+- Each worker gets its own git worktree via `createWorktree()`. In serial mode (default), each worker branches from the previous worker's branch so later workers build on earlier workers' commits. In parallel mode (`--parallel`), all workers branch from the same base commit.
 - Worker branches: `hydraz/<session>-worker-a`, `-worker-b`, etc.
 - Integration branch: `hydraz/<session>` (the session's primary branch)
 
 **Container/cloud mode (implemented):**
 - The entire swarm pipeline runs inside a single DevPod container
-- The host copies `dist/` via `tar | ssh` pipe, SSHs in to run `pipeline-runner.ts`, reads the result after exit
+- The host copies `dist/` via `tar | ssh` pipe, then copies `hydrazincludes` paths from host into container (if `.hydraz/config.json` exists — see §3.11), SSHs in to run `pipeline-runner.ts`, reads the result after exit
 - Inside the container, the pipeline runs identically to local bare-metal mode
 - Workers use local worktrees inside the container, same as bare-metal mode
 - Per-worker DevPod workspaces are not used; one container hosts all workers
@@ -203,6 +203,8 @@ All workers receive an identical core prompt emphasizing:
 - Interface contracts from the plan are authoritative -- implement against them exactly
 
 Workers are differentiated only by their task brief and file ownership, not by persona.
+
+If the target repo contains a `.hydraz/HYDRAZ.md` file, its contents are injected into all role prompts (investigator, architect, planner, workers, reviewers) — positioned after core role instructions but before task-specific content. See §3.11 for the full repo-level configuration convention.
 
 ### 3.6 Review Panel
 
@@ -293,16 +295,51 @@ Extend the existing JSONL event system with stage-specific events:
 - `swarm.investigate_started`, `swarm.investigate_completed`
 - `swarm.architect_started`, `swarm.architect_completed`
 - `swarm.plan_started`, `swarm.plan_completed`
-- `swarm.consensus_round` (with round number)
+- `swarm.consensus_round` (with round number, emitted by pipeline after consensus completes)
+- `swarm.consensus_round_started`, `swarm.consensus_planner_completed`, `swarm.consensus_planner_failed`
+- `swarm.consensus_review_started`, `swarm.consensus_review_completed` (with verdict)
 - `swarm.worker_launched`, `swarm.worker_completed`, `swarm.worker_failed`
 - `swarm.merge_started`, `swarm.merge_completed`, `swarm.merge_conflict`
 - `swarm.review_started`, `swarm.review_completed`
 - `swarm.review_feedback` (with category: architectural | implementation)
 - `swarm.outer_loop` (with iteration number)
 - `swarm.delivery_started`, `swarm.delivery_completed`
+- `workspace.heartbeat`, `swarm.heartbeat` (periodic heartbeats during long-running operations)
 
 Per-stage metrics from `ExecutorResult`: cost, tokens, duration, turns.
 Aggregate swarm metrics: total cost, total duration, stage breakdown, loop counts.
+
+### 3.11 Repo-level Configuration (`.hydraz/` directory)
+
+Target repos may optionally contain a committed `.hydraz/` directory with repo-specific hydraz configuration. This is *repo-owned configuration* — authored and committed by the repo's owners, analogous to `.devcontainer/`. It is distinct from `~/.hydraz/` (hydraz-generated session data). The principle "no hydraz-generated files are placed in target repos" remains true.
+
+**Directory layout:**
+```
+.hydraz/
+  config.json    # Repo-specific hydraz configuration
+  HYDRAZ.md      # Repo-specific prompt content injected into all swarm agent prompts
+  .env           # Repo-specific secrets (listed in .worktreeinclude for worktree propagation)
+```
+
+All files are optional. If `.hydraz/` does not exist, hydraz operates exactly as before.
+
+**`config.json`** contains repo-specific configuration keys. Currently the only key is `hydrazincludes`:
+
+```json
+{
+  "hydrazincludes": [
+    { "host": "~/.aigl", "container": "~/.aigl" }
+  ]
+}
+```
+
+`hydrazincludes` maps host paths into the container via the existing `tar | ssh` pipe mechanism (same as `scpToContainer`). Each entry specifies a host path and a container path, with tilde expansion on both sides. This fires during container setup after dist copy but before pipeline execution. Missing host paths produce a warning but do not fail the session. Not applicable in local bare-metal mode.
+
+**`HYDRAZ.md`** provides repo-specific prompt content injected into all role prompts. Positioned after core role instructions but before task-specific content. Silent no-op if the file doesn't exist. Content should be concise and universally relevant — for example, directing agents to read existing repo-specific `CLAUDE.md` files.
+
+**`.hydraz/.env`** contains repo-specific secrets. Propagated via the existing `.worktreeinclude` mechanism (repos add `.hydraz/.env` to their `.worktreeinclude` file). No new hydraz code needed.
+
+**Design rationale**: The `.hydraz/` directory gives repos a standardized surface for hydraz-specific configuration without scattering files around the repo root. It is prescriptive about *structure* (one directory, known filenames, known schema) while being flexible about *content* (repos choose what to map, what prompt content to inject, what secrets to provide). This aligns with Hydraz's core philosophy of strong defaults and opinionated conventions.
 
 ---
 

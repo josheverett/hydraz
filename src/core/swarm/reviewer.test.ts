@@ -11,8 +11,17 @@ import { buildReviewerPrompt } from './prompts/reviewer.js';
 import type { ExecutionContext } from './types.js';
 
 vi.mock('../claude/executor.js', () => ({ launchClaude: vi.fn() }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
+
 import { launchClaude } from '../claude/executor.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
+
 const mockLaunchClaude = vi.mocked(launchClaude);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -61,6 +70,16 @@ describe('buildReviewerPrompt', () => {
   it('should instruct writing review to reviews/<name>.md', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack')).toContain('carmack.md'); });
   it('should include evidence discipline principles', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack'); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
   it('should include the absolute swarm directory path when provided', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack', '/tmp/swarm')).toContain('/tmp/swarm'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack', undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Persona.', 'carmack');
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runReviewPanel', () => {
@@ -99,5 +118,25 @@ describe('runReviewPanel', () => {
     expect(prompts.some(p => p.includes('correctness'))).toBe(true);
     expect(prompts.some(p => p.includes('design quality'))).toBe(true);
     expect(prompts.some(p => p.includes('simplicity'))).toBe(true);
+  });
+
+  it('should include repoPromptContent in reviewer prompts when set on context', async () => {
+    mockAllReviewersSucceed();
+    await runReviewPanel(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
+    expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
+  });
+
+  it('should register and unregister executor handles for all reviewers', async () => {
+    mockAllReviewersSucceed();
+    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      const handle = mockLaunchClaude.mock.results[i]!.value;
+      expect(mockRegister).toHaveBeenCalledWith(handle);
+      expect(mockUnregister).toHaveBeenCalledWith(handle);
+    }
   });
 });

@@ -17,12 +17,19 @@ vi.mock('../providers/worktree.js', () => ({
   })),
   destroyWorktree: vi.fn(),
 }));
+vi.mock('../orchestration/shutdown.js', () => ({
+  registerExecutorHandle: vi.fn(),
+  unregisterExecutorHandle: vi.fn(),
+}));
 
 import { launchClaude } from '../claude/executor.js';
 import { createWorktree } from '../providers/worktree.js';
+import { registerExecutorHandle, unregisterExecutorHandle } from '../orchestration/shutdown.js';
 
 const mockLaunchClaude = vi.mocked(launchClaude);
 const mockCreateWorktree = vi.mocked(createWorktree);
+const mockRegister = vi.mocked(registerExecutorHandle);
+const mockUnregister = vi.mocked(unregisterExecutorHandle);
 
 let repoRoot: string;
 let sessionId: string;
@@ -93,6 +100,16 @@ describe('buildWorkerPrompt', () => {
   });
   it('should include the absolute swarm directory path when provided', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', '/tmp/swarm')).toContain('/tmp/swarm'); });
   it('should include the plan content', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nDetailed steps here.', 'worker-a')).toContain('Detailed steps here'); });
+
+  it('should include repo prompt content when provided', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', undefined, 'Always read CLAUDE.md files.');
+    expect(prompt).toContain('Always read CLAUDE.md files.');
+  });
+
+  it('should not include repo-specific section when repoPromptContent is not provided', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a');
+    expect(prompt).not.toContain('Repo-Specific');
+  });
 });
 
 describe('runWorkerFanout', () => {
@@ -160,5 +177,106 @@ describe('runWorkerFanout', () => {
     mockAllWorkersSucceed();
     await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
+  });
+
+  it('should run workers sequentially by default', async () => {
+    const callOrder: string[] = [];
+    let callIndex = 0;
+    const workerIds = Object.keys(LEDGER_3_WORKERS.workers);
+    mockLaunchClaude.mockImplementation(() => {
+      const wid = workerIds[callIndex++] ?? 'unknown';
+      callOrder.push(`launch:${wid}`);
+      return {
+        process: {} as never, pid: 12345, kill: vi.fn(),
+        waitForExit: vi.fn().mockImplementation(async () => {
+          callOrder.push(`exit:${wid}`);
+          return { exitCode: 0, signal: null, success: true, cost: 0.30 };
+        }),
+      };
+    });
+
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    expect(callOrder).toEqual([
+      'launch:worker-a', 'exit:worker-a',
+      'launch:worker-b', 'exit:worker-b',
+      'launch:worker-c', 'exit:worker-c',
+    ]);
+  });
+
+  it('should pass previous workers branch as startPoint in serial mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    const calls = mockCreateWorktree.mock.calls;
+    expect(calls[0]![3]).toBeUndefined();
+    expect(calls[1]![3]).toBe('hydraz/test-worker-a');
+    expect(calls[2]![3]).toBe('hydraz/test-worker-b');
+  });
+
+  it('should run workers concurrently when parallel is true', async () => {
+    const callOrder: string[] = [];
+    let callIndex = 0;
+    const resolvers: Array<() => void> = [];
+    const workerIds = Object.keys(LEDGER_3_WORKERS.workers);
+    mockLaunchClaude.mockImplementation(() => {
+      const wid = workerIds[callIndex++] ?? 'unknown';
+      callOrder.push(`launch:${wid}`);
+      return {
+        process: {} as never, pid: 12345, kill: vi.fn(),
+        waitForExit: vi.fn().mockImplementation(() => new Promise((resolve) => {
+          resolvers.push(() => {
+            callOrder.push(`exit:${wid}`);
+            resolve({ exitCode: 0, signal: null, success: true, cost: 0.30 });
+          });
+        })),
+      };
+    });
+
+    const fanoutPromise = runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    await vi.waitFor(() => expect(resolvers).toHaveLength(3));
+    expect(callOrder).toEqual(['launch:worker-a', 'launch:worker-b', 'launch:worker-c']);
+
+    resolvers.forEach(r => r());
+    await fanoutPromise;
+  });
+
+  it('should not pass startPoint in parallel mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    const calls = mockCreateWorktree.mock.calls;
+    for (const call of calls) {
+      expect(call[3]).toBeUndefined();
+    }
+  });
+
+  it('should include repoPromptContent in worker prompts when set on context', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
+    expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
+  });
+
+  it('should register and unregister executor handles for all workers', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      const handle = mockLaunchClaude.mock.results[i]!.value;
+      expect(mockRegister).toHaveBeenCalledWith(handle);
+      expect(mockUnregister).toHaveBeenCalledWith(handle);
+    }
+  });
+
+  it('should register all handles in parallel mode', async () => {
+    mockAllWorkersSucceed();
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+
+    expect(mockRegister).toHaveBeenCalledTimes(3);
+    expect(mockUnregister).toHaveBeenCalledTimes(3);
   });
 });

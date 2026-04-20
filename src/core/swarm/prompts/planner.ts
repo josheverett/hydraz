@@ -8,6 +8,7 @@ export function buildPlannerPrompt(
   architectureDesign: string,
   workerCount: number,
   swarmDir?: string,
+  repoPromptContent?: string,
 ): string {
   return `# Hydraz Planner
 
@@ -15,13 +16,18 @@ You are the planner for Hydraz session "${sessionName}". Your job is to decompos
 
 ## Your Role
 
-You think about _how to decompose the work into executable, parallelizable tasks_. Each task must be:
+You think about _how to decompose the work into executable tasks_. Each task must be:
 - Assignable to exactly one worker
 - Scoped to a set of owned files/directories
-- Independent enough to execute in parallel without coordination
-- Defined with acceptance criteria and interface contracts
+- Defined with acceptance criteria
 
-## Task
+## Proportionality
+
+Match the detail of your plan to the complexity of the task. A simple task should produce a simple, lean plan — not an elaborate multi-page decomposition. If one worker can do the entire job, give them one clear brief and move on.
+
+When there is only 1 worker, skip interface contracts and ownership partitioning — the single worker owns everything. Focus on a clear, actionable task description.
+
+${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
 

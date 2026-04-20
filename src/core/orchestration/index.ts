@@ -10,6 +10,18 @@ export {
 } from './controller.js';
 export {
   type OrphanedWorkspace,
+  type UnknownOrphanedWorkspace,
+  type AllOrphanedWorkspaces,
   findOrphanedWorkspaces,
+  findUnknownOrphanedWorkspaces,
+  findAllOrphanedWorkspaces,
   destroyOrphanedWorkspace,
 } from './cleanup.js';
+export {
+  registerSession,
+  unregisterSession,
+  registerSshChild,
+  registerExecutorHandle,
+  unregisterExecutorHandle,
+  gracefulShutdown,
+} from './shutdown.js';

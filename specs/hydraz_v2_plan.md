@@ -46,7 +46,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **57 test files** (v1 base + v2 swarm module tests).
+- **60 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -284,13 +284,84 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 - **Verbose/debug mode**: `--verbose` flag with exhaustive debug logging, `--branch` flag for container clone override, container flow fixes (git remote URL cloning, docker provider forcing, `.worktreeinclude` SCP from host to container)
 
-### Deferred to v2.2.0
+### v2.2.0 Backlog
 
+**P0 — Ship-blocking for non-experimental:**
+- ~~**Serial worker execution (default)**: workers execute serially by default, with parallel mode opt-in via `--parallel`.~~ (done in v2.2.0)
+- ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
+- ~~**Credentials out of `process.argv`**: options JSON moved from CLI argument to `HYDRAZ_PIPELINE_OPTIONS` env var, not visible in `ps aux`.~~ (done in v2.2.0)
+
+### ~~Repo-level configuration (`.hydraz/` directory convention)~~ (done in v2.2.0)
+
+~~**Goal**: Support repo-specific hydraz configuration via a committed `.hydraz/` directory in target repos. This enables repos to declare host-to-container file mappings, repo-specific prompt content for swarm agents, and repo-specific secrets — all via a standardized, committed directory convention.~~ (done — `repo-config.ts` implements `loadRepoConfig` for `.hydraz/config.json` parsing, `readRepoPromptContent` for `HYDRAZ.md` injection into all role prompts, `processHydrazIncludes` for host-to-container SCP via the existing `tar | ssh` pipe; controller calls `processHydrazIncludes` during container setup; pipeline reads `HYDRAZ.md` and passes `repoPromptContent` to all 6 stage executors; `.hydraz/.env` propagation uses the existing `.worktreeinclude` mechanism with no new code; 14 tests in `repo-config.test.ts`)
+
+**Important distinction**: The `.hydraz/` directory in a target repo is *repo-owned configuration*, committed by repo owners — analogous to `.devcontainer/`. This is distinct from `~/.hydraz/`, which stores hydraz-generated session data, worktrees, and workspace state. The principle "no hydraz-generated files are placed in target repos" remains true.
+
+**`.hydraz/` directory layout (in target repo):**
+```
+.hydraz/
+  config.json    # Repo-specific hydraz configuration (hydrazincludes, future keys)
+  HYDRAZ.md      # Repo-specific prompt content injected into all swarm agent prompts
+  .env           # Repo-specific secrets (listed in .worktreeinclude for worktree propagation)
+```
+
+**`config.json` schema:**
+```json
+{
+  "hydrazincludes": [
+    { "host": "~/.aigl", "container": "~/.aigl" }
+  ]
+}
+```
+
+**Key changes:**
+- Parse `.hydraz/config.json` from the target repo root during session startup
+- Implement `hydrazincludes` SCP: for each entry, copy the host path into the container at the specified container path via the existing `tar | ssh` pipe mechanism (same as `scpToContainer`)
+- Implement `HYDRAZ.md` prompt injection: read `.hydraz/HYDRAZ.md` from the target repo and inject its contents into all role prompts (investigator, architect, planner, workers, reviewers)
+- `.hydraz/.env` support: repos list `.hydraz/.env` in their `.worktreeinclude` file, leveraging the existing worktree-include mechanism — no new hydraz code needed for this
+
+**`hydrazincludes` mechanics:**
+- Each entry maps a host path to a container path
+- Tilde (`~`) expansion on both host and container sides
+- SCP via the existing `tar | ssh` pipe mechanism (same as `scpToContainer` in `devpod.ts`)
+- Fires during container setup, after DevPod workspace creation and dist copy but before pipeline execution
+- Graceful handling of missing host paths (warn and skip, don't fail the session)
+- Not applicable in local bare-metal mode (no host/container boundary)
+
+**`HYDRAZ.md` prompt injection:**
+- Read from `.hydraz/HYDRAZ.md` in the target repo root (local mode) or container-local repo root (container mode)
+- Injected into all role prompts: investigator, architect, planner, workers, reviewers
+- Positioned after core role instructions but before task-specific content
+- If the file doesn't exist, no injection (silent no-op)
+- Content is expected to be concise and universally relevant to any agent working in the repo
+
+**Dependencies**: Container-side orchestration (done), prompt system (done), `scpToContainer` (done)
+**Risks**: Low. The hydraz CLI implementation is straightforward: config parsing, SCP, and prompt injection.
+
+**P1 — High impact:**
+- ~~**Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.~~ (done — `ConsensusOptions.onEvent` callback emits per-round events: `consensus_round_started`, `consensus_planner_completed`/`failed`, `consensus_review_started`/`completed` with verdict; pipeline forwards via `emitEvent`; 5 new `EventType` entries in `logger.ts`)
+- ~~**Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.~~ (done — `spawnWithHeartbeat` utility, async `devpodUp`/`scpToContainer` with heartbeat callbacks, async `WorkspaceProvider.createWorkspace()` interface, controller emits `workspace.heartbeat` and `swarm.heartbeat` events, SSH pipeline runner emits idle heartbeats every 30s)
+- ~~**Signal handling and graceful shutdown**: no SIGINT handler. Ctrl+C kills the process without transitioning the session to `stopped` or cleaning up the DevPod workspace. Orphaned cloud VMs burn money silently.~~ (done)
+- ~~**Zombie DevPod workspace cleanup on failure**: failed sessions don't reliably clean up DevPod workspaces. `hydraz clean` should auto-detect and force-delete all orphaned workspaces. Consider cleanup-on-start (detect and warn about existing zombies).~~ (done)
+
+**P2 — Quality of life:**
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.
-- **Architect council**: parallel architects with synthesis (see spec non-goals)
-- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy
-- **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller
-- **Verification phase**: post-review test execution with inner retry loop (see spec §18)
+- **Consensus loop complexity awareness**: the architect-planner loop should fast-path for simple tasks instead of deliberating for multiple rounds on a trivial task. Complexity-aware bounds or a lightweight planner bypass for trivial tasks.
+- **Verification phase**: post-review test execution with inner retry loop (see spec §18).
+- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate; needs a cleanup strategy.
+
+**P3 — CLI convenience and developer experience:**
+- **`hydraz ssh [session]`**: resolve the DevPod workspace name from session metadata and SSH in. Eliminates the need to type `devpod ssh hydraz-<uuid>` manually.
+- **`hydraz logs [session]`**: tail artifacts and events from the container (or local session dir) without manually finding paths.
+- **`hydraz artifacts [session]`**: list or display swarm artifacts (investigation brief, architecture, plan, worker briefs, reviews) for a session without navigating `~/.hydraz` paths manually.
+- **`hydraz cost [session]`**: per-session cost summary (total tokens, estimated cost, per-stage breakdown). The executor already tracks `inputTokens`, `outputTokens`, `cost`, `durationMs`.
+- **`hydraz diff [session]`**: show the aggregate diff of what the swarm produced. For container sessions, SSH in and `git diff main..HEAD`. For local, diff the worktree.
+- **Remove dead `container-auth-file.ts`**: fully tested (8 tests), imported by nothing. Orphaned by the container-side orchestration rewrite.
+
+**P4 — Future / architectural:**
+- **Resume wiring**: `determineResumePoint` exists and is tested but not connected to `resumeSession` in the controller.
+- **Architect council**: parallel architects with synthesis (see spec non-goals).
+- **Detach/background for cloud mode**: closing the laptop kills the SSH connection and the entire pipeline. Needs server-side orchestration (run the orchestrator inside the container so it survives client disconnect).
 
 ### Known doc discrepancies
 
@@ -350,3 +421,15 @@ It introduces zero parallelism and zero loop complexity. It's one Claude invocat
 4. **Merge conflicts despite ownership**: Even with ownership, workers may make incompatible changes to shared files or interfaces. Mitigation: interface contracts in the plan + merge-phase conflict resolution.
 
 5. **Review panel consistency**: Reviewers may produce inconsistent or unstructured output. Mitigation: structured output format in the prompt + parsing fallbacks.
+
+---
+
+## 6. Manual E2E Verification
+
+After all v2.2.0 code changes are complete, run a full manual end-to-end test before tagging the release. At minimum:
+
+- [ ] Local bare-metal: `hydraz run "<task>"` — full pipeline to completion
+- [ ] Local bare-metal with `--parallel`: verify parallel worker execution still works
+- [ ] Container/cloud mode (if changes touched container paths): `hydraz run --container "<task>"` or `--cloud`
+- [ ] `hydraz hello-world --local` sanity check
+- [ ] Verify serial worker chaining: confirm later workers build on earlier workers' commits (inspect git log on integration branch)

@@ -15,6 +15,7 @@ import {
   getSwarmDir,
 } from './artifacts.js';
 import { getWorkspaceDir } from '../providers/provider.js';
+import { readRepoPromptContent } from './repo-config.js';
 
 export interface PipelineCallbacks {
   onPhaseChange?: (phase: SwarmPhase) => void;
@@ -42,6 +43,7 @@ export interface PipelineOptions {
   reviewerPersonas: Array<{ name: string; persona: string }>;
   maxOuterLoops: number;
   maxConsensusRounds: number;
+  parallel: boolean;
   callbacks?: PipelineCallbacks;
 }
 
@@ -54,6 +56,7 @@ function emitEvent(options: PipelineOptions, type: string, message: string): voi
 }
 
 function buildContext(options: PipelineOptions, swarmDir: string): ExecutionContext {
+  const repoPrompt = readRepoPromptContent(options.repoRoot);
   return {
     repoRoot: options.repoRoot,
     sessionId: options.sessionId,
@@ -62,6 +65,7 @@ function buildContext(options: PipelineOptions, swarmDir: string): ExecutionCont
     workingDirectory: options.workingDirectory,
     config: options.config,
     swarmDir,
+    repoPromptContent: repoPrompt ?? undefined,
   };
 }
 
@@ -123,6 +127,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       architectureDesign,
       workerCount: options.workerCount,
       maxRounds: options.maxConsensusRounds,
+      onEvent: (type, message) => emitEvent(options, type, message),
     });
 
     totalConsensusRounds += consensusResult.roundsUsed;
@@ -153,6 +158,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       ownership,
       planContent,
       existingWorktrees: workerWorktrees,
+      parallel: options.parallel,
     });
 
     if (!workerWorktrees) {
