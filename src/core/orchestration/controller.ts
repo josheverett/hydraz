@@ -144,7 +144,13 @@ export async function startSession(
 
   let workspace: WorkspaceInfo;
   try {
-    workspace = provider.createWorkspace({ session, config });
+    workspace = await provider.createWorkspace({
+      session,
+      config,
+      onHeartbeat: (label, elapsedMs) => {
+        emitEvent('workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      },
+    });
     const updated = loadSession(repoRoot, sessionId);
     updated.workspaceDir = workspace.directory;
     saveSession(repoRoot, updated);
@@ -181,7 +187,9 @@ export async function startSession(
 
     try {
       emitEvent('swarm.container_setup', 'Copying Hydraz into container');
-      scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH);
+      await scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH, (label, elapsedMs) => {
+        emitEvent('swarm.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       transitionState(repoRoot, sessionId, 'failed', msg);

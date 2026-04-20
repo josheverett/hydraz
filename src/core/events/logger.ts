@@ -53,7 +53,9 @@ export type EventType =
   | 'branch.pushed'
   | 'pull_request.created'
   | 'workspace.destroyed'
-  | 'workspace.preserved';
+  | 'workspace.preserved'
+  | 'workspace.heartbeat'
+  | 'swarm.heartbeat';
 
 export function createEvent(
   sessionId: string,

@@ -133,27 +133,28 @@ describe('LocalContainerProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('launches devpod with the git remote URL, docker provider, and current branch', () => {
+    it('launches devpod with the git remote URL, docker provider, and current branch', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       expect(mockDevpodUp).toHaveBeenCalledWith(
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
         'docker',
         'feature/devcontainer',
+        undefined,
       );
     });
 
-    it('creates worktree inside the container via SSH', () => {
+    it('creates worktree inside the container via SSH', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       expect(mockCreateWorktreeInContainer).toHaveBeenCalledWith(
         expect.stringContaining(session.id),
@@ -163,12 +164,12 @@ describe('LocalContainerProvider', () => {
       );
     });
 
-    it('copies .worktreeinclude files inside the container', () => {
+    it('copies .worktreeinclude files inside the container', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       expect(mockListCopyableIncludes).toHaveBeenCalledWith(
         '/fake/repo',
@@ -182,12 +183,12 @@ describe('LocalContainerProvider', () => {
       );
     });
 
-    it('SCPs worktree include files from host to container before copying within container', () => {
+    it('SCPs worktree include files from host to container before copying within container', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       expect(mockScpFiles).toHaveBeenCalledWith(
         expect.stringContaining('hydraz-'),
@@ -197,28 +198,28 @@ describe('LocalContainerProvider', () => {
       );
     });
 
-    it('does not SCP when there are no worktree include files', () => {
+    it('does not SCP when there are no worktree include files', async () => {
       mockListCopyableIncludes.mockReturnValue([]);
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       expect(mockScpFiles).not.toHaveBeenCalled();
     });
 
-    it('tears down devpod if SCP of worktree include files fails', () => {
+    it('tears down devpod if SCP of worktree include files fails', async () => {
       mockScpFiles.mockImplementation(() => { throw new Error('scp failed'); });
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('scp failed');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('scp failed');
       expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
-    it('fails before launching devpod when .worktreeinclude validation rejects a symlink', () => {
+    it('fails before launching devpod when .worktreeinclude validation rejects a symlink', async () => {
       mockListCopyableIncludes.mockImplementation(() => {
         throw new Error('Refusing to copy symlink entry from .worktreeinclude: agent/.env');
       });
@@ -226,93 +227,107 @@ describe('LocalContainerProvider', () => {
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow(/symlink/i);
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/symlink/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
       expect(mockVerifyClaude).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('returns container-internal worktree path as directory', () => {
+    it('returns container-internal worktree path as directory', async () => {
       mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/abc');
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
 
       expect(workspace.type).toBe('local-container');
       expect(workspace.directory).toBe('/tmp/hydraz-worktrees/abc');
       expect(workspace.sessionId).toBe(session.id);
     });
 
-    it('returns a cloud workspace type when invoked for a cloud session', () => {
+    it('returns a cloud workspace type when invoked for a cloud session', async () => {
       mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/cloud-abc');
       const provider = new LocalContainerProvider();
       const session = makeSession('cloud-session', 'cloud');
       const config = makeConfig();
 
-      const workspace = provider.createWorkspace({ session, config });
+      const workspace = await provider.createWorkspace({ session, config });
 
       expect(workspace.type).toBe('cloud');
     });
 
-    it('tears down devpod if worktree creation inside container fails', () => {
+    it('tears down devpod if worktree creation inside container fails', async () => {
       mockCreateWorktreeInContainer.mockImplementation(() => { throw new Error('git failed'); });
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('git failed');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('git failed');
       expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
-    it('fails if devcontainer.json is missing', () => {
+    it('fails if devcontainer.json is missing', async () => {
       mockHasDevcontainer.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('devcontainer');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('devcontainer');
     });
 
-    it('fails if no git remote is configured', () => {
+    it('fails if no git remote is configured', async () => {
       mockHasGitRemote.mockReturnValue(false);
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('remote');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('remote');
     });
 
-    it('fails early when the repo remote is not supported for GitHub-only beta automation', () => {
+    it('fails early when the repo remote is not supported for GitHub-only beta automation', async () => {
       mockGetGitHubRepo.mockReturnValue(null);
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub-only/i);
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/GitHub-only/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('fails early when GitHub auth is not configured', () => {
+    it('fails early when GitHub auth is not configured', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig(false);
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow(/GitHub token/i);
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/GitHub token/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('tears down workspace if Claude Code is not found in the container', () => {
+    it('tears down workspace if Claude Code is not found in the container', async () => {
       mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      expect(() => provider.createWorkspace({ session, config })).toThrow('Claude Code');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('Claude Code');
       expect(mockDevpodDelete).toHaveBeenCalled();
+    });
+
+    it('threads onHeartbeat callback from params to devpodUp', async () => {
+      const heartbeatCb = vi.fn();
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config, onHeartbeat: heartbeatCb });
+
+      const passedCb = mockDevpodUp.mock.calls[0]?.[4];
+      expect(passedCb).toBeDefined();
+      passedCb?.('DevPod provisioning', 15000);
+      expect(heartbeatCb).toHaveBeenCalledWith('DevPod provisioning', 15000);
     });
   });
 
@@ -358,12 +373,12 @@ describe('CloudProvider', () => {
   });
 
   describe('createWorkspace', () => {
-    it('does not force docker provider or branch for devpod up', () => {
+    it('does not force docker provider or branch for devpod up', async () => {
       const provider = new CloudProvider();
       const session = makeSession('cloud-session', 'cloud');
       const config = makeConfig();
 
-      provider.createWorkspace({ session, config });
+      await provider.createWorkspace({ session, config });
 
       const providerArg = mockDevpodUp.mock.calls[0]?.[2];
       const branchArg = mockDevpodUp.mock.calls[0]?.[3];

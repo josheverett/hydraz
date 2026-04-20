@@ -52,7 +52,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
     return { available: true };
   }
 
-  createWorkspace(params: CreateWorkspaceParams): WorkspaceInfo {
+  async createWorkspace(params: CreateWorkspaceParams): Promise<WorkspaceInfo> {
     const { session } = params;
     const includeDestinationRoot = join(session.repoRoot, '.hydraz-container-worktree');
     debug(`createWorkspace: repoRoot=${session.repoRoot} executionTarget=${session.executionTarget}`);
@@ -92,7 +92,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
     debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'default'}`);
 
     try {
-      devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider, currentBranch);
+      await devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider, currentBranch, params.onHeartbeat);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);

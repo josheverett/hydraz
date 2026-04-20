@@ -234,7 +234,7 @@ describe('startSession container failure paths', () => {
       available: true,
     });
     vi.spyOn(LocalContainerProvider.prototype, 'createWorkspace').mockImplementation(
-      (params: any) => ({
+      async (params: any) => ({
         type: 'local-container' as const,
         directory: '/workspaces/test',
         sessionId: params.session.id,
@@ -372,5 +372,51 @@ describe('startSession container failure paths', () => {
 
     const loaded = loadSession(repoRoot, session.id);
     expect(loaded.state).toBe('failed');
+  });
+
+  it('passes heartbeat callback to createWorkspace that emits workspace.heartbeat events', async () => {
+    const createSpy = vi.spyOn(LocalContainerProvider.prototype, 'createWorkspace');
+    createSpy.mockImplementation(async (params: any) => {
+      params.onHeartbeat?.('DevPod provisioning', 15000);
+      return {
+        type: 'local-container' as const,
+        directory: '/workspaces/test',
+        sessionId: params.session.id,
+      };
+    });
+
+    const session = makeContainerSession('heartbeat-ws');
+    vi.mocked(scpToContainer).mockImplementation(() => {
+      throw new Error('SCP failed');
+    });
+
+    const events: string[] = [];
+    await startSession(session.id, repoRoot, {
+      onEvent: (type, msg) => events.push(`${type}: ${msg}`),
+      onError: () => {},
+    });
+
+    expect(events.some(e => e.startsWith('workspace.heartbeat:') && e.includes('15s'))).toBe(true);
+  });
+
+  it('passes heartbeat callback to scpToContainer that emits swarm.heartbeat events', async () => {
+    const session = makeContainerSession('heartbeat-scp');
+    vi.mocked(scpToContainer).mockImplementation(async (...args: any[]) => {
+      const heartbeatCb = args[3];
+      heartbeatCb?.('Copying to container', 10000);
+    });
+    vi.mocked(spawn).mockReturnValue(createFakeChildProcess(1) as any);
+    vi.mocked(sshExec).mockReturnValue(JSON.stringify({
+      success: false, phase: 'failed', outerLoopsUsed: 0,
+      consensusRoundsUsed: 0, approved: false, error: 'fail',
+    }));
+
+    const events: string[] = [];
+    await startSession(session.id, repoRoot, {
+      onEvent: (type, msg) => events.push(`${type}: ${msg}`),
+      onError: () => {},
+    });
+
+    expect(events.some(e => e.startsWith('swarm.heartbeat:') && e.includes('10s'))).toBe(true);
   });
 });
