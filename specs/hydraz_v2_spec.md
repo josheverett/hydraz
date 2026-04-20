@@ -2,7 +2,7 @@
 
 ## 0. Current State (read this first)
 
-**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18).
+**Status:** Phases 1-9 complete, Phase 10 (resume) partial. Post-phase cleanup (README, dead code, 4 rounds of complexity reduction) complete. Local bare-metal mode verified end-to-end. Container-side orchestration implemented (pipeline runs inside the container). Container hello-world verified end-to-end (devpod up, clone, build, worktree, Claude execution, file verification). Verification phase designed and documented for v2.2 (see §18). Repo-level configuration (`.hydraz/` directory convention) implemented: `config.json` parsing, `hydrazincludes` SCP, `HYDRAZ.md` prompt injection into all role prompts (see §12.3).
 
 **Bugs found and fixed during manual testing:**
 - Investigation artifact path mismatch: prompts now include absolute `swarmDir` path so Claude writes artifacts to the session directory, not the worktree
@@ -659,6 +659,8 @@ These can be overridden per-session via CLI flags (`--workers N`, `--reviewers <
 **Status: Not implemented.** Reviewer persona definitions are currently inline strings in the controller (`"You are ${name}. Review the code with your characteristic engineering perspective."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
 
 ### 12.3 Repo-level configuration (`.hydraz/` directory)
+
+**Status: Implemented.** `src/core/swarm/repo-config.ts` provides `loadRepoConfig` (parses `.hydraz/config.json`), `readRepoPromptContent` (reads `.hydraz/HYDRAZ.md`), and `processHydrazIncludes` (SCP of `hydrazincludes` entries during container setup). The controller calls `processHydrazIncludes` during container startup. The pipeline reads `HYDRAZ.md` and passes `repoPromptContent` to all stage executors via `ExecutionContext`. All 6 prompt templates inject the content as a "Repo-Specific Instructions" section. `.hydraz/.env` propagation uses the existing `.worktreeinclude` mechanism with no new code.
 
 Target repos may optionally contain a committed `.hydraz/` directory with repo-specific hydraz configuration. This is *repo-owned configuration* — authored and committed by the repo's owners, analogous to `.devcontainer/`. It is distinct from `~/.hydraz/`, which stores hydraz-generated session data. The principle "no hydraz-generated files are placed in target repos" remains true.
 

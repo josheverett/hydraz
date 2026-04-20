@@ -58,7 +58,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **57 test files** (v1 base + v2 swarm module tests).
+- **60 test files** (v1 base + v2 swarm module tests).
 
 ---
 

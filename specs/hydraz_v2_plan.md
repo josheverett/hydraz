@@ -46,7 +46,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - **Event system**: JSONL event log per session with typed events.
 - **Session model**: State machine, metadata persistence, artifact directory.
 - **GitHub delivery**: Push verification and PR creation.
-- **57 test files** (v1 base + v2 swarm module tests).
+- **60 test files** (v1 base + v2 swarm module tests).
 
 ---
 
@@ -291,11 +291,9 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
 - ~~**Credentials out of `process.argv`**: options JSON moved from CLI argument to `HYDRAZ_PIPELINE_OPTIONS` env var, not visible in `ps aux`.~~ (done in v2.2.0)
 
-### Repo-level configuration (`.hydraz/` directory convention)
+### ~~Repo-level configuration (`.hydraz/` directory convention)~~ (done in v2.2.0)
 
-**Goal**: Support repo-specific hydraz configuration via a committed `.hydraz/` directory in target repos. This enables repos to declare host-to-container file mappings, repo-specific prompt content for swarm agents, and repo-specific secrets — all via a standardized, committed directory convention.
-
-**Context**: The `.hydraz/` directory convention was established in the travelagent-ai monorepo (PR #20859 against `staging`). That PR creates the target-repo side of the convention: the directory structure, `config.json` schema, `HYDRAZ.md` content, and `.worktreeinclude` integration. This phase implements the hydraz CLI support for parsing and acting on these conventions during session startup and container setup.
+~~**Goal**: Support repo-specific hydraz configuration via a committed `.hydraz/` directory in target repos. This enables repos to declare host-to-container file mappings, repo-specific prompt content for swarm agents, and repo-specific secrets — all via a standardized, committed directory convention.~~ (done — `repo-config.ts` implements `loadRepoConfig` for `.hydraz/config.json` parsing, `readRepoPromptContent` for `HYDRAZ.md` injection into all role prompts, `processHydrazIncludes` for host-to-container SCP via the existing `tar | ssh` pipe; controller calls `processHydrazIncludes` during container setup; pipeline reads `HYDRAZ.md` and passes `repoPromptContent` to all 6 stage executors; `.hydraz/.env` propagation uses the existing `.worktreeinclude` mechanism with no new code; 14 tests in `repo-config.test.ts`)
 
 **Important distinction**: The `.hydraz/` directory in a target repo is *repo-owned configuration*, committed by repo owners — analogous to `.devcontainer/`. This is distinct from `~/.hydraz/`, which stores hydraz-generated session data, worktrees, and workspace state. The principle "no hydraz-generated files are placed in target repos" remains true.
 
@@ -338,7 +336,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 - Content is expected to be concise and universally relevant to any agent working in the repo
 
 **Dependencies**: Container-side orchestration (done), prompt system (done), `scpToContainer` (done)
-**Risks**: Low. The `.hydraz/` convention is already proven in the travelagent-ai repo. The hydraz CLI implementation is straightforward: config parsing, SCP, and prompt injection.
+**Risks**: Low. The hydraz CLI implementation is straightforward: config parsing, SCP, and prompt injection.
 
 **P1 — High impact:**
 - ~~**Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.~~ (done — `ConsensusOptions.onEvent` callback emits per-round events: `consensus_round_started`, `consensus_planner_completed`/`failed`, `consensus_review_started`/`completed` with verdict; pipeline forwards via `emitEvent`; 5 new `EventType` entries in `logger.ts`)
