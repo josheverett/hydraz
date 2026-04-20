@@ -343,8 +343,8 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 **P1 — High impact:**
 - **Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.
 - **Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.
-- **Signal handling and graceful shutdown**: no SIGINT handler. Ctrl+C kills the process without transitioning the session to `stopped` or cleaning up the DevPod workspace. Orphaned cloud VMs burn money silently.
-- **Zombie DevPod workspace cleanup on failure**: failed sessions don't reliably clean up DevPod workspaces. `hydraz clean` should auto-detect and force-delete all orphaned workspaces. Consider cleanup-on-start (detect and warn about existing zombies).
+- ~~**Signal handling and graceful shutdown**: no SIGINT handler. Ctrl+C kills the process without transitioning the session to `stopped` or cleaning up the DevPod workspace. Orphaned cloud VMs burn money silently.~~ (done)
+- ~~**Zombie DevPod workspace cleanup on failure**: failed sessions don't reliably clean up DevPod workspaces. `hydraz clean` should auto-detect and force-delete all orphaned workspaces. Consider cleanup-on-start (detect and warn about existing zombies).~~ (done)
 
 **P2 — Quality of life:**
 - **Worker count intelligence**: planner should detect when a task is too small for N workers and assign fewer meaningful work streams. Currently a trivial task (e.g., "add one file") gets decomposed into 3 workers where 2 do make-work, which wastes Opus invocations and can cause review panel rejections.

@@ -418,7 +418,7 @@ Manage built-in and custom personas and choose the global default swarm.
 Manage MCP server configuration and connectivity.
 
 #### `hydraz clean`
-Clean up orphaned DevPod workspaces from completed, stopped, or failed container sessions. Lists orphans with their session state and DevPod status, then prompts for confirmation before destroying. Supports `--force` to skip the confirmation prompt.
+Clean up orphaned DevPod workspaces. Detects two categories of orphans: (1) workspaces linked to sessions in terminal states (completed, stopped, failed, blocked) and (2) unknown `hydraz-*` workspaces discovered via `devpod list` with no matching active session. Lists orphans with their session state and DevPod status, then prompts for confirmation before force-deleting. Supports `--force` to skip the confirmation prompt and `--dry-run` to list orphans without destroying.
 
 ---
 

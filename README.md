@@ -160,7 +160,7 @@ devpod provider use gcloud
 
 **`ZONE_RESOURCE_POOL_EXHAUSTED`**: GCP doesn't have capacity for your machine type in the configured zone. Try a different zone: `devpod provider set-options gcloud -o ZONE=us-west1-b`
 
-**Stale DevPod workspaces**: Failed sessions can leave orphaned DevPod workspaces that interfere with new runs. Run `devpod list` to check, and `devpod delete --force <name>` to clean them up.
+**Stale DevPod workspaces**: Failed sessions can leave orphaned DevPod workspaces that interfere with new runs. Run `hydraz clean` to auto-detect and force-delete all orphaned workspaces (including ones with no matching session). Hydraz also warns about orphans at session start. As a manual fallback: `devpod list` to check, `devpod delete --force <name>` to remove individually.
 
 **`INACTIVITY_TIMEOUT`**: The default DevPod gcloud provider timeout (5m) can be too short for cold container builds. Increase it: `devpod provider set-options gcloud -o INACTIVITY_TIMEOUT=30m`
 
