@@ -20,6 +20,7 @@ export type EventType =
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped'
+  | 'session.warning'
   | 'workspace.created'
   | 'branch.created'
   | 'claude.ready'

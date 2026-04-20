@@ -16,6 +16,8 @@ import {
   scpFilesToContainer,
   getDistRoot,
   devpodUp,
+  devpodDelete,
+  devpodList,
 } from './devpod.js';
 import { setVerbose } from '../debug.js';
 
@@ -425,5 +427,116 @@ describe('devpodUp', () => {
     devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
     const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--debug');
+  });
+});
+
+describe('devpodDelete', () => {
+  it('calls devpod delete with the workspace name', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodDelete('hydraz-abc123');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['delete', 'hydraz-abc123'],
+      expect.any(Object),
+    );
+  });
+
+  it('passes --force flag when force option is true', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodDelete('hydraz-abc123', true);
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['delete', '--force', 'hydraz-abc123'],
+      expect.any(Object),
+    );
+  });
+
+  it('omits --force flag when force option is false', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodDelete('hydraz-abc123', false);
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--force');
+  });
+
+  it('omits --force flag when force option is not provided', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    devpodDelete('hydraz-abc123');
+    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--force');
+  });
+});
+
+describe('devpodList', () => {
+  it('returns parsed workspace entries from devpod list JSON output', () => {
+    const jsonOutput = JSON.stringify([
+      { id: 'hydraz-abc123', status: 'Running' },
+      { id: 'hydraz-def456', status: 'Stopped' },
+    ]);
+    mockExecFileSync.mockReturnValue(jsonOutput as never);
+
+    const result = devpodList();
+
+    expect(result).toEqual([
+      { name: 'hydraz-abc123', status: 'Running' },
+      { name: 'hydraz-def456', status: 'Stopped' },
+    ]);
+  });
+
+  it('calls devpod list with --output json', () => {
+    mockExecFileSync.mockReturnValue('[]' as never);
+    devpodList();
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['list', '--output', 'json'],
+      expect.objectContaining({ encoding: 'utf-8' }),
+    );
+  });
+
+  it('returns empty array when no workspaces exist', () => {
+    mockExecFileSync.mockReturnValue('[]' as never);
+    const result = devpodList();
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when devpod list fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('devpod not found'); });
+    const result = devpodList();
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when output is not valid JSON', () => {
+    mockExecFileSync.mockReturnValue('not json' as never);
+    const result = devpodList();
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when output is not an array', () => {
+    mockExecFileSync.mockReturnValue('{"id": "ws"}' as never);
+    const result = devpodList();
+    expect(result).toEqual([]);
+  });
+
+  it('skips entries without an id field', () => {
+    const jsonOutput = JSON.stringify([
+      { id: 'hydraz-abc', status: 'Running' },
+      { status: 'Stopped' },
+      { id: 'hydraz-def', status: 'Running' },
+    ]);
+    mockExecFileSync.mockReturnValue(jsonOutput as never);
+
+    const result = devpodList();
+
+    expect(result).toHaveLength(2);
+    expect(result[0]!.name).toBe('hydraz-abc');
+    expect(result[1]!.name).toBe('hydraz-def');
+  });
+
+  it('defaults status to Unknown when status field is missing', () => {
+    const jsonOutput = JSON.stringify([{ id: 'hydraz-abc' }]);
+    mockExecFileSync.mockReturnValue(jsonOutput as never);
+
+    const result = devpodList();
+
+    expect(result).toEqual([{ name: 'hydraz-abc', status: 'Unknown' }]);
   });
 });

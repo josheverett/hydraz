@@ -29,6 +29,7 @@ import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
 import { processHydrazIncludes } from '../swarm/repo-config.js';
 import { registerSession, unregisterSession, registerSshChild } from './shutdown.js';
+import { findAllOrphanedWorkspaces } from './cleanup.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -130,6 +131,17 @@ export async function startSession(
     return;
   }
 
+  try {
+    const orphans = findAllOrphanedWorkspaces(repoRoot);
+    if (orphans.total > 0) {
+      const msg = `Warning: ${orphans.total} orphaned DevPod workspace(s) detected. Run 'hydraz clean' to remove them.`;
+      emitEvent('session.warning', msg);
+      callbacks.onError?.(msg);
+    }
+  } catch {
+    // non-fatal — don't block session start if orphan detection fails
+  }
+
   let workspace: WorkspaceInfo;
   try {
     workspace = provider.createWorkspace({ session, config });
@@ -176,6 +188,11 @@ export async function startSession(
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.failed', `Container setup failed: ${msg}`);
       callbacks.onError?.(msg);
+      try {
+        provider.destroyWorkspace(repoRoot, workspace);
+      } catch {
+        // best-effort cleanup
+      }
       unregisterSession(sessionId);
       activeSessions.delete(sessionId);
       return;
@@ -376,6 +393,10 @@ export async function startSession(
       transitionState(repoRoot, sessionId, 'failed', failMsg);
       callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
       emitEvent('session.failed', failMsg);
+      if (isContainerExecutionTarget(session.executionTarget)) {
+        callbacks.onError?.(
+          `Workspace preserved for inspection: devpod ssh hydraz-${session.id}`);
+      }
     }
   }
 }

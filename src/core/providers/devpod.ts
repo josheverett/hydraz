@@ -68,11 +68,44 @@ export function devpodUp(source: string, workspaceName: string, provider?: strin
   debugTiming('devpod up', Date.now() - start);
 }
 
-export function devpodDelete(workspaceName: string): void {
-  debugExec('devpod', ['delete', workspaceName]);
+export function devpodDelete(workspaceName: string, force?: boolean): void {
+  const args = force
+    ? ['delete', '--force', workspaceName]
+    : ['delete', workspaceName];
+  debugExec('devpod', args);
   const start = Date.now();
-  execFileSync('devpod', ['delete', workspaceName], EXEC_OPTIONS);
+  execFileSync('devpod', args, EXEC_OPTIONS);
   debugTiming('devpod delete', Date.now() - start);
+}
+
+export interface DevPodListEntry {
+  name: string;
+  status: string;
+}
+
+export function devpodList(): DevPodListEntry[] {
+  debugExec('devpod', ['list', '--output', 'json']);
+  const start = Date.now();
+  try {
+    const output = execFileSync('devpod', ['list', '--output', 'json'], {
+      ...EXEC_OPTIONS,
+      encoding: 'utf-8',
+    });
+    debugTiming('devpod list', Date.now() - start);
+
+    const parsed = JSON.parse(output);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((entry: Record<string, unknown>) => typeof entry.id === 'string')
+      .map((entry: Record<string, unknown>) => ({
+        name: entry.id as string,
+        status: typeof entry.status === 'string' ? entry.status : 'Unknown',
+      }));
+  } catch {
+    debugTiming('devpod list (failed)', Date.now() - start);
+    return [];
+  }
 }
 
 export function devpodStatus(workspaceName: string): 'Running' | 'Stopped' | 'NotFound' {
