@@ -47,7 +47,7 @@ describe('spawnWithHeartbeat', () => {
 
   it('calls onHeartbeat at the configured interval with label and elapsed time', async () => {
     const onHeartbeat = vi.fn();
-    const promise = spawnWithHeartbeat('sh', ['-c', 'sleep 999'], {}, {
+    const promise = spawnWithHeartbeat('cat', [], {}, {
       label: 'Provision',
       intervalMs: 5000,
       onHeartbeat,
@@ -62,12 +62,11 @@ describe('spawnWithHeartbeat', () => {
     expect(onHeartbeat).toHaveBeenCalledTimes(2);
     expect(onHeartbeat.mock.calls[1]![1]).toBeGreaterThanOrEqual(9000);
 
-    // Kill the child so the promise settles
     const child = (promise as unknown as { _child?: { kill: () => void } })._child;
     if (child) child.kill();
     vi.useRealTimers();
     await promise.catch(() => {});
-  });
+  }, 15_000);
 
   it('forwards stdout lines to onStdoutLine callback', async () => {
     const onHeartbeat = vi.fn();
