@@ -25,8 +25,15 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }));
 
+vi.mock('./spawn-heartbeat.js', () => ({
+  spawnWithHeartbeat: vi.fn(() => Promise.resolve({ stdout: '', exitCode: 0 })),
+}));
+
 import { execFileSync } from 'node:child_process';
 const mockExecFileSync = vi.mocked(execFileSync);
+
+import { spawnWithHeartbeat } from './spawn-heartbeat.js';
+const mockSpawnWithHeartbeat = vi.mocked(spawnWithHeartbeat);
 
 let testDir: string;
 
@@ -258,43 +265,54 @@ describe('getDistRoot', () => {
 });
 
 describe('scpToContainer', () => {
-  it('uses tar|ssh pipe via sh -c for efficient transfer', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpToContainer('my-ws', '/local/dist', '/tmp/hydraz-dist');
-    expect(mockExecFileSync).toHaveBeenCalledWith(
+  it('uses tar|ssh pipe via sh -c for efficient transfer', async () => {
+    await scpToContainer('my-ws', '/local/dist', '/tmp/hydraz-dist');
+    expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
       'sh',
       ['-c', expect.stringContaining('tar')],
+      expect.any(Object),
       expect.any(Object),
     );
   });
 
-  it('pipes tar output to ssh targeting the correct devpod host', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+  it('pipes tar output to ssh targeting the correct devpod host', async () => {
+    await scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
     expect(cmd).toContain('ssh');
     expect(cmd).toContain('hydraz-abc123.devpod');
   });
 
-  it('includes rm and mkdir in the remote command for idempotent transfer', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+  it('includes rm and mkdir in the remote command for idempotent transfer', async () => {
+    await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
     expect(cmd).toContain('rm -rf /tmp/hydraz-dist');
     expect(cmd).toContain('mkdir -p /tmp/hydraz-dist');
   });
 
-  it('writes a package.json with type:module into the remote path for ESM support', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+  it('writes a package.json with type:module into the remote path for ESM support', async () => {
+    await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
     expect(cmd).toContain('package.json');
     expect(cmd).toContain('"type":"module"');
   });
 
-  it('throws when the transfer fails', () => {
-    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
-    expect(() => scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).toThrow('ssh: connection refused');
+  it('rejects when the transfer fails', async () => {
+    mockSpawnWithHeartbeat.mockRejectedValueOnce(new Error('ssh: connection refused'));
+    await expect(scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).rejects.toThrow('ssh: connection refused');
+  });
+
+  it('uses 10s heartbeat interval', async () => {
+    await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(heartbeatConfig?.intervalMs).toBe(10_000);
+  });
+
+  it('threads onHeartbeat callback when provided', async () => {
+    const heartbeatCb = vi.fn();
+    await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist', heartbeatCb);
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    heartbeatConfig?.onHeartbeat('test', 1000);
+    expect(heartbeatCb).toHaveBeenCalledWith('test', 1000);
   });
 });
 
@@ -351,82 +369,94 @@ describe('scpFilesToContainer', () => {
 });
 
 describe('devpodUp', () => {
-  it('uses a 900 second timeout for first-time devcontainer builds', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
+  it('uses a 900 second timeout for first-time devcontainer builds', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as Record<string, unknown>;
     expect(opts.timeout).toBe(900_000);
   });
 
-  it('uses stdio inherit when verbose is enabled for real-time streaming', () => {
+  it('forwards stdout lines when verbose is enabled', async () => {
     setVerbose(true);
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
-    expect(opts.stdio).toBe('inherit');
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(heartbeatConfig?.onStdoutLine).toBeDefined();
   });
 
-  it('uses stdio pipe when verbose is disabled', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const opts = mockExecFileSync.mock.calls[0]?.[2] as Record<string, unknown>;
-    expect(opts.stdio).toBe('pipe');
+  it('does not forward stdout lines when verbose is disabled', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(heartbeatConfig?.onStdoutLine).toBeUndefined();
   });
 
-  it('passes the source and workspace name to devpod up', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    expect(mockExecFileSync).toHaveBeenCalledWith(
+  it('passes the source and workspace name to devpod up', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
       'devpod',
       ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc'],
       expect.any(Object),
-    );
-  });
-
-  it('includes --provider flag when provider is specified', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      'devpod',
-      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--provider', 'docker'],
       expect.any(Object),
     );
   });
 
-  it('omits --provider flag when provider is not specified', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+  it('includes --provider flag when provider is specified', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
+      'devpod',
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--provider', 'docker'],
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('omits --provider flag when provider is not specified', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--provider');
   });
 
-  it('appends branch to source URL with @ syntax when branch is specified', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+  it('appends branch to source URL with @ syntax when branch is specified', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args[1]).toBe('git@github.com:org/repo.git@feature/devcontainer');
   });
 
-  it('uses bare source URL when branch is not specified', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+  it('uses bare source URL when branch is not specified', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args[1]).toBe('git@github.com:org/repo.git');
   });
 
-  it('passes --debug to devpod when verbose is enabled', () => {
+  it('passes --debug to devpod when verbose is enabled', async () => {
     setVerbose(true);
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).toContain('--debug');
   });
 
-  it('omits --debug when verbose is disabled', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
-    const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
+  it('omits --debug when verbose is disabled', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--debug');
+  });
+
+  it('uses 15s heartbeat interval', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(heartbeatConfig?.intervalMs).toBe(15_000);
+  });
+
+  it('threads onHeartbeat callback when provided', async () => {
+    const heartbeatCb = vi.fn();
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, heartbeatCb);
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    heartbeatConfig?.onHeartbeat('test', 1000);
+    expect(heartbeatCb).toHaveBeenCalledWith('test', 1000);
+  });
+
+  it('uses a no-op heartbeat when onHeartbeat is not provided', async () => {
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(() => heartbeatConfig?.onHeartbeat('test', 1000)).not.toThrow();
   });
 });
 
