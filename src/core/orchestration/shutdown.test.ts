@@ -248,10 +248,8 @@ describe('shutdown manager', () => {
       transitionState(repoRoot, session.id, 'starting');
 
       const destroyFn = vi.fn();
-      const provider = mockProvider(destroyFn);
-      provider.type = 'local' as any;
-      const workspace = mockWorkspace(session.id);
-      workspace.type = 'local';
+      const provider = { ...mockProvider(destroyFn), type: 'local' as const };
+      const workspace = { ...mockWorkspace(session.id), type: 'local' as const };
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
       registerSession(session.id, repoRoot, provider, workspace, {});
@@ -361,8 +359,7 @@ describe('shutdown manager', () => {
 
       const provider = mockProvider();
       const workspace = mockWorkspace(session.id);
-      const child = mockChildProcess();
-      child.killed = true;
+      const child = { ...mockChildProcess(), killed: true } as unknown as ChildProcess;
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
       registerSession(session.id, repoRoot, provider, workspace, {});

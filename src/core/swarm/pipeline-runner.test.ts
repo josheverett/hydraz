@@ -70,6 +70,7 @@ describe('pipeline-runner', () => {
         reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
         maxOuterLoops: 5,
         maxConsensusRounds: 10,
+        parallel: false,
         callbacks: { onPhaseChange: () => {} },
       });
 

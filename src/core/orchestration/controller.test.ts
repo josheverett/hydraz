@@ -235,8 +235,10 @@ describe('startSession container failure paths', () => {
     });
     vi.spyOn(LocalContainerProvider.prototype, 'createWorkspace').mockImplementation(
       async (params: any) => ({
+        id: `ws-${params.session.id}`,
         type: 'local-container' as const,
         directory: '/workspaces/test',
+        branchName: params.session.branchName,
         sessionId: params.session.id,
       }),
     );
@@ -278,7 +280,7 @@ describe('startSession container failure paths', () => {
 
   it('destroys workspace when container setup (SCP) fails', async () => {
     const session = makeContainerSession('scp-fail');
-    vi.mocked(scpToContainer).mockImplementation(() => {
+    vi.mocked(scpToContainer).mockImplementation(async () => {
       throw new Error('SCP connection refused');
     });
 
@@ -294,7 +296,7 @@ describe('startSession container failure paths', () => {
 
   it('emits recovery info when pipeline fails in container mode', async () => {
     const session = makeContainerSession('pipeline-fail');
-    vi.mocked(scpToContainer).mockImplementation(() => {});
+    vi.mocked(scpToContainer).mockImplementation(async () => {});
     vi.mocked(spawn).mockReturnValue(createFakeChildProcess(1) as any);
     vi.mocked(sshExec).mockReturnValue(JSON.stringify({
       success: false,
@@ -323,7 +325,7 @@ describe('startSession container failure paths', () => {
       unknown: [{ workspaceName: 'hydraz-mystery', devpodStatus: 'Running' }],
       total: 2,
     } as any);
-    vi.mocked(scpToContainer).mockImplementation(() => {
+    vi.mocked(scpToContainer).mockImplementation(async () => {
       throw new Error('SCP failed');
     });
 
@@ -344,7 +346,7 @@ describe('startSession container failure paths', () => {
       unknown: [],
       total: 0,
     });
-    vi.mocked(scpToContainer).mockImplementation(() => {
+    vi.mocked(scpToContainer).mockImplementation(async () => {
       throw new Error('SCP failed');
     });
 
@@ -361,7 +363,7 @@ describe('startSession container failure paths', () => {
     vi.mocked(findAllOrphanedWorkspaces).mockImplementation(() => {
       throw new Error('devpod not available');
     });
-    vi.mocked(scpToContainer).mockImplementation(() => {
+    vi.mocked(scpToContainer).mockImplementation(async () => {
       throw new Error('SCP failed');
     });
 
@@ -379,14 +381,16 @@ describe('startSession container failure paths', () => {
     createSpy.mockImplementation(async (params: any) => {
       params.onHeartbeat?.('DevPod provisioning', 15000);
       return {
+        id: `ws-${params.session.id}`,
         type: 'local-container' as const,
         directory: '/workspaces/test',
+        branchName: params.session.branchName,
         sessionId: params.session.id,
       };
     });
 
     const session = makeContainerSession('heartbeat-ws');
-    vi.mocked(scpToContainer).mockImplementation(() => {
+    vi.mocked(scpToContainer).mockImplementation(async () => {
       throw new Error('SCP failed');
     });
 

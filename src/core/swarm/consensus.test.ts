@@ -275,7 +275,7 @@ describe('runConsensus', () => {
         onEvent,
       });
 
-      const eventTypes = onEvent.mock.calls.map((c: [string, string]) => c[0]);
+      const eventTypes = onEvent.mock.calls.map((c) => c[0]);
       expect(eventTypes).toEqual([
         'swarm.consensus_round_started',
         'swarm.consensus_planner_completed',
