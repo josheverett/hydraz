@@ -295,13 +295,16 @@ Extend the existing JSONL event system with stage-specific events:
 - `swarm.investigate_started`, `swarm.investigate_completed`
 - `swarm.architect_started`, `swarm.architect_completed`
 - `swarm.plan_started`, `swarm.plan_completed`
-- `swarm.consensus_round` (with round number)
+- `swarm.consensus_round` (with round number, emitted by pipeline after consensus completes)
+- `swarm.consensus_round_started`, `swarm.consensus_planner_completed`, `swarm.consensus_planner_failed`
+- `swarm.consensus_review_started`, `swarm.consensus_review_completed` (with verdict)
 - `swarm.worker_launched`, `swarm.worker_completed`, `swarm.worker_failed`
 - `swarm.merge_started`, `swarm.merge_completed`, `swarm.merge_conflict`
 - `swarm.review_started`, `swarm.review_completed`
 - `swarm.review_feedback` (with category: architectural | implementation)
 - `swarm.outer_loop` (with iteration number)
 - `swarm.delivery_started`, `swarm.delivery_completed`
+- `workspace.heartbeat`, `swarm.heartbeat` (periodic heartbeats during long-running operations)
 
 Per-stage metrics from `ExecutorResult`: cost, tokens, duration, turns.
 Aggregate swarm metrics: total cost, total duration, stage breakdown, loop counts.
