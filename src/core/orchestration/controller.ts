@@ -242,6 +242,7 @@ export async function startSession(
       optionsJson,
     );
 
+    const SSH_HEARTBEAT_INTERVAL_MS = 30_000;
     const sshExitCode = await new Promise<number | null>((resolve) => {
       const child = spawn(ssh.cmd, ssh.args, { stdio: ['pipe', 'pipe', 'pipe'] });
       registerSshChild(child);
@@ -249,6 +250,12 @@ export async function startSession(
         child.stdin?.write(ssh.stdinScript);
       }
       child.stdin?.end();
+
+      const sshStartTime = Date.now();
+      const heartbeatInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - sshStartTime) / 1000);
+        emitEvent('swarm.heartbeat', `Pipeline running... (${elapsed}s)`);
+      }, SSH_HEARTBEAT_INTERVAL_MS);
 
       let buffer = '';
       child.stdout?.on('data', (data: Buffer) => {
@@ -280,8 +287,12 @@ export async function startSession(
         if (text) callbacks.onError?.(text);
       });
 
-      child.on('close', (code) => resolve(code));
+      child.on('close', (code) => {
+        clearInterval(heartbeatInterval);
+        resolve(code);
+      });
       child.on('error', (err) => {
+        clearInterval(heartbeatInterval);
         callbacks.onError?.(`SSH error: ${err.message}`);
         resolve(1);
       });

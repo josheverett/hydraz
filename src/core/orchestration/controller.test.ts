@@ -419,4 +419,38 @@ describe('startSession container failure paths', () => {
 
     expect(events.some(e => e.startsWith('swarm.heartbeat:') && e.includes('10s'))).toBe(true);
   });
+
+  it('emits swarm.heartbeat during idle SSH pipeline execution', async () => {
+    vi.useFakeTimers();
+
+    const session = makeContainerSession('ssh-idle-hb');
+    vi.mocked(scpToContainer).mockImplementation(async () => {});
+
+    const child = new EventEmitter() as any;
+    child.stdin = { write: vi.fn(), end: vi.fn() };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.killed = false;
+    child.kill = vi.fn();
+    vi.mocked(spawn).mockReturnValue(child);
+
+    vi.mocked(sshExec).mockReturnValue(JSON.stringify({
+      success: false, phase: 'failed', outerLoopsUsed: 0,
+      consensusRoundsUsed: 0, approved: false, error: 'idle test',
+    }));
+
+    const events: string[] = [];
+    const sessionPromise = startSession(session.id, repoRoot, {
+      onEvent: (type, msg) => events.push(`${type}: ${msg}`),
+      onError: () => {},
+    });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(events.some(e => e.startsWith('swarm.heartbeat:') && e.includes('30s'))).toBe(true);
+
+    child.emit('close', 1);
+    await sessionPromise;
+
+    vi.useRealTimers();
+  });
 });
