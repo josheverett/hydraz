@@ -342,7 +342,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 **P1 — High impact:**
 - **Event streaming during consensus/planning**: the terminal goes silent during the architect-planner consensus loop because phase transitions are consumed without printing. A long gap with zero output is unacceptable. Emit visible events for each consensus round attempt.
-- **Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.
+- ~~**Heartbeats for long operations**: `devpod up` (90-300s), `scpToContainer`, and the SSH pipeline runner all block with zero user feedback. Switch to `spawn` with stdout streaming and print periodic heartbeats for operations that don't produce their own output.~~ (done — `spawnWithHeartbeat` utility, async `devpodUp`/`scpToContainer` with heartbeat callbacks, async `WorkspaceProvider.createWorkspace()` interface, controller emits `workspace.heartbeat` and `swarm.heartbeat` events, SSH pipeline runner emits idle heartbeats every 30s)
 - ~~**Signal handling and graceful shutdown**: no SIGINT handler. Ctrl+C kills the process without transitioning the session to `stopped` or cleaning up the DevPod workspace. Orphaned cloud VMs burn money silently.~~ (done)
 - ~~**Zombie DevPod workspace cleanup on failure**: failed sessions don't reliably clean up DevPod workspaces. `hydraz clean` should auto-detect and force-delete all orphaned workspaces. Consider cleanup-on-start (detect and warn about existing zombies).~~ (done)
 
