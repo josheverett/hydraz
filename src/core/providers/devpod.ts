@@ -1,5 +1,5 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { shellEscape } from '../claude/ssh.js';
@@ -48,6 +48,57 @@ export function checkDockerAvailability(): boolean {
 
 export function hasDevcontainerJson(repoDir: string): boolean {
   return existsSync(join(repoDir, '.devcontainer', 'devcontainer.json'));
+}
+
+export interface DevcontainerPlatformCheck {
+  ok: boolean;
+  forced?: string;
+  host?: string;
+  message?: string;
+}
+
+export function checkDevcontainerPlatform(repoDir: string, hostArch?: string): DevcontainerPlatformCheck {
+  const devcontainerPath = join(repoDir, '.devcontainer', 'devcontainer.json');
+  if (!existsSync(devcontainerPath)) {
+    return { ok: true };
+  }
+
+  let config: Record<string, unknown>;
+  try {
+    config = JSON.parse(readFileSync(devcontainerPath, 'utf-8'));
+  } catch {
+    return { ok: true };
+  }
+
+  const runArgs = config.runArgs;
+  if (!Array.isArray(runArgs)) {
+    return { ok: true };
+  }
+
+  const platformArg = runArgs.find(
+    (arg): arg is string => typeof arg === 'string' && arg.startsWith('--platform='),
+  );
+  if (!platformArg) {
+    return { ok: true };
+  }
+
+  const forced = platformArg.slice('--platform='.length);
+  const arch = hostArch ?? process.arch;
+  const host = arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
+
+  if (forced !== host) {
+    return {
+      ok: false,
+      forced,
+      host,
+      message:
+        `devcontainer.json forces --platform=${forced} via runArgs, but this host is ${host}. ` +
+        `DevPod builds images for the host architecture, creating a build/run platform mismatch. ` +
+        `Remove "--platform=${forced}" from runArgs in .devcontainer/devcontainer.json.`,
+    };
+  }
+
+  return { ok: true, forced, host };
 }
 
 export async function devpodUp(

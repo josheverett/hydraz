@@ -6,6 +6,7 @@ import {
   checkDevPodAvailability,
   checkDockerAvailability,
   hasDevcontainerJson,
+  checkDevcontainerPlatform,
   buildSshCommand,
   verifyBranchPushed,
   verifyClaudeInContainer,
@@ -89,6 +90,88 @@ describe('hasDevcontainerJson', () => {
   it('returns false when .devcontainer dir exists but no json', () => {
     mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
     expect(hasDevcontainerJson(testDir)).toBe(false);
+  });
+});
+
+describe('checkDevcontainerPlatform', () => {
+  it('returns ok when devcontainer.json has no runArgs', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+    }));
+    const result = checkDevcontainerPlatform(testDir);
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok when runArgs does not contain --platform', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+      runArgs: ['--privileged'],
+    }));
+    const result = checkDevcontainerPlatform(testDir);
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok when --platform matches arm64 host', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+      runArgs: ['--platform=linux/arm64'],
+    }));
+    const result = checkDevcontainerPlatform(testDir, 'arm64');
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok when --platform matches x64 host', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+      runArgs: ['--platform=linux/amd64'],
+    }));
+    const result = checkDevcontainerPlatform(testDir, 'x64');
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns not ok when --platform conflicts with host architecture', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+      runArgs: ['--platform=linux/amd64'],
+    }));
+    const result = checkDevcontainerPlatform(testDir, 'arm64');
+    expect(result.ok).toBe(false);
+    expect(result.forced).toBe('linux/amd64');
+    expect(result.host).toBe('linux/arm64');
+  });
+
+  it('includes actionable error message when platform conflicts', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), JSON.stringify({
+      name: 'test',
+      image: 'ubuntu',
+      runArgs: ['--platform=linux/amd64'],
+    }));
+    const result = checkDevcontainerPlatform(testDir, 'arm64');
+    expect(result.message).toContain('runArgs');
+    expect(result.message).toContain('--platform=linux/amd64');
+  });
+
+  it('returns ok when devcontainer.json does not exist', () => {
+    const result = checkDevcontainerPlatform(testDir);
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns ok when devcontainer.json is malformed JSON', () => {
+    mkdirSync(join(testDir, '.devcontainer'), { recursive: true });
+    writeFileSync(join(testDir, '.devcontainer', 'devcontainer.json'), 'not valid json {{{');
+    const result = checkDevcontainerPlatform(testDir);
+    expect(result.ok).toBe(true);
   });
 });
 
