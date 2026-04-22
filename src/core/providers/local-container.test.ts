@@ -24,6 +24,7 @@ vi.mock('./devpod.js', () => ({
   checkDevPodAvailability: vi.fn(() => ({ available: true, version: 'v0.6.15' })),
   checkDockerAvailability: vi.fn(() => true),
   hasDevcontainerJson: vi.fn(() => true),
+  checkDevcontainerPlatform: vi.fn(() => ({ ok: true })),
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
   verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),

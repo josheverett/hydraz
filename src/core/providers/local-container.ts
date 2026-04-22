@@ -11,6 +11,7 @@ import {
   checkDevPodAvailability,
   checkDockerAvailability,
   hasDevcontainerJson,
+  checkDevcontainerPlatform,
   devpodUp,
   devpodDelete,
   verifyClaudeInContainer,
@@ -63,6 +64,11 @@ export class LocalContainerProvider implements WorkspaceProvider {
       );
     }
     debug('createWorkspace: devcontainer.json found');
+
+    const platformCheck = checkDevcontainerPlatform(session.repoRoot);
+    if (!platformCheck.ok) {
+      throw new Error(platformCheck.message ?? 'devcontainer.json platform mismatch');
+    }
 
     if (!hasGitRemote(session.repoRoot)) {
       throw new Error(
