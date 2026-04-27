@@ -315,4 +315,81 @@ describe('processHydrazIncludes', () => {
     expect(mockScp).toHaveBeenCalledTimes(1);
     expect(mockScp.mock.calls[0]![2]).toBe(join(homedir(), '.config/tool'));
   });
+
+  it('should await async scp calls before resolving', async () => {
+    const root = setupRepoRoot();
+    const existingDir = join(root, 'async-dir');
+    mkdirSync(existingDir, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [{ host: existingDir, container: '/dest' }],
+    }));
+
+    let callCompleted = false;
+    const asyncScp = vi.fn().mockImplementation(
+      () => new Promise<void>(resolve => {
+        setTimeout(() => { callCompleted = true; resolve(); }, 50);
+      }),
+    );
+
+    await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+
+    expect(asyncScp).toHaveBeenCalledTimes(1);
+    expect(callCompleted).toBe(true);
+  });
+
+  it('should propagate errors from async scp calls', async () => {
+    const root = setupRepoRoot();
+    const existingDir = join(root, 'err-dir');
+    mkdirSync(existingDir, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [{ host: existingDir, container: '/dest' }],
+    }));
+
+    const error = new Error('scp failed: connection refused');
+    const asyncScp = vi.fn().mockImplementation(() => {
+      const p = Promise.reject(error);
+      p.catch(() => {});
+      return p;
+    });
+
+    let caught: Error | undefined;
+    try {
+      await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+    } catch (err) {
+      caught = err as Error;
+    }
+
+    expect(caught).toBeDefined();
+    expect(caught!.message).toContain('scp failed');
+  });
+
+  it('should process multiple async scp calls sequentially', async () => {
+    const root = setupRepoRoot();
+    const dir1 = join(root, 'seq-dir-1');
+    const dir2 = join(root, 'seq-dir-2');
+    mkdirSync(dir1, { recursive: true });
+    mkdirSync(dir2, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [
+        { host: dir1, container: '/dest1' },
+        { host: dir2, container: '/dest2' },
+      ],
+    }));
+
+    const order: string[] = [];
+    const asyncScp = vi.fn().mockImplementation(
+      (_ws: string, _local: string, remote: string) => new Promise<void>(resolve => {
+        const delay = remote === '/dest1' ? 50 : 10;
+        setTimeout(() => { order.push(remote); resolve(); }, delay);
+      }),
+    );
+
+    await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+
+    expect(asyncScp).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(['/dest1', '/dest2']);
+  });
 });
