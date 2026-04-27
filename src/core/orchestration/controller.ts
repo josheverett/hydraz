@@ -207,7 +207,7 @@ export async function startSession(
     }
 
     try {
-      processHydrazIncludes(
+      await processHydrazIncludes(
         repoRoot,
         workspaceName,
         scpToContainer,

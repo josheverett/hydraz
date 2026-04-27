@@ -79,14 +79,14 @@ export function expandTilde(p: string): string {
   return p;
 }
 
-export type ScpFunction = (workspaceName: string, localPath: string, remotePath: string) => void;
+export type ScpFunction = (workspaceName: string, localPath: string, remotePath: string) => void | Promise<void>;
 
-export function processHydrazIncludes(
+export async function processHydrazIncludes(
   repoRoot: string,
   workspaceName: string,
   scp: ScpFunction,
   onEvent?: (message: string) => void,
-): void {
+): Promise<void> {
   const config = loadRepoConfig(repoRoot);
   if (!config?.hydrazincludes?.length) return;
 
@@ -98,6 +98,6 @@ export function processHydrazIncludes(
     }
     const containerPath = expandTilde(include.container);
     onEvent?.(`hydrazincludes: copying ${include.host} → ${include.container}`);
-    scp(workspaceName, hostPath, containerPath);
+    await scp(workspaceName, hostPath, containerPath);
   }
 }
