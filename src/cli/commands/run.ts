@@ -23,7 +23,7 @@ export function registerRunCommand(program: Command): void {
     .option('--swarm', 'No-op (swarm pipeline always runs)')
     .option('--workers <count>', 'Number of workers (default: 3)')
     .option('--parallel', 'Run workers in parallel (default: serial)')
-    .option('--reviewers <names>', 'Comma-separated reviewer persona names (default: carmack,metz,torvalds)')
+    .option('--reviewers <names>', 'Comma-separated reviewer names (default: reviewer)')
     .action(async (task: string, options: {
       session?: string;
       branch?: string;

@@ -46,7 +46,7 @@ Consider:
 
 Write your feedback to \`${artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`)}\`.
 
-Start your feedback file with either \`APPROVED\` or \`CHANGES REQUESTED\` on the first line so the orchestrator can parse your verdict.
+IMPORTANT: The first line of your output file must be the literal text APPROVED or CHANGES REQUESTED — no markdown formatting, no headings, no bold, no prefixes. Just the raw verdict text on line 1.
 
 If approved, note any minor observations. If requesting changes, explain the specific issue that would cause the implementation to fail and what change is needed.
 `;

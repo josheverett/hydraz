@@ -21,10 +21,10 @@ All of the following were discussed and confirmed with the project owner:
 - **Swarm mode**: Always active. `--swarm` flag exists but is a no-op (swarm pipeline always runs). No backward compatibility with v1 single-process sessions.
 - **Worker count**: User-controlled via `--workers N`, default 3.
 - **Backward compatibility**: None. Major version bump, breaking changes expected.
-- **Personas**: Applied to the review panel (famous engineers). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
+- **Personas**: Review panel uses a single generic reviewer by default (no persona embodiment). Workers get identical rigorous-implementer prompts. Pipeline stages (investigator, architect, planner) are structural roles with Hydraz-provided prompts.
 - **Verification**: Workers themselves are responsible for TDD, tests, lint, build for v2.0. No separate verification stage in v2.0. A post-review verification phase with inner retry loop is planned for v2.2 (see spec §18).
 - **Consensus bounds**: Architect-planner loop max 10 rounds (architect has final say at cap). Outer review loop max 5 iterations.
-- **Review feedback routing**: Reviewers categorize findings as architectural vs implementation. Both routes rewind to planning via the outer loop; architectural feedback additionally refreshes the architecture design from disk.
+- **Review feedback routing**: Reviewers categorize findings as architectural vs implementation. Both routes rewind to planning via the outer loop; architectural feedback additionally refreshes the architecture design from disk. Review feedback is passed to the planner on subsequent iterations so it can address the specific issues raised.
 
 ---
 
@@ -153,19 +153,19 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 **Dependencies**: Phase 5
 **Risks**: Git merge edge cases. Mitigate with simple sequential strategy and thorough testing.
 
-### Phase 7: Review panel with famous-engineer personas [DONE]
+### Phase 7: Review panel [DONE]
 
-**Goal**: Launch 3 parallel reviewer Claude processes with distinct famous-engineer personas.
+**Goal**: Launch reviewer Claude process(es) to evaluate the integrated result.
 
 **Key changes:**
-- New `src/core/swarm/reviewer.ts`: Build reviewer prompts (persona + integrated code + task + plan), launch 3 in parallel, parse structured reviews
-- New `src/core/swarm/prompts/reviewer.ts`: Reviewer prompt templates with persona injection
-- New `src/core/swarm/review-aggregate.ts`: Aggregate reviews, categorize findings as architectural vs implementation, determine if approved or changes-requested
-- Ship default reviewer personas: Carmack, Metz, Torvalds (as persona definitions, not in `src/core/config/` built-in personas -- separate concept)
+- New `src/core/swarm/reviewer.ts`: Build reviewer prompts (integrated code + task + plan), launch reviewers, parse structured reviews
+- New `src/core/swarm/prompts/reviewer.ts`: Reviewer prompt template (generic, no persona embodiment)
+- New `src/core/swarm/review-aggregate.ts`: Aggregate reviews, categorize findings as architectural vs implementation, determine if approved or changes-requested. Verdict parsing defaults to `approve` — scans for explicit `CHANGES REQUESTED`.
+- Default: single generic reviewer (`['reviewer']`). Configurable via `--reviewers` for multi-reviewer panels.
 
 **Why seventh**: Review panel operates on the merged result, so it depends on fan-in.
 **Dependencies**: Phase 6
-**Risks**: Getting reviewers to produce consistently structured, categorized output. Mitigate with clear output format instructions and parsing fallbacks.
+**Risks**: Getting reviewers to produce consistently structured, categorized output. Mitigate with clear output format instructions, explicit verdict formatting rules, and default-approve parsing.
 
 ### Phase 8: Categorized feedback loops (outer loop) [DONE]
 
@@ -230,7 +230,7 @@ Hydraz v1 runs **one Claude Code process per session**. The "swarm" is prompt th
 - Extracted `ExecutionContext` to replace per-stage options bags
 - Created `artifactPath` helper for prompt path templating
 - Consensus now calls `runPlanner` instead of inlining
-- Consolidated duplicate `APPROVED` parsing into `parseReviewVerdict`
+- Consolidated duplicate `APPROVED` parsing into `parseReviewVerdict` (later inverted to default-approve with regex-based `CHANGES REQUESTED` detection)
 - Threaded `maxConsensusRounds` from pipeline config to consensus
 - Folded `orchestrator.ts` into `review-aggregate.ts`
 - Removed dead code: `architectFinalSay`, `conflict-resolved`, `canContinueConsensus`, `canContinueOuterLoop`, `OUTER_LOOP_MAX_ITERATIONS`, `run-phase.ts`, `conflictFiles`
@@ -288,7 +288,7 @@ First-class CLI command (`hydraz hello-world [--local|--container|--cloud]`) for
 
 **P0 — Ship-blocking for non-experimental:**
 - ~~**Serial worker execution (default)**: workers execute serially by default, with parallel mode opt-in via `--parallel`.~~ (done in v2.2.0)
-- ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language.~~ (done in v2.2.0)
+- ~~**Prompt calibration for proportionality and approval bias**: proportionality sections added to investigator, architect, and planner. Architect-review default verdict APPROVED. Reviewer prompt reworked with anti-approval-bias language. Later overhauled: verdict parsing inverted to default-approve, 3 persona-based reviewers replaced with single generic reviewer, review feedback wired into planner prompt for outer loop convergence, explicit verdict formatting instructions added to reviewer and architect-review prompts.~~ (done in v2.2.0)
 - ~~**Credentials out of `process.argv`**: options JSON moved from CLI argument to `HYDRAZ_PIPELINE_OPTIONS` env var, not visible in `ps aux`.~~ (done in v2.2.0)
 
 ### ~~Repo-level configuration (`.hydraz/` directory convention)~~ (done in v2.2.0)

@@ -16,6 +16,7 @@ export interface PlannerOptions {
   investigationBrief: string;
   architectureDesign: string;
   workerCount: number;
+  reviewFeedback?: string;
 }
 
 export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): Promise<PlannerResult> {
@@ -27,6 +28,7 @@ export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): P
     opts.workerCount,
     ctx.swarmDir,
     ctx.repoPromptContent,
+    opts.reviewFeedback,
   );
 
   const executor = launchClaude({

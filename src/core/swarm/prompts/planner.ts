@@ -9,6 +9,7 @@ export function buildPlannerPrompt(
   workerCount: number,
   swarmDir?: string,
   repoPromptContent?: string,
+  reviewFeedback?: string,
 ): string {
   return `# Hydraz Planner
 
@@ -40,7 +41,13 @@ ${investigationBrief}
 ${architectureDesign}
 
 ${EVIDENCE_DISCIPLINE}
+${reviewFeedback ? `
+## Previous Review Feedback
 
+The review panel rejected the previous implementation. Address these issues in your revised plan:
+
+${reviewFeedback}
+` : ''}
 ## What to Produce
 
 You must produce all of the following artifacts in \`${artifactPath(swarmDir)}/\`:

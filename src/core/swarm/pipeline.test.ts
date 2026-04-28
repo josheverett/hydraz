@@ -62,9 +62,7 @@ vi.mock('./reviewer.js', () => ({
   runReviewPanel: vi.fn().mockResolvedValue({
     success: true,
     reviews: [
-      { reviewerName: 'carmack', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
-      { reviewerName: 'metz', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
-      { reviewerName: 'torvalds', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
+      { reviewerName: 'reviewer', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
     ],
   }),
 }));
@@ -80,14 +78,18 @@ vi.mock('./artifacts.js', async (importOriginal) => {
   };
 });
 
-vi.mock('./review-aggregate.js', () => ({
-  aggregateReviews: vi.fn().mockReturnValue({
-    approved: true,
-    architecturalFindings: [],
-    implementationFindings: [],
-    reviews: [],
-  }),
-}));
+vi.mock('./review-aggregate.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./review-aggregate.js')>();
+  return {
+    ...actual,
+    aggregateReviews: vi.fn().mockReturnValue({
+      approved: true,
+      architecturalFindings: [],
+      implementationFindings: [],
+      reviews: [],
+    }),
+  };
+});
 
 import { runInvestigation } from './investigator.js';
 import { runArchitect } from './architect.js';
@@ -102,9 +104,7 @@ let sessionId: string;
 let config: ReturnType<typeof createDefaultConfig>;
 
 const DEFAULT_PERSONAS = [
-  { name: 'carmack', persona: 'Correctness.' },
-  { name: 'metz', persona: 'Design quality.' },
-  { name: 'torvalds', persona: 'Simplicity.' },
+  { name: 'reviewer', persona: 'Review for correctness and completeness.' },
 ];
 
 beforeEach(() => {
@@ -380,5 +380,37 @@ describe('runSwarmPipeline', () => {
       type: 'swarm.consensus_round_started',
       message: 'Consensus round 1 of 10',
     });
+  });
+
+  it('should pass review feedback to consensus on subsequent outer loop iterations', async () => {
+    const { readReviewFile } = await import('./artifacts.js');
+    vi.mocked(readReviewFile).mockReturnValue('CHANGES REQUESTED\n\nMissing null check.');
+
+    vi.mocked(aggregateReviews)
+      .mockReturnValueOnce({
+        approved: false,
+        architecturalFindings: [],
+        implementationFindings: [],
+        reviews: [{ reviewer: 'reviewer', verdict: 'changes-requested', findings: [], summary: 'CHANGES REQUESTED\n\nMissing null check.' }],
+      })
+      .mockReturnValueOnce({
+        approved: true,
+        architecturalFindings: [],
+        implementationFindings: [],
+        reviews: [],
+      });
+
+    await runSwarmPipeline(makeOptions());
+
+    expect(runConsensus).toHaveBeenCalledTimes(2);
+    const secondConsensusOpts = vi.mocked(runConsensus).mock.calls[1]![1];
+    expect(secondConsensusOpts.reviewFeedback).toContain('Missing null check');
+  });
+
+  it('should not pass review feedback on the first outer loop iteration', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const firstConsensusOpts = vi.mocked(runConsensus).mock.calls[0]![1];
+    expect(firstConsensusOpts.reviewFeedback).toBeUndefined();
   });
 });

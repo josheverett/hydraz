@@ -71,7 +71,7 @@ function mockClaudeSequence(results: Array<{ success: boolean; writePlanArtifact
     if (spec.writeFeedback && spec.feedbackRound !== undefined) {
       const feedbackDir = join(getSwarmDir(repoRoot, sessionId), 'architecture', 'feedback');
       mkdirSync(feedbackDir, { recursive: true });
-      writeFileSync(join(feedbackDir, `round-${spec.feedbackRound}.md`), '# Feedback\nNeeds more error handling.', { mode: 0o600 });
+      writeFileSync(join(feedbackDir, `round-${spec.feedbackRound}.md`), 'CHANGES REQUESTED\n\nNeeds more error handling.', { mode: 0o600 });
     }
     return { process: {} as never, pid: 12345, kill: vi.fn(), waitForExit: vi.fn().mockResolvedValue({ exitCode: spec.success ? 0 : 1, signal: null, success: spec.success, cost: 0.20 }) };
   });
@@ -94,6 +94,11 @@ describe('buildArchitectPlanReviewPrompt', () => {
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
     const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
     expect(prompt).not.toContain('Repo-Specific');
+  });
+
+  it('should include verdict formatting instructions', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    expect(prompt).toContain('no markdown formatting, no headings, no bold, no prefixes');
   });
 });
 
@@ -285,5 +290,29 @@ describe('runConsensus', () => {
         'swarm.consensus_planner_completed',
       ]);
     });
+  });
+
+  it('should include reviewFeedback in planner prompt when provided', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx(), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+      reviewFeedback: 'CHANGES REQUESTED\n\nMissing error handling in auth middleware.',
+    });
+    const plannerCallArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(plannerCallArgs.prompt).toContain('Previous Review Feedback');
+    expect(plannerCallArgs.prompt).toContain('Missing error handling in auth middleware');
+  });
+
+  it('should not include review feedback section when reviewFeedback is not provided', async () => {
+    mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
+    await runConsensus(makeCtx(), {
+      investigationBrief: SAMPLE_BRIEF,
+      architectureDesign: SAMPLE_DESIGN,
+      workerCount: 3,
+    });
+    const plannerCallArgs = mockLaunchClaude.mock.calls[0]![0]!;
+    expect(plannerCallArgs.prompt).not.toContain('Previous Review Feedback');
   });
 });

@@ -176,7 +176,7 @@ export async function startSession(
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
   const reviewerPersonas = reviewerNames.map(name => ({
     name,
-    persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
+    persona: `Review the code for correctness, completeness, and serious defects.`,
   }));
 
   let pipelineResult: PipelineResult;

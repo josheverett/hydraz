@@ -1,9 +1,19 @@
 import type { ReviewAggregate, ReviewFinding, ReviewResult, ReviewVerdict } from './types.js';
 
+const CHANGES_REQUESTED_RE = /(?<!\bNO\s)(?<!\bNOT\s)\bCHANGES\s+REQUESTED\b/i;
+const MARKDOWN_PREFIX_RE = /^[#*>\s`_~]+/;
+
+function stripMarkdown(line: string): string {
+  return line.replace(MARKDOWN_PREFIX_RE, '').replace(/[*`_~]+$/g, '').trim();
+}
+
 export function parseReviewVerdict(reviewContent: string): ReviewVerdict {
-  const firstLine = reviewContent.split('\n')[0]?.trim().toUpperCase() ?? '';
-  if (firstLine.startsWith('APPROVED')) return 'approve';
-  return 'changes-requested';
+  const lines = reviewContent.split('\n').slice(0, 5);
+  for (const line of lines) {
+    const cleaned = stripMarkdown(line);
+    if (CHANGES_REQUESTED_RE.test(cleaned)) return 'changes-requested';
+  }
+  return 'approve';
 }
 
 export function parseReviewFindings(reviewContent: string): ReviewFinding[] {

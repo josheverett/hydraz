@@ -77,6 +77,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   let ownership: OwnershipMap;
   let totalConsensusRounds = 0;
   let workerWorktrees: Record<string, string> | undefined;
+  let reviewFeedback: string | undefined;
   const swarmDir = getSwarmDir(options.repoRoot, options.sessionId);
   const ctx = buildContext(options, swarmDir);
 
@@ -127,6 +128,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
       architectureDesign,
       workerCount: options.workerCount,
       maxRounds: options.maxConsensusRounds,
+      reviewFeedback,
       onEvent: (type, message) => emitEvent(options, type, message),
     });
 
@@ -254,6 +256,10 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     const route = determineFeedbackRoute(aggregate);
     emitEvent(options, 'swarm.review_feedback', `Feedback route: ${route}`);
     emitEvent(options, 'swarm.outer_loop', `Outer loop ${outerLoop + 2}`);
+
+    reviewFeedback = reviewContents
+      .map(r => `### ${r.reviewerName}\n\n${r.content}`)
+      .join('\n\n');
 
     if (route === 'architectural') {
       architectureDesign = readArchitectureDesign(options.repoRoot, options.sessionId) ?? architectureDesign;

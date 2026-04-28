@@ -22,6 +22,7 @@ export interface ConsensusOptions {
   architectureDesign: string;
   workerCount: number;
   maxRounds?: number;
+  reviewFeedback?: string;
   onEvent?: (type: string, message: string) => void;
 }
 
@@ -45,6 +46,7 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
         ? `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
         : ''),
       workerCount: opts.workerCount,
+      reviewFeedback: opts.reviewFeedback,
     });
 
     if (!plannerResult.success) {

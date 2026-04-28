@@ -88,6 +88,17 @@ describe('buildPlannerPrompt', () => {
     const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
     expect(prompt).not.toContain('Repo-Specific');
   });
+
+  it('should include review feedback section when reviewFeedback is provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, undefined, undefined, 'CHANGES REQUESTED\n\nMissing null check in auth handler.');
+    expect(prompt).toContain('Previous Review Feedback');
+    expect(prompt).toContain('Missing null check in auth handler');
+  });
+
+  it('should not include review feedback section when reviewFeedback is not provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
+    expect(prompt).not.toContain('Previous Review Feedback');
+  });
 });
 
 describe('runPlanner', () => {

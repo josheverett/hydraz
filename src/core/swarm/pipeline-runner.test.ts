@@ -42,7 +42,7 @@ function makeSerializedOptions(overrides: Partial<SerializablePipelineOptions> =
     workingDirectory: '/work',
     config: createDefaultConfig(),
     workerCount: 3,
-    reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
+    reviewerPersonas: [{ name: 'reviewer', persona: 'Review for correctness.' }],
     maxOuterLoops: 5,
     maxConsensusRounds: 10,
     parallel: false,
@@ -67,7 +67,7 @@ describe('pipeline-runner', () => {
         workingDirectory: '/work',
         config: createDefaultConfig(),
         workerCount: 3,
-        reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
+        reviewerPersonas: [{ name: 'reviewer', persona: 'Review for correctness.' }],
         maxOuterLoops: 5,
         maxConsensusRounds: 10,
         parallel: false,
@@ -82,7 +82,7 @@ describe('pipeline-runner', () => {
 
     it('should preserve all pipeline-relevant fields', () => {
       const config = createDefaultConfig();
-      const personas = [{ name: 'metz', persona: 'Design quality.' }];
+      const personas = [{ name: 'reviewer', persona: 'Review for correctness.' }];
 
       const serialized = toSerializable({
         repoRoot: '/my/repo',
@@ -193,7 +193,7 @@ describe('pipeline-runner', () => {
       await executePipeline(makeSerializedOptions({
         repoRoot: '/container/repo',
         workerCount: 2,
-        reviewerPersonas: [{ name: 'carmack', persona: 'Find bugs.' }],
+        reviewerPersonas: [{ name: 'reviewer', persona: 'Review for correctness.' }],
       }), resultPath);
 
       expect(runSwarmPipeline).toHaveBeenCalledTimes(1);
