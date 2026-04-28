@@ -23,6 +23,7 @@ export interface ConsensusOptions {
   workerCount: number;
   maxRounds?: number;
   reviewFeedback?: string;
+  verbose?: boolean;
   onEvent?: (type: string, message: string) => void;
 }
 
@@ -48,6 +49,16 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       workerCount: opts.workerCount,
       reviewFeedback: opts.reviewFeedback,
     });
+
+    if (plannerResult.executorResult && opts.verbose) {
+      const r = plannerResult.executorResult;
+      const cost = r.cost != null ? `$${r.cost.toFixed(2)}` : 'n/a';
+      const tokensIn = r.inputTokens != null ? `${(r.inputTokens / 1000).toFixed(1)}k in` : '';
+      const tokensOut = r.outputTokens != null ? `${(r.outputTokens / 1000).toFixed(1)}k out` : '';
+      const tokens = [tokensIn, tokensOut].filter(Boolean).join('/');
+      const dur = r.durationMs != null ? `${Math.round(r.durationMs / 1000)}s` : 'n/a';
+      opts.onEvent?.('verbose.executor_metrics', `Consensus round ${round} planner: ${cost}, ${tokens || 'n/a tokens'}, ${dur}, exit ${r.exitCode ?? '?'}`);
+    }
 
     if (!plannerResult.success) {
       opts.onEvent?.('swarm.consensus_planner_failed', `Planner failed (round ${round})`);
@@ -97,6 +108,15 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     const reviewResult = await reviewExecutor.waitForExit();
     unregisterExecutorHandle(reviewExecutor);
 
+    if (opts.verbose) {
+      const cost = reviewResult.cost != null ? `$${reviewResult.cost.toFixed(2)}` : 'n/a';
+      const tokensIn = reviewResult.inputTokens != null ? `${(reviewResult.inputTokens / 1000).toFixed(1)}k in` : '';
+      const tokensOut = reviewResult.outputTokens != null ? `${(reviewResult.outputTokens / 1000).toFixed(1)}k out` : '';
+      const tokens = [tokensIn, tokensOut].filter(Boolean).join('/');
+      const dur = reviewResult.durationMs != null ? `${Math.round(reviewResult.durationMs / 1000)}s` : 'n/a';
+      opts.onEvent?.('verbose.executor_metrics', `Consensus round ${round} architect-review: ${cost}, ${tokens || 'n/a tokens'}, ${dur}, exit ${reviewResult.exitCode ?? '?'}`);
+    }
+
     if (!reviewResult.success) {
       return {
         success: false,
@@ -120,6 +140,10 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     }
 
     opts.onEvent?.('swarm.consensus_review_completed', `Architect requested changes (round ${round})`);
+    if (opts.verbose) {
+      const feedbackExcerpt = feedback.split('\n').slice(0, 2).join('\n');
+      opts.onEvent?.('verbose.consensus', `Re-planning after architect feedback. Architect said:\n${feedbackExcerpt}`);
+    }
     previousFeedback = feedback;
   }
 

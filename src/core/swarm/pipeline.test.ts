@@ -6,7 +6,7 @@ import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
 import { ensureSwarmDirs } from './artifacts.js';
-import { runSwarmPipeline, type PipelineOptions } from './pipeline.js';
+import { runSwarmPipeline, extractReviewSummary, type PipelineOptions } from './pipeline.js';
 import type { SwarmPhase } from './types.js';
 
 vi.mock('./investigator.js', () => ({
@@ -412,5 +412,68 @@ describe('runSwarmPipeline', () => {
 
     const firstConsensusOpts = vi.mocked(runConsensus).mock.calls[0]![1];
     expect(firstConsensusOpts.reviewFeedback).toBeUndefined();
+  });
+
+  it('should emit verbose events when verbose is true', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      verbose: true,
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents.length).toBeGreaterThan(0);
+  });
+
+  it('should not emit verbose events when verbose is false', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      verbose: false,
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents).toHaveLength(0);
+  });
+
+  it('should not emit verbose events when verbose is undefined', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents).toHaveLength(0);
+  });
+});
+
+describe('extractReviewSummary', () => {
+  it('should extract text after ## Summary heading', () => {
+    const content = `CHANGES REQUESTED\n\n## Findings\nSome issues.\n\n## Summary\nThe implementation is incomplete.\n`;
+    expect(extractReviewSummary(content)).toBe('The implementation is incomplete.');
+  });
+
+  it('should stop at the next ## heading', () => {
+    const content = `APPROVED\n\n## Summary\nLooks good overall.\n\n## Details\nMore stuff.`;
+    expect(extractReviewSummary(content)).toBe('Looks good overall.');
+  });
+
+  it('should return null when no summary section exists', () => {
+    expect(extractReviewSummary('APPROVED\n\nGreat work.')).toBeNull();
+  });
+
+  it('should return null when summary section is empty', () => {
+    expect(extractReviewSummary('## Summary\n\n## Other')).toBeNull();
+  });
+
+  it('should handle multi-line summaries', () => {
+    const content = `## Summary\nLine one.\nLine two.\nLine three.`;
+    expect(extractReviewSummary(content)).toBe('Line one.\nLine two.\nLine three.');
   });
 });

@@ -127,6 +127,43 @@ describe('pipeline-runner', () => {
 
       expect(serialized.parallel).toBe(true);
     });
+
+    it('should include verbose in serialized output', () => {
+      const serialized = toSerializable({
+        repoRoot: '/repo',
+        sessionId: 'abc',
+        sessionName: 'test',
+        task: 'Build it',
+        workingDirectory: '/work',
+        config: createDefaultConfig(),
+        workerCount: 3,
+        reviewerPersonas: [],
+        maxOuterLoops: 5,
+        maxConsensusRounds: 10,
+        parallel: false,
+        verbose: true,
+      });
+
+      expect(serialized.verbose).toBe(true);
+    });
+
+    it('should preserve verbose=undefined when not set', () => {
+      const serialized = toSerializable({
+        repoRoot: '/repo',
+        sessionId: 'abc',
+        sessionName: 'test',
+        task: 'Build it',
+        workingDirectory: '/work',
+        config: createDefaultConfig(),
+        workerCount: 3,
+        reviewerPersonas: [],
+        maxOuterLoops: 5,
+        maxConsensusRounds: 10,
+        parallel: false,
+      });
+
+      expect(serialized.verbose).toBeUndefined();
+    });
   });
 
   describe('toPipelineOptions', () => {
@@ -163,6 +200,16 @@ describe('pipeline-runner', () => {
     it('should preserve parallel field through round-trip', () => {
       const options = toPipelineOptions(makeSerializedOptions({ parallel: true }));
       expect(options.parallel).toBe(true);
+    });
+
+    it('should preserve verbose field through round-trip', () => {
+      const options = toPipelineOptions(makeSerializedOptions({ verbose: true }));
+      expect(options.verbose).toBe(true);
+    });
+
+    it('should default verbose to undefined when not provided', () => {
+      const options = toPipelineOptions(makeSerializedOptions());
+      expect(options.verbose).toBeUndefined();
     });
   });
 
