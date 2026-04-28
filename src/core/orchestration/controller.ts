@@ -64,6 +64,7 @@ export interface SwarmOptions {
   workerCount?: number;
   reviewerNames?: string[];
   parallel?: boolean;
+  verbose?: boolean;
 }
 
 export async function startSession(
@@ -173,10 +174,11 @@ export async function startSession(
 
   const workerCount = swarmOptions.workerCount ?? DEFAULT_SWARM_CONFIG.defaultWorkerCount;
   const parallel = swarmOptions.parallel ?? false;
+  const verbose = swarmOptions.verbose ?? false;
   const reviewerNames = swarmOptions.reviewerNames ?? DEFAULT_SWARM_CONFIG.defaultReviewers;
   const reviewerPersonas = reviewerNames.map(name => ({
     name,
-    persona: `You are ${name}. Review the code with your characteristic engineering perspective.`,
+    persona: `Review the code for correctness, completeness, and serious defects.`,
   }));
 
   let pipelineResult: PipelineResult;
@@ -207,7 +209,7 @@ export async function startSession(
     }
 
     try {
-      processHydrazIncludes(
+      await processHydrazIncludes(
         repoRoot,
         workspaceName,
         scpToContainer,
@@ -231,6 +233,7 @@ export async function startSession(
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
       parallel,
+      verbose,
     });
 
     const ssh = buildSshNodeCommand(
@@ -324,6 +327,7 @@ export async function startSession(
       maxOuterLoops: DEFAULT_SWARM_CONFIG.outerLoopMaxIterations,
       maxConsensusRounds: DEFAULT_SWARM_CONFIG.consensusMaxRounds,
       parallel,
+      verbose,
       callbacks: {
         onPhaseChange: (phase) => {
           try {
@@ -444,6 +448,7 @@ export async function resumeSession(
   sessionId: string,
   repoRoot: string,
   callbacks: ControllerCallbacks = {},
+  swarmOptions: SwarmOptions = {},
 ): Promise<void> {
   if (isSessionRunning(sessionId)) {
     callbacks.onError?.('Cannot resume: session is currently running.');
@@ -463,7 +468,7 @@ export async function resumeSession(
 
   transitionState(repoRoot, sessionId, 'created');
 
-  await startSession(sessionId, repoRoot, callbacks);
+  await startSession(sessionId, repoRoot, callbacks, swarmOptions);
 }
 
 export function isSessionRunning(sessionId: string): boolean {

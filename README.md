@@ -30,8 +30,8 @@ Investigate → Architect → Plan (with consensus loop) → Workers → Merge �
 3. A **planner** decomposes the work into tasks; the architect reviews the plan until both agree (up to 10 rounds)
 4. **N workers** (default 3, serial by default) implement their assigned tasks in isolated worktrees, each using strict TDD — each worker builds on the previous worker's branch
 5. The orchestrator **merges** worker branches into an integration branch
-6. A **review panel** of 3 famous-engineer personas (Carmack, Metz, Torvalds) independently reviews the result
-7. If changes are needed, the right part of the pipeline re-runs automatically (up to 5 iterations)
+6. A **review panel** independently reviews the result (single generic reviewer by default; configurable via `--reviewers`)
+7. If changes are needed, the review feedback is fed to the planner and the pipeline re-runs automatically (up to 5 iterations)
 8. When the panel approves, work is delivered (PR in container/cloud mode; branch with commits in local mode)
 
 Every stage produces durable artifacts. Every Claude invocation is stateless — fresh context, no shared conversation history. Communication between stages is entirely file-based.
@@ -52,7 +52,7 @@ hydraz
 hydraz run "fix the auth timeout regression"
 hydraz run --workers 5 "build the user management system"
 hydraz run --parallel "build the user management system"
-hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
+hydraz run --reviewers reviewer-a,reviewer-b "refactor the database layer"
 ```
 
 ### CLI flags
@@ -64,7 +64,7 @@ hydraz run --reviewers carmack,torvalds,pike "refactor the database layer"
 | `--swarm` | No-op (swarm pipeline always runs) | Always on |
 | `--workers <N>` | Number of workers | 3 |
 | `--parallel` | Run workers concurrently instead of serially | Off (serial) |
-| `--reviewers <names>` | Comma-separated reviewer persona names | carmack,metz,torvalds |
+| `--reviewers <names>` | Comma-separated reviewer names | reviewer |
 | `--local` | Run locally (bare metal) | Default |
 | `--container` | Run locally in a Docker container | |
 | `--cloud` | Run on a cloud VM via DevPod | |
@@ -92,15 +92,11 @@ hydraz clean           # clean up orphaned DevPod workspaces
 
 ## Review panel
 
-Three independent reviewers evaluate the integrated result, each embodying a celebrated software engineer:
+A single generic reviewer evaluates the integrated result by default. The reviewer is strongly biased toward approval — it will only reject if it finds a ship-blocking defect (runtime crash, security vulnerability, fundamental architectural violation, or unmet task requirements). Verdict parsing defaults to `approve` unless `CHANGES REQUESTED` is explicitly found in the first 5 lines of the review output.
 
-- **John Carmack** — correctness, edge cases, error handling, subtle bugs
-- **Sandi Metz** — code organization, naming, abstraction quality, maintainability
-- **Linus Torvalds** — simplicity, rejecting unnecessary complexity, bloat detection
+Reviewers categorize their findings as **architectural** or **implementation**. Both routes rewind through re-planning via the outer loop; architectural feedback additionally refreshes the architecture design. Review feedback is fed back to the planner so the next iteration can address the specific issues raised. The orchestrator automatically determines the feedback route.
 
-Reviewers categorize their findings as **architectural** or **implementation**. Both routes rewind through re-planning via the outer loop; architectural feedback additionally refreshes the architecture design. The orchestrator automatically determines the feedback route.
-
-Configurable per-session via `--reviewers`.
+Configurable per-session via `--reviewers` (pass multiple comma-separated names to use a multi-reviewer panel).
 
 ## Artifacts
 
@@ -116,9 +112,7 @@ swarm/
   workers/worker-a/brief.md      # each worker's assignment
   workers/worker-a/progress.md   # what each worker did
   merge/report.md                 # merge results
-  reviews/carmack.md              # each reviewer's independent review
-  reviews/metz.md
-  reviews/torvalds.md
+  reviews/reviewer.md             # reviewer's independent review (one per reviewer)
 ```
 
 ## Prerequisites

@@ -9,6 +9,7 @@ import {
 import { createEvent, appendEvent } from '../../core/events/index.js';
 import { suggestBranchName, isValidBranchName, isValidSessionName } from '../../core/branches/index.js';
 import { startSession } from '../../core/orchestration/index.js';
+import { setVerbose } from '../../core/debug.js';
 
 export function registerRunCommand(program: Command): void {
   program
@@ -23,7 +24,8 @@ export function registerRunCommand(program: Command): void {
     .option('--swarm', 'No-op (swarm pipeline always runs)')
     .option('--workers <count>', 'Number of workers (default: 3)')
     .option('--parallel', 'Run workers in parallel (default: serial)')
-    .option('--reviewers <names>', 'Comma-separated reviewer persona names (default: carmack,metz,torvalds)')
+    .option('--reviewers <names>', 'Comma-separated reviewer names (default: reviewer)')
+    .option('--verbose', 'Enable exhaustive diagnostic output')
     .action(async (task: string, options: {
       session?: string;
       branch?: string;
@@ -34,7 +36,10 @@ export function registerRunCommand(program: Command): void {
       workers?: string;
       parallel?: boolean;
       reviewers?: string;
+      verbose?: boolean;
     }) => {
+      if (options.verbose) setVerbose(true);
+
       const repo = detectRepo();
       if (!repo) {
         console.error('Not in a git repository.');
@@ -113,6 +118,7 @@ export function registerRunCommand(program: Command): void {
         workerCount,
         reviewerNames,
         parallel: options.parallel,
+        verbose: options.verbose,
       });
     });
 }

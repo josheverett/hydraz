@@ -198,7 +198,7 @@ describe('expandTilde', () => {
 });
 
 describe('processHydrazIncludes', () => {
-  it('should call scp for each hydrazincludes entry with expanded paths', () => {
+  it('should call scp for each hydrazincludes entry with expanded paths', async () => {
     const root = setupRepoRoot();
     const hostDir = join(root, 'fake-aigl');
     mkdirSync(hostDir, { recursive: true });
@@ -211,13 +211,13 @@ describe('processHydrazIncludes', () => {
     }));
 
     const mockScp = vi.fn<ScpFunction>();
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
 
     expect(mockScp).toHaveBeenCalledTimes(1);
     expect(mockScp).toHaveBeenCalledWith('hydraz-test-ws', hostDir, '/home/user/.aigl');
   });
 
-  it('should skip entries where host path does not exist and emit a warning', () => {
+  it('should skip entries where host path does not exist and emit a warning', async () => {
     const root = setupRepoRoot();
     writeHydrazConfig(root, JSON.stringify({
       hydrazincludes: [
@@ -227,32 +227,32 @@ describe('processHydrazIncludes', () => {
 
     const mockScp = vi.fn<ScpFunction>();
     const events: string[] = [];
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp, (msg) => events.push(msg));
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp, (msg) => events.push(msg));
 
     expect(mockScp).not.toHaveBeenCalled();
     expect(events.some(e => e.includes('skipping') || e.includes('not found'))).toBe(true);
   });
 
-  it('should do nothing when .hydraz/config.json does not exist', () => {
+  it('should do nothing when .hydraz/config.json does not exist', async () => {
     const root = setupRepoRoot();
 
     const mockScp = vi.fn<ScpFunction>();
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
 
     expect(mockScp).not.toHaveBeenCalled();
   });
 
-  it('should do nothing when hydrazincludes is empty', () => {
+  it('should do nothing when hydrazincludes is empty', async () => {
     const root = setupRepoRoot();
     writeHydrazConfig(root, JSON.stringify({ hydrazincludes: [] }));
 
     const mockScp = vi.fn<ScpFunction>();
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
 
     expect(mockScp).not.toHaveBeenCalled();
   });
 
-  it('should handle multiple entries and skip only missing ones', () => {
+  it('should handle multiple entries and skip only missing ones', async () => {
     const root = setupRepoRoot();
     const existingDir = join(root, 'existing-dir');
     mkdirSync(existingDir, { recursive: true });
@@ -267,7 +267,7 @@ describe('processHydrazIncludes', () => {
 
     const mockScp = vi.fn<ScpFunction>();
     const events: string[] = [];
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp, (msg) => events.push(msg));
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp, (msg) => events.push(msg));
 
     expect(mockScp).toHaveBeenCalledTimes(2);
     expect(mockScp).toHaveBeenCalledWith('hydraz-test-ws', existingDir, '/container/existing');
@@ -275,7 +275,7 @@ describe('processHydrazIncludes', () => {
     expect(events.some(e => e.includes('not found') || e.includes('skipping'))).toBe(true);
   });
 
-  it('should expand tilde in host paths', () => {
+  it('should expand tilde in host paths', async () => {
     const root = setupRepoRoot();
     const homeAigl = join(homedir(), '.aigl-hydraz-test-' + Date.now());
     mkdirSync(homeAigl, { recursive: true });
@@ -289,7 +289,7 @@ describe('processHydrazIncludes', () => {
       }));
 
       const mockScp = vi.fn<ScpFunction>();
-      processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
+      await processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
 
       expect(mockScp).toHaveBeenCalledTimes(1);
       expect(mockScp.mock.calls[0]![1]).toBe(homeAigl);
@@ -298,7 +298,7 @@ describe('processHydrazIncludes', () => {
     }
   });
 
-  it('should expand tilde in container paths', () => {
+  it('should expand tilde in container paths', async () => {
     const root = setupRepoRoot();
     const existingDir = join(root, 'some-dir');
     mkdirSync(existingDir, { recursive: true });
@@ -310,9 +310,86 @@ describe('processHydrazIncludes', () => {
     }));
 
     const mockScp = vi.fn<ScpFunction>();
-    processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp);
 
     expect(mockScp).toHaveBeenCalledTimes(1);
     expect(mockScp.mock.calls[0]![2]).toBe(join(homedir(), '.config/tool'));
+  });
+
+  it('should await async scp calls before resolving', async () => {
+    const root = setupRepoRoot();
+    const existingDir = join(root, 'async-dir');
+    mkdirSync(existingDir, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [{ host: existingDir, container: '/dest' }],
+    }));
+
+    let callCompleted = false;
+    const asyncScp = vi.fn().mockImplementation(
+      () => new Promise<void>(resolve => {
+        setTimeout(() => { callCompleted = true; resolve(); }, 50);
+      }),
+    );
+
+    await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+
+    expect(asyncScp).toHaveBeenCalledTimes(1);
+    expect(callCompleted).toBe(true);
+  });
+
+  it('should propagate errors from async scp calls', async () => {
+    const root = setupRepoRoot();
+    const existingDir = join(root, 'err-dir');
+    mkdirSync(existingDir, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [{ host: existingDir, container: '/dest' }],
+    }));
+
+    const error = new Error('scp failed: connection refused');
+    const asyncScp = vi.fn().mockImplementation(() => {
+      const p = Promise.reject(error);
+      p.catch(() => {});
+      return p;
+    });
+
+    let caught: Error | undefined;
+    try {
+      await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+    } catch (err) {
+      caught = err as Error;
+    }
+
+    expect(caught).toBeDefined();
+    expect(caught!.message).toContain('scp failed');
+  });
+
+  it('should process multiple async scp calls sequentially', async () => {
+    const root = setupRepoRoot();
+    const dir1 = join(root, 'seq-dir-1');
+    const dir2 = join(root, 'seq-dir-2');
+    mkdirSync(dir1, { recursive: true });
+    mkdirSync(dir2, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [
+        { host: dir1, container: '/dest1' },
+        { host: dir2, container: '/dest2' },
+      ],
+    }));
+
+    const order: string[] = [];
+    const asyncScp = vi.fn().mockImplementation(
+      (_ws: string, _local: string, remote: string) => new Promise<void>(resolve => {
+        const delay = remote === '/dest1' ? 50 : 10;
+        setTimeout(() => { order.push(remote); resolve(); }, delay);
+      }),
+    );
+
+    await processHydrazIncludes(root, 'hydraz-test-ws', asyncScp);
+
+    expect(asyncScp).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(['/dest1', '/dest2']);
   });
 });

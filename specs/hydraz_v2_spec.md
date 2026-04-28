@@ -97,7 +97,7 @@ Behind the scenes, the swarm investigates the codebase, designs a solution, plan
 
 - Real parallel execution with isolated workspaces per worker
 - Structured planning pipeline with architect-planner consensus
-- Independent code review by a panel of famous-engineer personas
+- Independent code review by a review panel (single generic reviewer by default)
 - Categorized feedback loops that route issues to the right stage
 - Full observability: per-stage cost, tokens, timing, event log
 - Resume from any checkpoint via durable artifacts
@@ -107,7 +107,7 @@ Behind the scenes, the swarm investigates the codebase, designs a solution, plan
 
 - Container-per-worker isolation (deferred; local worktrees first)
 - Permission scoping per worker role (deferred; `--dangerously-skip-permissions` remains for now)
-- Variable reviewer panel size (fixed at 3 for v2)
+- Variable reviewer panel size (default 1, configurable via `--reviewers`)
 - Architect council (parallel architects with synthesis; deferred to v2.2 -- single architect with review-panel feedback is sufficient for v2.0; if the single architect proves to be the weak link, a council with famous-engineer personas and a synthesis step is the natural next move)
 - Homebrew distribution (deferred from v1)
 
@@ -182,8 +182,8 @@ This is the fundamental architectural shift from v1. v1 had one long-running Cla
        │ integrated branch
        ▼
 ┌─────────────┐
-│   Review     │  3 instances in parallel, famous-engineer personas
-│    Panel     │  independent reviews of integrated result
+│   Review     │  1 instance by default (configurable via --reviewers)
+│    Panel     │  independent review of integrated result
 └──────┬──────┘
        │ approved, or categorized feedback
        │
@@ -295,8 +295,8 @@ File ownership makes conflicts unlikely. The merge phase is a safety net, not th
 **Role**: Independently review the integrated codebase from distinct engineering perspectives.
 
 **Input**: Integrated code + original task + plan + architecture
-**Output**: `swarm/reviews/<persona>.md` per reviewer
-**Process**: 3 Claude instances in parallel, each embodying a famous/celebrated software engineer
+**Output**: `swarm/reviews/<reviewer>.md` per reviewer
+**Process**: 1 Claude instance by default (configurable via `--reviewers` for multiple reviewers)
 
 Each reviewer produces a structured review with:
 - Overall assessment: `approve` or `changes-requested`
@@ -305,7 +305,9 @@ Each reviewer produces a structured review with:
   - `implementation`: code-level issues
 - Specific file/line references for each finding
 
-The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the feedback route (see §4.8). Both routes rewind through re-planning; the distinction affects whether the architecture design is refreshed from disk.
+Verdict parsing defaults to `approve` — the parser scans the first 5 non-empty lines for `CHANGES REQUESTED` (case-insensitive, stripping markdown formatting), guarding against negation prefixes like "NO CHANGES REQUESTED". If no explicit rejection is found, the verdict is `approve`.
+
+The orchestrator aggregates reviews in memory (not persisted to disk). If any reviewer requests changes, the categorized findings determine the feedback route (see §4.8). Both routes rewind through re-planning; the distinction affects whether the architecture design is refreshed from disk. Review feedback is passed to the planner on subsequent outer loop iterations so the planner can address the specific issues raised.
 
 ### 4.8 Feedback loop routing
 
@@ -333,20 +335,9 @@ After the review panel approves:
 
 ---
 
-## 5. Default Reviewer Personas
+## 5. Default Reviewer
 
-The review panel ships with three default famous-engineer personas. These are user-configurable per-session via `--reviewers`. Global config for reviewers is not yet implemented (see §12).
-
-### John Carmack
-Focus: correctness, edge cases, error handling, data flow, performance traps, subtle bugs. Known for mathematical rigor, relentless attention to detail, and finding the things that will break at 3am.
-
-### Sandi Metz
-Focus: code organization, naming, abstraction quality, coupling, changeability, practical design principles. Known for making complex design accessible and pragmatic, and for asking "is this code easy to change?"
-
-### Linus Torvalds
-Focus: unnecessary complexity, over-engineering, bloated abstractions, whether the code does what it needs to and nothing more. Known for simplicity, directness, and rejecting anything that doesn't carry its weight.
-
-These three form a triangle of coverage: Carmack finds bugs, Metz finds design debt, Torvalds finds bloat. Their perspectives are well-documented enough for Claude to reliably embody.
+The review panel ships with a single generic reviewer by default. The reviewer focuses on correctness, completeness, and serious defects. No persona-specific language or famous-engineer embodiment is used. This is user-configurable per-session via `--reviewers` (pass multiple names for a multi-reviewer panel). Global config for reviewers is not yet implemented (see §12).
 
 ---
 
@@ -423,9 +414,7 @@ Resumable states: `stopped`, `blocked`, `failed` -> `created` (for resume).
       report.md                   # Merge/conflict report
 
     reviews/
-      carmack.md                  # Review from John Carmack persona
-      metz.md                     # Review from Sandi Metz persona
-      torvalds.md                 # Review from Linus Torvalds persona
+      reviewer.md                 # Review from the reviewer (one file per reviewer)
       # Note: review aggregation is done in-memory by the pipeline, not persisted to disk
 
     delivery/
@@ -601,7 +590,7 @@ Aggregate swarm metrics:
 hydraz run "<task>"                      # Launch swarm pipeline (swarm always runs; --swarm is a no-op)
 hydraz run --workers 5 "<task>"          # 5 workers (serial by default)
 hydraz run --parallel "<task>"           # Run workers in parallel instead of serial
-hydraz run --reviewers carmack,metz,torvalds "<task>"  # Custom reviewer panel
+hydraz run --reviewers reviewer-a,reviewer-b "<task>"  # Custom reviewer panel
 hydraz run --local "<task>"              # Run locally (bare metal, default)
 hydraz run --container "<task>"          # Run in local Docker container via DevPod
 hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
@@ -612,7 +601,7 @@ hydraz run --cloud "<task>"              # Run on cloud VM via DevPod
 - `--swarm`: Declared but currently a no-op (swarm pipeline always runs)
 - `--workers N`: Number of workers (default 3, serial by default)
 - `--parallel`: Run workers concurrently instead of serially (opt-in)
-- `--reviewers <list>`: Comma-separated reviewer persona names (default: carmack, metz, torvalds)
+- `--reviewers <list>`: Comma-separated reviewer names (default: reviewer)
 - `--local` / `--container` / `--cloud`: Execution target selection (carried from v1)
 
 ### 11.2 Existing commands (swarm awareness NOT yet implemented in display)
@@ -648,7 +637,7 @@ Note: The following commands exist but their output has NOT been updated for v2 
 
 Current defaults:
 - `defaultWorkerCount`: 3
-- `defaultReviewers`: `["carmack", "metz", "torvalds"]`
+- `defaultReviewers`: `["reviewer"]`
 - `consensusMaxRounds`: 10
 - `outerLoopMaxIterations`: 5
 
@@ -656,7 +645,7 @@ These can be overridden per-session via CLI flags (`--workers N`, `--reviewers <
 
 ### 12.2 Reviewer persona storage
 
-**Status: Not implemented.** Reviewer persona definitions are currently inline strings in the controller (`"You are ${name}. Review the code with your characteristic engineering perspective."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
+**Status: Not implemented.** Reviewer persona definitions are currently a generic inline string in the controller (`"Review the code for correctness, completeness, and serious defects."`). A proper persona storage system at `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support is future work.
 
 ### 12.3 Repo-level configuration (`.hydraz/` directory)
 
@@ -713,7 +702,7 @@ Each pipeline role has its own prompt template in `src/core/swarm/prompts/`:
 - `architect-review.ts`: Architect reviews the planner's execution plan
 - `planner.ts`: Task decomposition, produce structured plan artifacts
 - `worker.ts`: Strict TDD implementation with ownership constraints, full prove-it methodology
-- `reviewer.ts`: Famous-engineer persona review with categorized findings
+- `reviewer.ts`: Review with categorized findings
 
 All prompts embed core engineering principles via `core-principles.ts`. Workers receive the most rigorous version (full TDD + full prove-it-first + evidence taxonomy). Other roles receive evidence discipline appropriate to their function.
 
@@ -868,12 +857,12 @@ A post-review verification phase that actually runs tests (and optionally headle
 1. **Orchestrator model**: TypeScript supervisor, not a Claude process.
 2. **Worker count**: User-controlled, default 3.
 3. **Backward compatibility**: None. Clean major version break.
-4. **Personas**: Applied to reviewers only. Workers get identical prompts.
+4. **Personas**: Review panel uses a single generic reviewer (no persona embodiment). Workers get identical prompts.
 5. **Verification**: Workers own TDD for v2.0. Separate verification phase planned for v2.2 (see above).
 6. **Consensus bounds**: 10 rounds, architect final say.
 7. **Outer loop bounds**: 5 iterations, then fail.
 8. **Feedback routing**: Reviewers categorize as architectural vs implementation.
-9. **Default reviewers**: Carmack, Metz, Torvalds.
+9. **Default reviewer**: Single generic reviewer (no persona embodiment).
 
 ---
 
@@ -888,15 +877,15 @@ A post-review verification phase that actually runs tests (and optionally headle
 | Planning | 1 |
 | Architect review | 1 |
 | Workers | N (default 3) |
-| Reviewers | 3 |
-| **Total** | **N + 7** (default 10) |
+| Reviewers | 1 (default; configurable) |
+| **Total** | **N + 5** (default 8) |
 
 All at Claude Opus pricing.
 
 ### 19.2 With loops
 
 Each consensus round adds 2 invocations (planner + architect review).
-Each outer loop adds: up to 10 consensus rounds (2 invocations each) + N workers + 3 reviewers.
+Each outer loop adds: up to 10 consensus rounds (2 invocations each) + N workers + 1 reviewer (default).
 
 Worst case with all bounds hit: significant. Per-stage cost tracking is essential so users can see where spend goes.
 
@@ -911,10 +900,10 @@ An engineer stands in a repo, runs `hydraz run "build the user auth system"`, an
 3. A planner decomposes the work into parallel tasks, and the architect reviews the plan until both agree
 4. Three workers implement their assigned tasks in parallel, each in an isolated worktree, using strict TDD
 5. The orchestrator merges their work into an integration branch
-6. John Carmack, Sandi Metz, and Linus Torvalds independently review the result
-7. If changes are needed, the right part of the pipeline re-runs automatically
+6. A review panel independently reviews the result
+7. If changes are needed, the review feedback is fed to the planner and the pipeline re-runs automatically
 8. When the panel approves, a PR appears
 
-The engineer comes back to a PR with a full audit trail: investigation brief, architecture document, plan, worker progress files, merge report, and three independent code reviews from engineering legends.
+The engineer comes back to a PR with a full audit trail: investigation brief, architecture document, plan, worker progress files, merge report, and independent code review.
 
 That is the product.

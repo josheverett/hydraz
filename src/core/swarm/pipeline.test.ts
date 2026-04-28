@@ -6,7 +6,7 @@ import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
 import { ensureSwarmDirs } from './artifacts.js';
-import { runSwarmPipeline, type PipelineOptions } from './pipeline.js';
+import { runSwarmPipeline, extractReviewSummary, type PipelineOptions } from './pipeline.js';
 import type { SwarmPhase } from './types.js';
 
 vi.mock('./investigator.js', () => ({
@@ -62,9 +62,7 @@ vi.mock('./reviewer.js', () => ({
   runReviewPanel: vi.fn().mockResolvedValue({
     success: true,
     reviews: [
-      { reviewerName: 'carmack', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
-      { reviewerName: 'metz', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
-      { reviewerName: 'torvalds', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
+      { reviewerName: 'reviewer', success: true, executorResult: { exitCode: 0, signal: null, success: true } },
     ],
   }),
 }));
@@ -80,14 +78,18 @@ vi.mock('./artifacts.js', async (importOriginal) => {
   };
 });
 
-vi.mock('./review-aggregate.js', () => ({
-  aggregateReviews: vi.fn().mockReturnValue({
-    approved: true,
-    architecturalFindings: [],
-    implementationFindings: [],
-    reviews: [],
-  }),
-}));
+vi.mock('./review-aggregate.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./review-aggregate.js')>();
+  return {
+    ...actual,
+    aggregateReviews: vi.fn().mockReturnValue({
+      approved: true,
+      architecturalFindings: [],
+      implementationFindings: [],
+      reviews: [],
+    }),
+  };
+});
 
 import { runInvestigation } from './investigator.js';
 import { runArchitect } from './architect.js';
@@ -102,9 +104,7 @@ let sessionId: string;
 let config: ReturnType<typeof createDefaultConfig>;
 
 const DEFAULT_PERSONAS = [
-  { name: 'carmack', persona: 'Correctness.' },
-  { name: 'metz', persona: 'Design quality.' },
-  { name: 'torvalds', persona: 'Simplicity.' },
+  { name: 'reviewer', persona: 'Review for correctness and completeness.' },
 ];
 
 beforeEach(() => {
@@ -380,5 +380,100 @@ describe('runSwarmPipeline', () => {
       type: 'swarm.consensus_round_started',
       message: 'Consensus round 1 of 10',
     });
+  });
+
+  it('should pass review feedback to consensus on subsequent outer loop iterations', async () => {
+    const { readReviewFile } = await import('./artifacts.js');
+    vi.mocked(readReviewFile).mockReturnValue('CHANGES REQUESTED\n\nMissing null check.');
+
+    vi.mocked(aggregateReviews)
+      .mockReturnValueOnce({
+        approved: false,
+        architecturalFindings: [],
+        implementationFindings: [],
+        reviews: [{ reviewer: 'reviewer', verdict: 'changes-requested', findings: [], summary: 'CHANGES REQUESTED\n\nMissing null check.' }],
+      })
+      .mockReturnValueOnce({
+        approved: true,
+        architecturalFindings: [],
+        implementationFindings: [],
+        reviews: [],
+      });
+
+    await runSwarmPipeline(makeOptions());
+
+    expect(runConsensus).toHaveBeenCalledTimes(2);
+    const secondConsensusOpts = vi.mocked(runConsensus).mock.calls[1]![1];
+    expect(secondConsensusOpts.reviewFeedback).toContain('Missing null check');
+  });
+
+  it('should not pass review feedback on the first outer loop iteration', async () => {
+    await runSwarmPipeline(makeOptions());
+
+    const firstConsensusOpts = vi.mocked(runConsensus).mock.calls[0]![1];
+    expect(firstConsensusOpts.reviewFeedback).toBeUndefined();
+  });
+
+  it('should emit verbose events when verbose is true', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      verbose: true,
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents.length).toBeGreaterThan(0);
+  });
+
+  it('should not emit verbose events when verbose is false', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      verbose: false,
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents).toHaveLength(0);
+  });
+
+  it('should not emit verbose events when verbose is undefined', async () => {
+    const events: Array<{ type: string; message: string }> = [];
+    await runSwarmPipeline(makeOptions({
+      callbacks: {
+        onEvent: (type, message) => events.push({ type, message }),
+      },
+    }));
+
+    const verboseEvents = events.filter(e => e.type.startsWith('verbose.'));
+    expect(verboseEvents).toHaveLength(0);
+  });
+});
+
+describe('extractReviewSummary', () => {
+  it('should extract text after ## Summary heading', () => {
+    const content = `CHANGES REQUESTED\n\n## Findings\nSome issues.\n\n## Summary\nThe implementation is incomplete.\n`;
+    expect(extractReviewSummary(content)).toBe('The implementation is incomplete.');
+  });
+
+  it('should stop at the next ## heading', () => {
+    const content = `APPROVED\n\n## Summary\nLooks good overall.\n\n## Details\nMore stuff.`;
+    expect(extractReviewSummary(content)).toBe('Looks good overall.');
+  });
+
+  it('should return null when no summary section exists', () => {
+    expect(extractReviewSummary('APPROVED\n\nGreat work.')).toBeNull();
+  });
+
+  it('should return null when summary section is empty', () => {
+    expect(extractReviewSummary('## Summary\n\n## Other')).toBeNull();
+  });
+
+  it('should handle multi-line summaries', () => {
+    const content = `## Summary\nLine one.\nLine two.\nLine three.`;
+    expect(extractReviewSummary(content)).toBe('Line one.\nLine two.\nLine three.');
   });
 });

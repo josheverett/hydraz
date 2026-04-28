@@ -119,7 +119,7 @@ export interface SwarmConfig {
 
 export const DEFAULT_SWARM_CONFIG: SwarmConfig = {
   defaultWorkerCount: 3,
-  defaultReviewers: ['carmack', 'metz', 'torvalds'],
+  defaultReviewers: ['reviewer'],
   consensusMaxRounds: 10,
   outerLoopMaxIterations: 5,
 };

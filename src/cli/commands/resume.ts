@@ -3,13 +3,17 @@ import { select } from '@inquirer/prompts';
 import { detectRepo } from '../../core/repo/detect.js';
 import { listSessions, findSessionByName, isTerminalState } from '../../core/sessions/index.js';
 import { resumeSession } from '../../core/orchestration/index.js';
+import { setVerbose } from '../../core/debug.js';
 
 export function registerResumeCommand(program: Command): void {
   program
     .command('resume')
     .description('Resume a paused, interrupted, or blocked session')
     .argument('[session]', 'Session name (prompted if not provided)')
-    .action(async (sessionName?: string) => {
+    .option('--verbose', 'Enable exhaustive diagnostic output')
+    .action(async (sessionName: string | undefined, options: { verbose?: boolean }) => {
+      if (options.verbose) setVerbose(true);
+
       const repo = detectRepo();
       if (!repo) {
         console.error('Not in a git repository.');
@@ -27,7 +31,7 @@ export function registerResumeCommand(program: Command): void {
         await resumeSession(session.id, repo.root, {
           onStreamLine: (line) => console.log(line),
           onError: (msg) => console.error(msg),
-        });
+        }, { verbose: options.verbose });
         return;
       }
 
@@ -53,6 +57,6 @@ export function registerResumeCommand(program: Command): void {
       await resumeSession(chosen, repo.root, {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
-      });
+      }, { verbose: options.verbose });
     });
 }

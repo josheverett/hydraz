@@ -19,6 +19,7 @@ export interface SerializablePipelineOptions {
   maxOuterLoops: number;
   maxConsensusRounds: number;
   parallel: boolean;
+  verbose?: boolean;
 }
 
 export function toSerializable(options: PipelineOptions): SerializablePipelineOptions {
@@ -34,6 +35,7 @@ export function toSerializable(options: PipelineOptions): SerializablePipelineOp
     maxOuterLoops: options.maxOuterLoops,
     maxConsensusRounds: options.maxConsensusRounds,
     parallel: options.parallel,
+    verbose: options.verbose,
   };
 }
 
@@ -50,6 +52,7 @@ export function toPipelineOptions(serialized: SerializablePipelineOptions): Pipe
     maxOuterLoops: serialized.maxOuterLoops,
     maxConsensusRounds: serialized.maxConsensusRounds,
     parallel: serialized.parallel,
+    verbose: serialized.verbose,
     callbacks: {
       onPhaseChange: (phase) => {
         process.stdout.write(JSON.stringify({ type: 'phase', phase }) + '\n');
