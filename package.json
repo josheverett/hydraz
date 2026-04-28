@@ -1,6 +1,6 @@
 {
   "name": "hydraz",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "An opinionated CLI for autonomous, multi-process coding swarms",
   "type": "module",
   "bin": {
