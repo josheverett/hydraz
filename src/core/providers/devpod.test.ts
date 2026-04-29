@@ -11,6 +11,7 @@ import {
   verifyBranchPushed,
   verifyClaudeInContainer,
   sshExec,
+  devpodSsh,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
   scpToContainer,
@@ -24,6 +25,7 @@ import { setVerbose } from '../debug.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
+  spawn: vi.fn(),
 }));
 
 vi.mock('./spawn-heartbeat.js', () => ({
@@ -275,6 +277,77 @@ describe('sshExec', () => {
   it('throws on failure', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('connection refused'); });
     expect(() => sshExec('my-workspace', 'echo hello')).toThrow('connection refused');
+  });
+});
+
+describe('devpodSsh', () => {
+  it('spawns devpod ssh with the workspace name and stdio inherit', async () => {
+    const { spawn } = await import('node:child_process');
+    const mockSpawn = vi.mocked(spawn);
+
+    const fakeChild = {
+      on: vi.fn((event: string, cb: (code: number | null) => void) => {
+        if (event === 'close') cb(0);
+        return fakeChild;
+      }),
+    };
+    mockSpawn.mockReturnValue(fakeChild as never);
+
+    const exitCode = await devpodSsh('hydraz-abc123');
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'devpod',
+      ['ssh', 'hydraz-abc123'],
+      { stdio: 'inherit' },
+    );
+    expect(exitCode).toBe(0);
+  });
+
+  it('resolves with non-zero exit code on failure', async () => {
+    const { spawn } = await import('node:child_process');
+    const mockSpawn = vi.mocked(spawn);
+
+    const fakeChild = {
+      on: vi.fn((event: string, cb: (code: number | null) => void) => {
+        if (event === 'close') cb(1);
+        return fakeChild;
+      }),
+    };
+    mockSpawn.mockReturnValue(fakeChild as never);
+
+    const exitCode = await devpodSsh('hydraz-abc123');
+    expect(exitCode).toBe(1);
+  });
+
+  it('resolves with exit code 1 when close event gives null', async () => {
+    const { spawn } = await import('node:child_process');
+    const mockSpawn = vi.mocked(spawn);
+
+    const fakeChild = {
+      on: vi.fn((event: string, cb: (code: number | null) => void) => {
+        if (event === 'close') cb(null);
+        return fakeChild;
+      }),
+    };
+    mockSpawn.mockReturnValue(fakeChild as never);
+
+    const exitCode = await devpodSsh('hydraz-abc123');
+    expect(exitCode).toBe(1);
+  });
+
+  it('rejects when spawn emits an error event', async () => {
+    const { spawn } = await import('node:child_process');
+    const mockSpawn = vi.mocked(spawn);
+
+    const fakeChild = {
+      on: vi.fn((event: string, cb: (err: Error) => void) => {
+        if (event === 'error') cb(new Error('spawn failed'));
+        return fakeChild;
+      }),
+    };
+    mockSpawn.mockReturnValue(fakeChild as never);
+
+    await expect(devpodSsh('hydraz-abc123')).rejects.toThrow('spawn failed');
   });
 });
 
