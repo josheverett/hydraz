@@ -25,6 +25,7 @@ export function registerRunCommand(program: Command): void {
     .option('--workers <count>', 'Number of workers (default: 3)')
     .option('--parallel', 'Run workers in parallel (default: serial)')
     .option('--reviewers <names>', 'Comma-separated reviewer names (default: reviewer)')
+    .option('--no-clone', 'Use local repo path instead of cloning from remote')
     .option('--verbose', 'Enable exhaustive diagnostic output')
     .action(async (task: string, options: {
       session?: string;
@@ -36,6 +37,7 @@ export function registerRunCommand(program: Command): void {
       workers?: string;
       parallel?: boolean;
       reviewers?: string;
+      clone?: boolean;
       verbose?: boolean;
     }) => {
       if (options.verbose) setVerbose(true);
@@ -118,6 +120,7 @@ export function registerRunCommand(program: Command): void {
         workerCount,
         reviewerNames,
         parallel: options.parallel,
+        skipClone: options.clone === false,
         verbose: options.verbose,
       });
     });

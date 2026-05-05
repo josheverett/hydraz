@@ -65,6 +65,7 @@ export interface SwarmOptions {
   reviewerNames?: string[];
   parallel?: boolean;
   verbose?: boolean;
+  skipClone?: boolean;
 }
 
 export async function startSession(
@@ -110,14 +111,16 @@ export async function startSession(
       return;
     }
 
-    const gitHubAutomation = getGitHubAutomationReadiness(config, repoRoot);
-    if (!gitHubAutomation.ok) {
-      const msg = gitHubAutomation.error ?? 'GitHub automation is not configured';
-      transitionState(repoRoot, sessionId, 'blocked', msg);
-      callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
-      emitEvent('session.blocked', msg);
-      callbacks.onError?.(msg);
-      return;
+    if (!swarmOptions.skipClone) {
+      const gitHubAutomation = getGitHubAutomationReadiness(config, repoRoot);
+      if (!gitHubAutomation.ok) {
+        const msg = gitHubAutomation.error ?? 'GitHub automation is not configured';
+        transitionState(repoRoot, sessionId, 'blocked', msg);
+        callbacks.onStateChange?.(loadSession(repoRoot, sessionId));
+        emitEvent('session.blocked', msg);
+        callbacks.onError?.(msg);
+        return;
+      }
     }
   }
 
@@ -148,6 +151,7 @@ export async function startSession(
     workspace = await provider.createWorkspace({
       session,
       config,
+      skipClone: swarmOptions.skipClone,
       onHeartbeat: (label, elapsedMs) => {
         emitEvent('workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
       },

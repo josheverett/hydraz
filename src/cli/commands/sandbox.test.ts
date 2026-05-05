@@ -138,6 +138,19 @@ describe('registerSandboxCommand', () => {
     );
   });
 
+  it('passes skipClone: true when --no-clone is provided', async () => {
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
+    mockRunSandbox.mockResolvedValue({ entered: true, steps: [] });
+
+    await run(['sandbox', '--container', '--no-clone']);
+
+    expect(mockRunSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skipClone: true,
+      }),
+    );
+  });
+
   it('sets process.exitCode to 1 when sandbox fails', async () => {
     mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: false, steps: [] });

@@ -40,6 +40,7 @@ export interface HelloWorldOptions {
   executionTarget: ExecutionTarget;
   repoRoot: string;
   branchOverride?: string;
+  skipClone?: boolean;
   onStep?: (step: HelloWorldStep) => void;
 }
 
@@ -123,11 +124,13 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
       return { passed: false, steps, timestamp };
     }
 
-    const ghReady = getGitHubAutomationReadiness(config, repoRoot);
-    debug(`runHelloWorld: githubAutomation ok=${ghReady.ok}`);
-    if (!ghReady.ok) {
-      emitStep(steps, onStep, { name: 'GitHub config', status: 'fail', detail: ghReady.error });
-      return { passed: false, steps, timestamp };
+    if (!options.skipClone) {
+      const ghReady = getGitHubAutomationReadiness(config, repoRoot);
+      debug(`runHelloWorld: githubAutomation ok=${ghReady.ok}`);
+      if (!ghReady.ok) {
+        emitStep(steps, onStep, { name: 'GitHub config', status: 'fail', detail: ghReady.error });
+        return { passed: false, steps, timestamp };
+      }
     }
   }
 
@@ -159,7 +162,7 @@ export async function runHelloWorld(options: HelloWorldOptions): Promise<HelloWo
     });
     debug(`runHelloWorld: session created id=${session.id}`);
 
-    workspace = await provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
+    workspace = await provider.createWorkspace({ session, config, branchOverride: options.branchOverride, skipClone: options.skipClone });
     debugTiming('runHelloWorld: createWorkspace', timed(wsStart));
     emitStep(steps, onStep, {
       name: 'Workspace',

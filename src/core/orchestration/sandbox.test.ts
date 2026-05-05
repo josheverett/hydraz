@@ -258,4 +258,25 @@ describe('runSandbox', () => {
       expect.any(String),
     );
   });
+
+  it('passes skipClone through to createWorkspace', async () => {
+    setupHappyPath();
+
+    await runSandbox(makeDefaultOptions({ skipClone: true }));
+
+    const fakeProvider = mockGetProvider.mock.results[0]!.value;
+    expect(fakeProvider.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ skipClone: true }),
+    );
+  });
+
+  it('skips GitHub readiness check when skipClone is true', async () => {
+    setupHappyPath();
+
+    const steps: SandboxStep[] = [];
+    await runSandbox(makeDefaultOptions({ skipClone: true, onStep: (s) => steps.push(s) }));
+
+    expect(mockGetGitHubReadiness).not.toHaveBeenCalled();
+    expect(steps.map((s) => s.name)).not.toContain('GitHub config');
+  });
 });

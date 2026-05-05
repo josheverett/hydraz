@@ -317,6 +317,56 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodDelete).toHaveBeenCalled();
     });
 
+    it('uses local repo path as devpod source when skipClone is true', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config, skipClone: true });
+
+      expect(mockDevpodUp).toHaveBeenCalledWith(
+        '/fake/repo',
+        expect.stringContaining('hydraz-'),
+        'docker',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('skips git remote and GitHub checks when skipClone is true', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig(false);
+
+      await provider.createWorkspace({ session, config, skipClone: true });
+
+      expect(mockHasGitRemote).not.toHaveBeenCalled();
+      expect(mockGetGitHubRepo).not.toHaveBeenCalled();
+      expect(mockDevpodUp).toHaveBeenCalled();
+    });
+
+    it('skips worktree creation when skipClone is true', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config, skipClone: true });
+
+      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
+      expect(mockCopyIncludes).not.toHaveBeenCalled();
+      expect(mockScpFiles).not.toHaveBeenCalled();
+    });
+
+    it('returns container repo path as directory when skipClone is true', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      const workspace = await provider.createWorkspace({ session, config, skipClone: true });
+
+      expect(workspace.directory).toBe(`/workspaces/hydraz-${session.id}`);
+    });
+
     it('threads onHeartbeat callback from params to devpodUp', async () => {
       const heartbeatCb = vi.fn();
       const provider = new LocalContainerProvider();
