@@ -67,7 +67,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('errors when neither --container nor --cloud is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
 
     await run(['sandbox']);
 
@@ -76,7 +76,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('calls runSandbox with local-container when --container is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: true, steps: [], workspaceName: 'hydraz-abc' });
 
     await run(['sandbox', '--container']);
@@ -91,7 +91,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('calls runSandbox with cloud when --cloud is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: true, steps: [], workspaceName: 'hydraz-abc' });
 
     await run(['sandbox', '--cloud']);
@@ -104,7 +104,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('passes cleanup: false when --no-cleanup is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: true, steps: [], workspaceName: 'hydraz-abc' });
 
     await run(['sandbox', '--container', '--no-cleanup']);
@@ -117,7 +117,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('sets verbose when --verbose is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: true, steps: [] });
 
     await run(['sandbox', '--container', '--verbose']);
@@ -126,7 +126,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('passes branchOverride when --branch is provided', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: true, steps: [] });
 
     await run(['sandbox', '--container', '--branch', 'feature/test']);
@@ -139,7 +139,7 @@ describe('registerSandboxCommand', () => {
   });
 
   it('sets process.exitCode to 1 when sandbox fails', async () => {
-    mockDetectRepo.mockReturnValue({ root: '/test/repo' });
+    mockDetectRepo.mockReturnValue({ root: '/test/repo', name: 'test-repo' });
     mockRunSandbox.mockResolvedValue({ entered: false, steps: [] });
 
     await run(['sandbox', '--container']);
