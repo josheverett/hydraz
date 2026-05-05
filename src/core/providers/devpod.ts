@@ -1,4 +1,4 @@
-import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
+import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -202,6 +202,20 @@ export function sshExec(workspaceName: string, command: string): string {
   debugOutput('ssh stdout', output);
   debugTiming('sshExec', Date.now() - start);
   return output;
+}
+
+export function devpodSsh(workspaceName: string): Promise<number> {
+  debugExec('devpod', ['ssh', workspaceName]);
+  const child = spawn('devpod', ['ssh', workspaceName], { stdio: 'inherit' });
+
+  return new Promise<number>((resolve, reject) => {
+    child.on('close', (code) => {
+      resolve(code ?? 1);
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+  });
 }
 
 export function createWorktreeInContainer(

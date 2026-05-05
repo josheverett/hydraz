@@ -14,6 +14,7 @@ export function prepareContainerAuthEnv(config: HydrazConfig): Record<string, st
 
   if (config.github.token) {
     Object.assign(env, buildGitHubGitEnv(config.github.token));
+    env['GH_TOKEN'] = config.github.token;
   }
 
   return env;

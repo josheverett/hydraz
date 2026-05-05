@@ -34,6 +34,19 @@ describe('prepareContainerAuthEnv', () => {
     expect(env['GIT_CONFIG_VALUE_0']).toBe('git@github.com:');
     expect(env['GIT_CONFIG_KEY_2']).toBe('http.https://github.com/.extraheader');
   });
+
+  it('includes GH_TOKEN when a GitHub token is configured', () => {
+    const config = createDefaultConfig();
+    config.github.token = 'github_pat_test';
+    const env = prepareContainerAuthEnv(config);
+    expect(env['GH_TOKEN']).toBe('github_pat_test');
+  });
+
+  it('does not include GH_TOKEN when no GitHub token is configured', () => {
+    const config = createDefaultConfig();
+    const env = prepareContainerAuthEnv(config);
+    expect(env['GH_TOKEN']).toBeUndefined();
+  });
 });
 
 describe('validateContainerAuth', () => {

@@ -12,6 +12,7 @@ const EXPECTED_COMMANDS = [
   'config',
   'run',
   'hello-world',
+  'sandbox',
   'attach',
   'sessions',
   'status',
