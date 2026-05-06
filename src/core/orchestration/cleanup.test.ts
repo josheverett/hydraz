@@ -163,6 +163,31 @@ describe('findOrphanedWorkspaces', () => {
 
     expect(orphans[0]!.branchName).toBe('hydraz/my-feature');
   });
+
+  it('finds stale workspaces for active sessions with a stopped DevPod workspace', () => {
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'stale-001', name: 'stale-session', state: 'planning' }),
+    ]);
+    mockDevpodStatus.mockReturnValue('Stopped');
+
+    const orphans = findOrphanedWorkspaces('/fake/repo');
+
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.workspaceName).toBe('hydraz-stale-001');
+    expect(orphans[0]!.sessionState).toBe('planning');
+    expect(orphans[0]!.devpodStatus).toBe('Stopped');
+  });
+
+  it('does not flag active sessions whose DevPod workspace is still running', () => {
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'active-001', state: 'investigating' }),
+    ]);
+    mockDevpodStatus.mockReturnValue('Running');
+
+    const orphans = findOrphanedWorkspaces('/fake/repo');
+
+    expect(orphans).toHaveLength(0);
+  });
 });
 
 describe('destroyOrphanedWorkspace', () => {
@@ -253,7 +278,8 @@ describe('findUnknownOrphanedWorkspaces', () => {
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
 
-    expect(orphans).toHaveLength(0);
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.workspaceName).toBe('hydraz-abc-def-123');
   });
 
   it('handles mix of known-active, known-terminal, and unknown workspaces', () => {
@@ -282,6 +308,33 @@ describe('findUnknownOrphanedWorkspaces', () => {
     ]);
     mockListSessions.mockReturnValue([
       makeSession({ id: 'local-sess', state: 'planning', executionTarget: 'local' }),
+    ]);
+
+    const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
+
+    expect(orphans).toHaveLength(0);
+  });
+
+  it('includes stopped workspaces even when matching an active session', () => {
+    mockDevpodList.mockReturnValue([
+      { name: 'hydraz-zombie-sess', status: 'Stopped' },
+    ]);
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'zombie-sess', state: 'planning' }),
+    ]);
+
+    const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
+
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.workspaceName).toBe('hydraz-zombie-sess');
+  });
+
+  it('still excludes running workspaces matching active sessions', () => {
+    mockDevpodList.mockReturnValue([
+      { name: 'hydraz-active-sess', status: 'Running' },
+    ]);
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'active-sess', state: 'investigating' }),
     ]);
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
@@ -349,5 +402,28 @@ describe('findAllOrphanedWorkspaces', () => {
     const result = findAllOrphanedWorkspaces('/fake/repo');
 
     expect(result.total).toBe(3);
+  });
+
+  it('includes stale active sessions in the total', () => {
+    mockListSessions.mockReturnValue([
+      makeSession({ id: 'terminal-001', name: 'done', state: 'completed' }),
+      makeSession({ id: 'stale-001', name: 'zombie', state: 'planning' }),
+      makeSession({ id: 'active-001', name: 'running', state: 'investigating' }),
+    ]);
+    mockDevpodStatus.mockImplementation((name: string) => {
+      if (name === 'hydraz-terminal-001') return 'Running';
+      if (name === 'hydraz-stale-001') return 'Stopped';
+      if (name === 'hydraz-active-001') return 'Running';
+      return 'NotFound';
+    });
+    mockDevpodList.mockReturnValue([
+      { name: 'hydraz-terminal-001', status: 'Running' },
+      { name: 'hydraz-stale-001', status: 'Stopped' },
+      { name: 'hydraz-active-001', status: 'Running' },
+    ]);
+
+    const result = findAllOrphanedWorkspaces('/fake/repo');
+
+    expect(result.total).toBe(2);
   });
 });

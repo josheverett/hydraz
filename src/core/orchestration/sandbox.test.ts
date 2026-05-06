@@ -44,6 +44,7 @@ vi.mock('../branches/index.js', () => ({
 vi.mock('../providers/devpod.js', () => ({
   scpToContainer: vi.fn(() => Promise.resolve()),
   getDistRoot: vi.fn(() => '/dist'),
+  getContainerHome: vi.fn(() => '/home/vscode'),
   devpodSsh: vi.fn(() => Promise.resolve(0)),
   devpodDelete: vi.fn(),
 }));
@@ -296,6 +297,7 @@ describe('runSandbox', () => {
       'hydraz-test-session-id',
       scpToContainer,
       expect.any(Function),
+      '/home/vscode',
     );
   });
 });
