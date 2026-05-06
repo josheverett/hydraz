@@ -147,6 +147,7 @@ describe('LocalContainerProvider', () => {
         'docker',
         'feature/devcontainer',
         undefined,
+        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
       );
     });
 
@@ -330,6 +331,7 @@ describe('LocalContainerProvider', () => {
         'docker',
         undefined,
         undefined,
+        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
       );
     });
 
@@ -365,6 +367,18 @@ describe('LocalContainerProvider', () => {
       const workspace = await provider.createWorkspace({ session, config, skipClone: true });
 
       expect(workspace.directory).toBe(`/workspaces/hydraz-${session.id}`);
+    });
+
+    it('passes container auth env to devpodUp', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      expect(envArg).toBeDefined();
+      expect(envArg!['GH_TOKEN']).toBe('github_pat_test');
     });
 
     it('threads onHeartbeat callback from params to devpodUp', async () => {

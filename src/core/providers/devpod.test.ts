@@ -634,6 +634,15 @@ describe('devpodUp', () => {
     const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
     expect(() => heartbeatConfig?.onHeartbeat('test', 1000)).not.toThrow();
   });
+
+  it('passes env to spawnWithHeartbeat when provided', async () => {
+    const env = { GH_TOKEN: 'github_pat_test', CUSTOM_VAR: 'value' };
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(opts.env).toBeDefined();
+    expect((opts.env as Record<string, string>)['GH_TOKEN']).toBe('github_pat_test');
+    expect((opts.env as Record<string, string>)['CUSTOM_VAR']).toBe('value');
+  });
 });
 
 describe('devpodDelete', () => {

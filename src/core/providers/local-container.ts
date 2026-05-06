@@ -20,6 +20,7 @@ import {
   scpFilesToContainer,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
+import { prepareContainerAuthEnv } from './container-auth.js';
 import { getGitHubRepo, hasGitRemote, getCurrentBranch } from '../repo/detect.js';
 import { debug } from '../debug.js';
 
@@ -108,7 +109,8 @@ export class LocalContainerProvider implements WorkspaceProvider {
     debug(`createWorkspace: devpodUp source=${devpodSource} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'none'}`);
 
     try {
-      await devpodUp(devpodSource, workspaceName, devpodProvider, currentBranch, params.onHeartbeat);
+      const authEnv = prepareContainerAuthEnv(params.config);
+      await devpodUp(devpodSource, workspaceName, devpodProvider, currentBranch, params.onHeartbeat, authEnv);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);

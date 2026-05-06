@@ -107,6 +107,7 @@ export async function devpodUp(
   provider?: string,
   branch?: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
+  env?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
   const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName];
@@ -118,7 +119,8 @@ export async function devpodUp(
   }
   debugExec('devpod', args);
   const start = Date.now();
-  await spawnWithHeartbeat('devpod', args, { timeout: 900_000 }, {
+  const spawnEnv = env ? { ...process.env, ...env } : undefined;
+  await spawnWithHeartbeat('devpod', args, { timeout: 900_000, env: spawnEnv }, {
     label: 'DevPod provisioning',
     intervalMs: 15_000,
     onHeartbeat: onHeartbeat ?? (() => {}),
