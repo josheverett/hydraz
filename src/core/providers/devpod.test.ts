@@ -20,6 +20,7 @@ import {
   devpodUp,
   devpodDelete,
   devpodList,
+  getContainerHome,
 } from './devpod.js';
 import { setVerbose } from '../debug.js';
 
@@ -348,6 +349,25 @@ describe('devpodSsh', () => {
     mockSpawn.mockReturnValue(fakeChild as never);
 
     await expect(devpodSsh('hydraz-abc123')).rejects.toThrow('spawn failed');
+  });
+});
+
+describe('getContainerHome', () => {
+  it('returns the trimmed output of echo $HOME via sshExec', () => {
+    mockExecFileSync.mockReturnValue('/root\n' as never);
+    const home = getContainerHome('my-workspace');
+    expect(home).toBe('/root');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['my-workspace.devpod', 'echo $HOME'],
+      expect.any(Object),
+    );
+  });
+
+  it('handles home directories without trailing newline', () => {
+    mockExecFileSync.mockReturnValue('/home/vscode' as never);
+    const home = getContainerHome('my-workspace');
+    expect(home).toBe('/home/vscode');
   });
 });
 

@@ -5,7 +5,7 @@ import { getGitHubAutomationReadiness } from '../github/requirements.js';
 import { getProvider } from './controller.js';
 import { createNewSession, initRepoState } from '../sessions/index.js';
 import { suggestBranchName } from '../branches/index.js';
-import { scpToContainer, getDistRoot, devpodSsh, devpodDelete } from '../providers/devpod.js';
+import { scpToContainer, getDistRoot, devpodSsh, devpodDelete, getContainerHome } from '../providers/devpod.js';
 import { CONTAINER_DIST_PATH } from '../swarm/pipeline-runner.js';
 import { processHydrazIncludes } from '../swarm/repo-config.js';
 import { debug, debugTiming } from '../debug.js';
@@ -147,11 +147,13 @@ export async function runSandbox(options: SandboxOptions): Promise<SandboxResult
   }
 
   try {
+    const containerHome = getContainerHome(workspaceName);
     await processHydrazIncludes(
       repoRoot,
       workspaceName,
       scpToContainer,
       (msg) => emitStep(steps, onStep, { name: 'Includes', status: 'ok', detail: msg }),
+      containerHome,
     );
   } catch {
     // non-fatal, matches controller.ts behavior

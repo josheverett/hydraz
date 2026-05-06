@@ -204,6 +204,10 @@ export function sshExec(workspaceName: string, command: string): string {
   return output;
 }
 
+export function getContainerHome(workspaceName: string): string {
+  return sshExec(workspaceName, 'echo $HOME').trim();
+}
+
 export function devpodSsh(workspaceName: string): Promise<number> {
   debugExec('devpod', ['ssh', workspaceName]);
   const child = spawn('devpod', ['ssh', workspaceName], { stdio: 'inherit' });

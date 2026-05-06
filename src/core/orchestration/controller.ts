@@ -23,7 +23,7 @@ import {
   type WorkspaceProvider,
   type WorkspaceInfo,
 } from '../providers/provider.js';
-import { scpToContainer, getDistRoot, sshExec } from '../providers/devpod.js';
+import { scpToContainer, getDistRoot, sshExec, getContainerHome } from '../providers/devpod.js';
 import { runSwarmPipeline, type PipelineResult } from '../swarm/pipeline.js';
 import { ensureSwarmDirs, DEFAULT_SWARM_CONFIG } from '../swarm/index.js';
 import { RESULT_PATH, CONTAINER_DIST_PATH, CONTAINER_RUNNER_SCRIPT } from '../swarm/pipeline-runner.js';
@@ -213,11 +213,13 @@ export async function startSession(
     }
 
     try {
+      const containerHome = getContainerHome(workspaceName);
       await processHydrazIncludes(
         repoRoot,
         workspaceName,
         scpToContainer,
         (msg) => emitEvent('swarm.container_setup', msg),
+        containerHome,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
