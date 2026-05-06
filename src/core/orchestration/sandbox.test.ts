@@ -48,6 +48,10 @@ vi.mock('../providers/devpod.js', () => ({
   devpodDelete: vi.fn(),
 }));
 
+vi.mock('../swarm/repo-config.js', () => ({
+  processHydrazIncludes: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock('../config/claude.js');
 vi.mock('../providers/auth.js');
 vi.mock('../repo/paths.js');
@@ -66,6 +70,7 @@ import { validateContainerAuth, prepareContainerAuthEnv } from '../providers/con
 import { getGitHubAutomationReadiness } from '../github/requirements.js';
 import { getProvider } from './controller.js';
 import { scpToContainer, devpodSsh, devpodDelete } from '../providers/devpod.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
 import type { HydrazConfig } from '../config/schema.js';
 
 const mockLoadConfig = vi.mocked(loadConfig);
@@ -77,6 +82,7 @@ const mockScpToContainer = vi.mocked(scpToContainer);
 const mockDevpodSsh = vi.mocked(devpodSsh);
 const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockPrepareContainerAuthEnv = vi.mocked(prepareContainerAuthEnv);
+const mockProcessHydrazIncludes = vi.mocked(processHydrazIncludes);
 
 const fakeConfig: HydrazConfig = {
   executionTarget: 'local-container',
@@ -278,5 +284,18 @@ describe('runSandbox', () => {
 
     expect(mockGetGitHubReadiness).not.toHaveBeenCalled();
     expect(steps.map((s) => s.name)).not.toContain('GitHub config');
+  });
+
+  it('calls processHydrazIncludes with the correct workspace name after dist SCP', async () => {
+    setupHappyPath();
+
+    await runSandbox(makeDefaultOptions());
+
+    expect(mockProcessHydrazIncludes).toHaveBeenCalledWith(
+      '/test/repo',
+      'hydraz-test-session-id',
+      scpToContainer,
+      expect.any(Function),
+    );
   });
 });

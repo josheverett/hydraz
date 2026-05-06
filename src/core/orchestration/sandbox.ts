@@ -7,6 +7,7 @@ import { createNewSession, initRepoState } from '../sessions/index.js';
 import { suggestBranchName } from '../branches/index.js';
 import { scpToContainer, getDistRoot, devpodSsh, devpodDelete } from '../providers/devpod.js';
 import { CONTAINER_DIST_PATH } from '../swarm/pipeline-runner.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
 import { debug, debugTiming } from '../debug.js';
 import type { ExecutionTarget } from '../config/schema.js';
 
@@ -143,6 +144,17 @@ export async function runSandbox(options: SandboxOptions): Promise<SandboxResult
     emitStep(steps, onStep, { name: 'Container setup', status: 'fail', detail: msg, durationMs: timed(scpStart) });
     try { devpodDelete(workspaceName); } catch { /* best-effort cleanup */ }
     return { entered: false, steps };
+  }
+
+  try {
+    await processHydrazIncludes(
+      repoRoot,
+      workspaceName,
+      scpToContainer,
+      (msg) => emitStep(steps, onStep, { name: 'Includes', status: 'ok', detail: msg }),
+    );
+  } catch {
+    // non-fatal, matches controller.ts behavior
   }
 
   debug(`runSandbox: entering interactive shell in ${workspaceName}`);
