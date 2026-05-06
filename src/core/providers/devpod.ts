@@ -110,7 +110,7 @@ export async function devpodUp(
   env?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
-  const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName];
+  const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
   if (provider) {
     args.push('--provider', provider);
   }

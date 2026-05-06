@@ -568,7 +568,7 @@ describe('devpodUp', () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
     expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
       'devpod',
-      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc'],
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--git-clone-strategy', 'shallow'],
       expect.any(Object),
       expect.any(Object),
     );
@@ -578,7 +578,7 @@ describe('devpodUp', () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
     expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
       'devpod',
-      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--provider', 'docker'],
+      ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--git-clone-strategy', 'shallow', '--provider', 'docker'],
       expect.any(Object),
       expect.any(Object),
     );
