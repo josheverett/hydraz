@@ -1,4 +1,6 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import type { ChildProcess } from 'node:child_process';
+import type { SpawnHeartbeatPromise } from './spawn-heartbeat.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
@@ -38,6 +40,10 @@ const mockExecFileSync = vi.mocked(execFileSync);
 
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 const mockSpawnWithHeartbeat = vi.mocked(spawnWithHeartbeat);
+
+function fakeSpawnPromise(result: { stdout: string; exitCode: number }): SpawnHeartbeatPromise {
+  return Object.assign(Promise.resolve(result), { _child: {} as ChildProcess }) as SpawnHeartbeatPromise;
+}
 
 let testDir: string;
 
@@ -653,13 +659,12 @@ describe('devpodUp', () => {
 
   it('writes env vars as KEY=VALUE lines to the workspace-env-file', async () => {
     let capturedContents = '';
-    mockSpawnWithHeartbeat.mockImplementationOnce(async (_cmd, args) => {
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
       const flagIdx = (args as string[]).indexOf('--workspace-env-file');
       if (flagIdx >= 0) {
-        const { readFileSync } = await import('node:fs');
         capturedContents = readFileSync((args as string[])[flagIdx + 1]!, 'utf-8');
       }
-      return { stdout: '', exitCode: 0 } as never;
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test', CLAUDE_CODE_OAUTH_TOKEN: 'oauth_abc' };
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
@@ -669,10 +674,10 @@ describe('devpodUp', () => {
 
   it('creates workspace-env-file with restricted 0o600 permissions', async () => {
     let capturedPath = '';
-    mockSpawnWithHeartbeat.mockImplementationOnce(async (_cmd, args) => {
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
       const flagIdx = (args as string[]).indexOf('--workspace-env-file');
       if (flagIdx >= 0) capturedPath = (args as string[])[flagIdx + 1]!;
-      return { stdout: '', exitCode: 0 } as never;
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test' };
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
@@ -684,10 +689,10 @@ describe('devpodUp', () => {
 
   it('cleans up the workspace-env-file after successful completion', async () => {
     let capturedPath = '';
-    mockSpawnWithHeartbeat.mockImplementationOnce(async (_cmd, args) => {
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
       const flagIdx = (args as string[]).indexOf('--workspace-env-file');
       if (flagIdx >= 0) capturedPath = (args as string[])[flagIdx + 1]!;
-      return { stdout: '', exitCode: 0 } as never;
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test' };
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
@@ -697,10 +702,10 @@ describe('devpodUp', () => {
 
   it('cleans up the workspace-env-file even when devpod up fails', async () => {
     let capturedPath = '';
-    mockSpawnWithHeartbeat.mockImplementationOnce(async (_cmd, args) => {
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
       const flagIdx = (args as string[]).indexOf('--workspace-env-file');
       if (flagIdx >= 0) capturedPath = (args as string[])[flagIdx + 1]!;
-      throw new Error('devpod up failed');
+      return Object.assign(Promise.reject(new Error('devpod up failed')), { _child: {} as ChildProcess }) as SpawnHeartbeatPromise;
     });
     const env = { GH_TOKEN: 'github_pat_test' };
     await expect(devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env)).rejects.toThrow();
