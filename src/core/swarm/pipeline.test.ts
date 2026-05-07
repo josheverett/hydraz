@@ -382,7 +382,7 @@ describe('runSwarmPipeline', () => {
     });
   });
 
-  it('should pass review feedback to consensus on subsequent outer loop iterations', async () => {
+  it('should pass hasReviewFeedback to consensus on subsequent outer loop iterations', async () => {
     const { readReviewFile } = await import('./artifacts.js');
     vi.mocked(readReviewFile).mockReturnValue('CHANGES REQUESTED\n\nMissing null check.');
 
@@ -404,14 +404,14 @@ describe('runSwarmPipeline', () => {
 
     expect(runConsensus).toHaveBeenCalledTimes(2);
     const secondConsensusOpts = vi.mocked(runConsensus).mock.calls[1]![1];
-    expect(secondConsensusOpts.reviewFeedback).toContain('Missing null check');
+    expect(secondConsensusOpts.hasReviewFeedback).toBe(true);
   });
 
-  it('should not pass review feedback on the first outer loop iteration', async () => {
+  it('should not pass hasReviewFeedback on the first outer loop iteration', async () => {
     await runSwarmPipeline(makeOptions());
 
     const firstConsensusOpts = vi.mocked(runConsensus).mock.calls[0]![1];
-    expect(firstConsensusOpts.reviewFeedback).toBeUndefined();
+    expect(firstConsensusOpts.hasReviewFeedback).toBe(false);
   });
 
   it('should emit verbose events when verbose is true', async () => {

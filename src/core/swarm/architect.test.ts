@@ -30,7 +30,6 @@ let repoRoot: string;
 let sessionId: string;
 let config: ReturnType<typeof createDefaultConfig>;
 
-const SAMPLE_BRIEF = '# Investigation Brief\n\nThe repo uses TypeScript and Vitest.';
 
 beforeEach(() => {
   repoRoot = mkdtempSync(join(tmpdir(), 'hydraz-architect-test-'));
@@ -84,65 +83,71 @@ function mockFailedClaude() {
 
 describe('buildArchitectPrompt', () => {
   it('should include the task description', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
     expect(prompt).toContain('Build the auth system');
   });
 
   it('should include the session name', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
     expect(prompt).toContain('auth-session');
   });
 
-  it('should include the investigation brief', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
-    expect(prompt).toContain('TypeScript and Vitest');
+  it('should reference the investigation brief path instead of embedding content', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', '/tmp/swarm');
+    expect(prompt).toContain('investigation/brief.md');
   });
 
   it('should instruct writing architecture/design.md', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
     expect(prompt).toContain('design.md');
   });
 
   it('should include evidence discipline principles', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
     expect(prompt).toContain('Verified facts');
     expect(prompt).toContain('Assumptions');
   });
 
   it('should include the absolute swarm directory path when provided', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, '/tmp/swarm');
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', '/tmp/swarm');
     expect(prompt).toContain('/tmp/swarm');
   });
 
   it('should include repo prompt content when provided', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, undefined, 'Always read CLAUDE.md files.');
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', undefined, 'Always read CLAUDE.md files.');
     expect(prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
-    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF);
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
     expect(prompt).not.toContain('Repo-Specific');
+  });
+
+  it('should include context refresh discipline', () => {
+    const prompt = buildArchitectPrompt('Build the auth system', 'auth-session');
+    expect(prompt).toContain('Context Refresh');
+    expect(prompt).toContain('RE-READ EVERY TURN');
   });
 });
 
 describe('runArchitect', () => {
-  it('should launch claude with the architect prompt containing the investigation brief', async () => {
+  it('should launch claude with the architect prompt', async () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    await runArchitect(makeCtx());
 
     expect(mockLaunchClaude).toHaveBeenCalledTimes(1);
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.prompt).toContain('Build the auth system');
-    expect(callArgs.prompt).toContain('TypeScript and Vitest');
+    expect(callArgs.prompt).toContain('investigation/brief.md');
   });
 
   it('should return success when claude exits cleanly and design exists', async () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    const result = await runArchitect(makeCtx());
 
     expect(result.success).toBe(true);
     expect(result.designPath).toBeTruthy();
@@ -151,7 +156,7 @@ describe('runArchitect', () => {
   it('should return failure when claude exits with error', async () => {
     mockFailedClaude();
 
-    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    const result = await runArchitect(makeCtx());
 
     expect(result.success).toBe(false);
     expect(result.executorResult).toBeTruthy();
@@ -161,7 +166,7 @@ describe('runArchitect', () => {
   it('should return failure when claude succeeds but design is missing', async () => {
     mockSuccessfulClaude();
 
-    const result = await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    const result = await runArchitect(makeCtx());
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
@@ -171,7 +176,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeCtx({ workingDirectory: '/tmp/custom-dir' }), { investigationBrief: SAMPLE_BRIEF });
+    await runArchitect(makeCtx({ workingDirectory: '/tmp/custom-dir' }));
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.workingDirectory).toBe('/tmp/custom-dir');
@@ -181,7 +186,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    await runArchitect(makeCtx());
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.config).toBe(config);
@@ -191,7 +196,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { investigationBrief: SAMPLE_BRIEF });
+    await runArchitect(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }));
 
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
@@ -201,7 +206,7 @@ describe('runArchitect', () => {
     mockSuccessfulClaude();
     writeArchitectureDesign(repoRoot, sessionId, '# Architecture\nDesign here.');
 
-    await runArchitect(makeCtx(), { investigationBrief: SAMPLE_BRIEF });
+    await runArchitect(makeCtx());
 
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledTimes(1);

@@ -19,6 +19,7 @@ import {
 import { getWorkspaceDir } from '../providers/provider.js';
 import { readRepoPromptContent } from './repo-config.js';
 
+
 export interface PipelineCallbacks {
   onPhaseChange?: (phase: SwarmPhase) => void;
   onEvent?: (type: string, message: string) => void;
@@ -119,14 +120,11 @@ function buildContext(options: PipelineOptions, swarmDir: string): ExecutionCont
 const COST_WARNING_THRESHOLD = 5.0;
 
 export async function runSwarmPipeline(options: PipelineOptions): Promise<PipelineResult> {
-  let investigationBrief: string;
-  let architectureDesign: string;
-  let planContent: string;
   let ledger: TaskLedger;
   let ownership: OwnershipMap;
   let totalConsensusRounds = 0;
   let workerWorktrees: Record<string, string> | undefined;
-  let reviewFeedback: string | undefined;
+  let hasReviewFeedback = false;
   const swarmDir = getSwarmDir(options.repoRoot, options.sessionId);
   const ctx = buildContext(options, swarmDir);
   let runningCost = 0;
@@ -158,7 +156,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     };
   }
 
-  investigationBrief = readInvestigationBrief(options.repoRoot, options.sessionId) ?? '';
+  const investigationBrief = readInvestigationBrief(options.repoRoot, options.sessionId) ?? '';
   emitEvent(options, 'swarm.investigate_completed', 'Investigation complete');
   if (investigationBrief) {
     emitVerbose(options, 'investigation', `Brief excerpt (first 5 lines):\n${excerptLines(investigationBrief)}`);
@@ -169,7 +167,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
   emitPhase(options, 'architecting');
   emitEvent(options, 'swarm.architect_started', 'Architecture starting');
 
-  const architectResult = await runArchitect(ctx, { investigationBrief });
+  const architectResult = await runArchitect(ctx);
 
   if (architectResult.executorResult) {
     runningCost += architectResult.executorResult.cost ?? 0;
@@ -192,7 +190,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     };
   }
 
-  architectureDesign = readArchitectureDesign(options.repoRoot, options.sessionId) ?? '';
+  const architectureDesign = readArchitectureDesign(options.repoRoot, options.sessionId) ?? '';
   emitEvent(options, 'swarm.architect_completed', 'Architecture complete');
   if (architectureDesign) {
     emitVerbose(options, 'architecture', `Design excerpt (first 5 lines):\n${excerptLines(architectureDesign)}`);
@@ -202,19 +200,16 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
 
   for (let outerLoop = 0; outerLoop < options.maxOuterLoops; outerLoop++) {
     if (outerLoop > 0) {
-      const prevReviewExcerpt = reviewFeedback ? excerptLines(reviewFeedback, 2) : '(no feedback)';
-      emitVerbose(options, 'outer_loop', `Starting outer loop ${outerLoop + 1}. Previous review feedback excerpt:\n${prevReviewExcerpt}`);
+      emitVerbose(options, 'outer_loop', `Starting outer loop ${outerLoop + 1}`);
     }
 
     emitPhase(options, 'planning');
     emitEvent(options, 'swarm.plan_started', `Planning (outer loop ${outerLoop + 1})`);
 
     const consensusResult = await runConsensus(ctx, {
-      investigationBrief,
-      architectureDesign,
       workerCount: options.workerCount,
       maxRounds: options.maxConsensusRounds,
-      reviewFeedback,
+      hasReviewFeedback,
       verbose: options.verbose,
       onEvent: (type, message) => {
         if (type.startsWith('verbose.')) {
@@ -240,7 +235,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
 
     ledger = consensusResult.finalLedger!;
     ownership = consensusResult.finalOwnership!;
-    planContent = readPlan(options.repoRoot, options.sessionId) ?? '';
+    const planContent = readPlan(options.repoRoot, options.sessionId) ?? '';
     emitEvent(options, 'swarm.consensus_round', `Consensus used ${consensusResult.roundsUsed} round(s)`);
     emitEvent(options, 'swarm.plan_completed', `Consensus reached in ${consensusResult.roundsUsed} rounds`);
 
@@ -264,7 +259,6 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     const workerResult = await runWorkerFanout(ctx, {
       ledger,
       ownership,
-      planContent,
       existingWorktrees: workerWorktrees,
       parallel: options.parallel,
     });
@@ -345,8 +339,6 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     emitEvent(options, 'swarm.review_started', 'Review panel starting');
 
     const reviewResult = await runReviewPanel(ctx, {
-      planContent,
-      architectureDesign,
       reviewerPersonas: options.reviewerPersonas,
     });
 
@@ -433,13 +425,7 @@ export async function runSwarmPipeline(options: PipelineOptions): Promise<Pipeli
     emitVerbose(options, 'review_route', `Feedback route: ${route} (reason: ${routeReason})`);
     emitEvent(options, 'swarm.outer_loop', `Outer loop ${outerLoop + 2}`);
 
-    reviewFeedback = reviewContents
-      .map(r => `### ${r.reviewerName}\n\n${r.content}`)
-      .join('\n\n');
-
-    if (route === 'architectural') {
-      architectureDesign = readArchitectureDesign(options.repoRoot, options.sessionId) ?? architectureDesign;
-    }
+    hasReviewFeedback = true;
   }
 
   return {

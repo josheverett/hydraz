@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveRepoDataPaths } from '../repo/paths.js';
 import { initRepoState, createNewSession } from '../sessions/manager.js';
 import { createDefaultConfig } from '../config/schema.js';
-import { ensureSwarmDirs, writeTaskLedger, writeOwnershipMap, writeWorkerBrief, writePlan, writeArchitectureDesign, getSwarmDir } from './artifacts.js';
+import { ensureSwarmDirs, writeTaskLedger, writeOwnershipMap, writeWorkerBrief, writePlan, getSwarmDir } from './artifacts.js';
 import { runConsensus } from './consensus.js';
 import { buildArchitectPlanReviewPrompt } from './prompts/architect-review.js';
 import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
@@ -28,8 +28,6 @@ let repoRoot: string;
 let sessionId: string;
 let config: ReturnType<typeof createDefaultConfig>;
 
-const SAMPLE_BRIEF = '# Investigation\nTypeScript project.';
-const SAMPLE_DESIGN = '# Architecture\nMiddleware pattern.';
 
 const VALID_LEDGER: TaskLedger = {
   swarmPhase: 'planning', baseCommit: 'abc123', outerLoop: 0, consensusRound: 0,
@@ -78,34 +76,40 @@ function mockClaudeSequence(results: Array<{ success: boolean; writePlanArtifact
 }
 
 describe('buildArchitectPlanReviewPrompt', () => {
-  it('should include the task description', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1)).toContain('Build auth'); });
-  it('should include the architecture design', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1)).toContain('Middleware pattern'); });
-  it('should include the plan content', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nDo steps.', 1)).toContain('Do steps'); });
-  it('should include the round number', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 3)).toContain('3'); });
-  it('should instruct writing feedback to architecture/feedback/', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1)).toContain('feedback'); });
-  it('should include evidence discipline principles', () => { const p = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
-  it('should include the absolute swarm directory path when provided', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, '/tmp/swarm')).toContain('/tmp/swarm'); });
+  it('should include the task description', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1)).toContain('Build auth'); });
+  it('should reference the architecture design path', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1, '/tmp/swarm')).toContain('architecture/design.md'); });
+  it('should reference the plan path', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1, '/tmp/swarm')).toContain('plan/plan.md'); });
+  it('should include the round number', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 3)).toContain('3'); });
+  it('should instruct writing feedback to architecture/feedback/', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1)).toContain('feedback'); });
+  it('should include evidence discipline principles', () => { const p = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
+  it('should include the absolute swarm directory path when provided', () => { expect(buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1, '/tmp/swarm')).toContain('/tmp/swarm'); });
 
   it('should include repo prompt content when provided', () => {
-    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1, undefined, 'Always read CLAUDE.md files.');
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1, undefined, 'Always read CLAUDE.md files.');
     expect(prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
-    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1);
     expect(prompt).not.toContain('Repo-Specific');
   });
 
   it('should include verdict formatting instructions', () => {
-    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', SAMPLE_DESIGN, '# Plan\nSteps.', 1);
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1);
     expect(prompt).toContain('no markdown formatting, no headings, no bold, no prefixes');
+  });
+
+  it('should include context refresh discipline', () => {
+    const prompt = buildArchitectPlanReviewPrompt('Build auth', 'auth-session', 1);
+    expect(prompt).toContain('Context Refresh');
+    expect(prompt).toContain('RE-READ EVERY TURN');
   });
 });
 
 describe('runConsensus', () => {
   it('should succeed on first round when planner produces valid artifacts and architect approves', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
-    const result = await runConsensus(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runConsensus(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(true);
     expect(result.roundsUsed).toBe(1);
     expect(result.finalLedger).toBeTruthy();
@@ -114,20 +118,20 @@ describe('runConsensus', () => {
 
   it('should call launchClaude at least twice (planner + architect review)', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
-    await runConsensus(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    await runConsensus(makeCtx(), { workerCount: 3 });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(2);
   });
 
   it('should return failure when planner fails on first round', async () => {
     mockClaudeSequence([{ success: false }]);
-    const result = await runConsensus(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runConsensus(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(false);
     expect(result.roundsUsed).toBe(1);
   });
 
   it('should return failure when planner produces artifacts but architect review fails', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: false }]);
-    const result = await runConsensus(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runConsensus(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(false);
   });
 
@@ -138,8 +142,6 @@ describe('runConsensus', () => {
       { success: true, writePlanArtifacts: true },
     ]);
     const result = await runConsensus(makeCtx(), {
-      investigationBrief: SAMPLE_BRIEF,
-      architectureDesign: SAMPLE_DESIGN,
       workerCount: 3,
       maxRounds: 2,
     });
@@ -149,8 +151,6 @@ describe('runConsensus', () => {
   it('should include repoPromptContent in the architect review prompt when set on context', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
     await runConsensus(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), {
-      investigationBrief: SAMPLE_BRIEF,
-      architectureDesign: SAMPLE_DESIGN,
       workerCount: 3,
     });
     const reviewCallArgs = mockLaunchClaude.mock.calls[1]![0]!;
@@ -160,8 +160,6 @@ describe('runConsensus', () => {
   it('should register and unregister executor handles for both planner and architect review', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
     await runConsensus(makeCtx(), {
-      investigationBrief: SAMPLE_BRIEF,
-      architectureDesign: SAMPLE_DESIGN,
       workerCount: 3,
     });
 
@@ -174,8 +172,6 @@ describe('runConsensus', () => {
       mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         onEvent,
       });
@@ -189,8 +185,6 @@ describe('runConsensus', () => {
       mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         onEvent,
       });
@@ -204,8 +198,6 @@ describe('runConsensus', () => {
       mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         onEvent,
       });
@@ -219,8 +211,6 @@ describe('runConsensus', () => {
       mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         onEvent,
       });
@@ -238,8 +228,6 @@ describe('runConsensus', () => {
       ]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         maxRounds: 2,
         onEvent,
@@ -254,8 +242,6 @@ describe('runConsensus', () => {
       mockClaudeSequence([{ success: false }]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         onEvent,
       });
@@ -273,8 +259,6 @@ describe('runConsensus', () => {
       ]);
       const onEvent = vi.fn();
       await runConsensus(makeCtx(), {
-        investigationBrief: SAMPLE_BRIEF,
-        architectureDesign: SAMPLE_DESIGN,
         workerCount: 3,
         maxRounds: 2,
         onEvent,
@@ -292,27 +276,23 @@ describe('runConsensus', () => {
     });
   });
 
-  it('should include reviewFeedback in planner prompt when provided', async () => {
+  it('should reference review files in planner prompt when hasReviewFeedback is true', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
     await runConsensus(makeCtx(), {
-      investigationBrief: SAMPLE_BRIEF,
-      architectureDesign: SAMPLE_DESIGN,
       workerCount: 3,
-      reviewFeedback: 'CHANGES REQUESTED\n\nMissing error handling in auth middleware.',
+      hasReviewFeedback: true,
     });
     const plannerCallArgs = mockLaunchClaude.mock.calls[0]![0]!;
-    expect(plannerCallArgs.prompt).toContain('Previous Review Feedback');
-    expect(plannerCallArgs.prompt).toContain('Missing error handling in auth middleware');
+    expect(plannerCallArgs.prompt).toContain('reviews');
+    expect(plannerCallArgs.prompt).toContain('Previous review feedback');
   });
 
-  it('should not include review feedback section when reviewFeedback is not provided', async () => {
+  it('should not reference review files when hasReviewFeedback is not provided', async () => {
     mockClaudeSequence([{ success: true, writePlanArtifacts: true }, { success: true }]);
     await runConsensus(makeCtx(), {
-      investigationBrief: SAMPLE_BRIEF,
-      architectureDesign: SAMPLE_DESIGN,
       workerCount: 3,
     });
     const plannerCallArgs = mockLaunchClaude.mock.calls[0]![0]!;
-    expect(plannerCallArgs.prompt).not.toContain('Previous Review Feedback');
+    expect(plannerCallArgs.prompt).not.toContain('Previous review feedback');
   });
 });

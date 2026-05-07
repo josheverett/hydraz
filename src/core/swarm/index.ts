@@ -55,7 +55,6 @@ export {
 } from './investigator.js';
 export {
   type ArchitectResult,
-  type ArchitectOptions,
   runArchitect,
 } from './architect.js';
 export {

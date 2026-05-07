@@ -1,16 +1,18 @@
-import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { EVIDENCE_DISCIPLINE, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
 export function buildReviewerPrompt(
   task: string,
   sessionName: string,
-  planContent: string,
-  architectureDesign: string,
   reviewerPersona: string,
   reviewerName: string,
   swarmDir?: string,
   repoPromptContent?: string,
 ): string {
+  const designPath = artifactPath(swarmDir, 'architecture', 'design.md');
+  const planPath = artifactPath(swarmDir, 'plan', 'plan.md');
+  const outputPath = artifactPath(swarmDir, 'reviews', `${reviewerName}.md`);
+
   return `# Hydraz Code Review — ${reviewerName}
 
 You are a code reviewer for Hydraz session "${sessionName}". You are reviewing the integrated result of worker implementations.
@@ -39,6 +41,16 @@ As a coding agent asked to review code, you have a strong inherent bias toward f
 
 If the worker followed TDD, wrote passing tests, and the code meets the task requirements, you MUST approve. Your job is to catch serious defects, not to achieve your personal standard of perfection.
 
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following files to maintain context:
+- \`${designPath}\` — Architecture design
+- \`${planPath}\` — Execution plan
+
+Your first action must be to read these files.
+
+${CONTEXT_REFRESH_DISCIPLINE}
+
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Your Role
 
 ${reviewerPersona}
@@ -46,14 +58,6 @@ ${reviewerPersona}
 ## Task That Was Implemented
 
 ${task}
-
-## Architecture Design
-
-${architectureDesign}
-
-## Execution Plan
-
-${planContent}
 
 ${EVIDENCE_DISCIPLINE}
 
@@ -63,7 +67,7 @@ Examine the integrated codebase. Look at the changes that were made to implement
 
 ## Output Format
 
-Write your review to \`${artifactPath(swarmDir, 'reviews', `${reviewerName}.md`)}\`.
+Write your review to \`${outputPath}\`.
 
 Your review MUST follow this structure:
 

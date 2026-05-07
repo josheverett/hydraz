@@ -1,16 +1,18 @@
-import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { EVIDENCE_DISCIPLINE, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
 export function buildPlannerPrompt(
   task: string,
   sessionName: string,
-  investigationBrief: string,
-  architectureDesign: string,
   workerCount: number,
   swarmDir?: string,
   repoPromptContent?: string,
-  reviewFeedback?: string,
+  hasReviewFeedback?: boolean,
 ): string {
+  const briefPath = artifactPath(swarmDir, 'investigation', 'brief.md');
+  const designPath = artifactPath(swarmDir, 'architecture', 'design.md');
+  const reviewsGlob = artifactPath(swarmDir, 'reviews');
+
   return `# Hydraz Planner
 
 You are the planner for Hydraz session "${sessionName}". Your job is to decompose the task into ${workerCount} parallel work streams that can be executed independently by separate workers.
@@ -28,26 +30,23 @@ Match the detail of your plan to the complexity of the task. A simple task shoul
 
 When there is only 1 worker, skip interface contracts and ownership partitioning — the single worker owns everything. Focus on a clear, actionable task description.
 
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following files to maintain context:
+- \`${briefPath}\` — Investigation findings about the repository
+- \`${designPath}\` — Architecture design and recommendations
+- All \`.md\` files in \`${artifactPath(swarmDir, 'architecture', 'feedback')}/\` — Architect feedback from previous rounds (if any exist)
+${hasReviewFeedback ? `- All \`.md\` files in \`${reviewsGlob}/\` — Previous review feedback (address these issues in your revised plan)\n` : ''}
+Your first action must be to read these files.
+
+${CONTEXT_REFRESH_DISCIPLINE}
+
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
 
-## Investigation Brief
-
-${investigationBrief}
-
-## Architecture Design
-
-${architectureDesign}
-
 ${EVIDENCE_DISCIPLINE}
-${reviewFeedback ? `
-## Previous Review Feedback
 
-The review panel rejected the previous implementation. Address these issues in your revised plan:
-
-${reviewFeedback}
-` : ''}
 ## What to Produce
 
 You must produce all of the following artifacts in \`${artifactPath(swarmDir)}/\`:

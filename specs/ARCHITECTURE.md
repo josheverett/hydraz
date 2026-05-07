@@ -550,26 +550,19 @@ prompts/
 
 ---
 
-## 16. Deferred and Future Work
+## 16. Known Limitations
 
-### Resume wiring
+Items below are acknowledged and tracked in detail in [ROADMAP.md](ROADMAP.md):
 
-`determineResumePoint` exists in `resume.ts` with tests, but `resumeSession` in the controller does not call it -- it resets to `created` and reruns the full pipeline. Target behavior: read `task-ledger.json` and re-enter at the appropriate checkpoint.
-
-### Verification phase (v2.2 design)
-
-A post-review verification phase that runs tests before delivery. Position: after review approval, before delivery. Test criteria sourced from reviewer output. Inner retry loop (verify -> single fix-up worker -> re-verify, max 2-3 attempts). On exhaustion, deliver with warning. Artifacts: `swarm/verification/result.md`, `swarm/verification/criteria.md`.
-
-### Other deferred items
-
-- **Reviewer persona storage**: `~/.config/hydraz/reviewers/` with seeded defaults and custom persona support
-- **Worker count intelligence**: planner should detect when a task is too small for N workers
-- **Consensus complexity awareness**: fast-path for simple tasks
-- **Dead code**: `container-auth-file.ts` (imported by nothing, still in tree)
-- **CLI convenience**: `hydraz ssh`, `hydraz logs`, `hydraz artifacts`, `hydraz cost`, `hydraz diff`
-- **Detach/background for cloud mode**: closing the laptop kills the SSH pipeline; needs server-side orchestration
-- **Leftover worktree branch cleanup**: branches from completed/failed sessions accumulate
-- **Swarm-aware display**: `status`, `review`, `sessions`, `events` commands need v2 output
+- Resume restarts from scratch (smart resume not wired)
+- No verification phase (post-review test run)
+- No per-agent turn/time bounds
+- Architectural feedback routing refreshes architecture from disk but nothing updates it
+- Dead code: `container-auth-file.ts`
+- CLI display not swarm-aware
+- No detach/background for cloud mode
+- Leftover worktree branches accumulate
+- Model hardcoded to `claude-opus-4-6`
 
 ---
 

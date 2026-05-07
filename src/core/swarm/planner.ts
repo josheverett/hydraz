@@ -13,22 +13,18 @@ export interface PlannerResult {
 }
 
 export interface PlannerOptions {
-  investigationBrief: string;
-  architectureDesign: string;
   workerCount: number;
-  reviewFeedback?: string;
+  hasReviewFeedback?: boolean;
 }
 
 export async function runPlanner(ctx: ExecutionContext, opts: PlannerOptions): Promise<PlannerResult> {
   const prompt = buildPlannerPrompt(
     ctx.task,
     ctx.sessionName,
-    opts.investigationBrief,
-    opts.architectureDesign,
     opts.workerCount,
     ctx.swarmDir,
     ctx.repoPromptContent,
-    opts.reviewFeedback,
+    opts.hasReviewFeedback,
   );
 
   const executor = launchClaude({

@@ -89,45 +89,51 @@ function mockWorkerFailure(failWorkerId: string) {
 }
 
 describe('buildWorkerPrompt', () => {
-  it('should include the task description', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nDo stuff.', '# Plan\nSteps.', 'worker-a')).toContain('Build auth'); });
-  it('should include the worker brief', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nDo auth stuff.', '# Plan\nSteps.', 'worker-a')).toContain('Do auth stuff'); });
-  it('should include the worker id', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a')).toContain('worker-a'); });
-  it('should instruct strict TDD', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a').toLowerCase()).toContain('tdd'); });
-  it('should instruct writing progress.md', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a')).toContain('progress.md'); });
+  it('should include the task description', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a')).toContain('Build auth'); });
+  it('should reference the worker brief path', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a', '/tmp/swarm')).toContain('workers/worker-a/brief.md'); });
+  it('should include the worker id', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a')).toContain('worker-a'); });
+  it('should instruct strict TDD', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a').toLowerCase()).toContain('tdd'); });
+  it('should instruct writing progress.md', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a')).toContain('progress.md'); });
   it('should include full prove-it methodology with evidence taxonomy', () => {
-    const p = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a');
+    const p = buildWorkerPrompt('Build auth', 'auth-session', 'worker-a');
     expect(p).toContain('Runtime proof'); expect(p).toContain('Source fact'); expect(p).toContain('Hypothesis'); expect(p).toContain('Unknown');
   });
-  it('should include the absolute swarm directory path when provided', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', '/tmp/swarm')).toContain('/tmp/swarm'); });
-  it('should include the plan content', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nDetailed steps here.', 'worker-a')).toContain('Detailed steps here'); });
+  it('should include the absolute swarm directory path when provided', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a', '/tmp/swarm')).toContain('/tmp/swarm'); });
+  it('should reference the progress path', () => { expect(buildWorkerPrompt('Build auth', 'auth-session', 'worker-a', '/tmp/swarm')).toContain('workers/worker-a/progress.md'); });
 
   it('should include repo prompt content when provided', () => {
-    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a', undefined, 'Always read CLAUDE.md files.');
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', 'worker-a', undefined, 'Always read CLAUDE.md files.');
     expect(prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
-    const prompt = buildWorkerPrompt('Build auth', 'auth-session', '# Brief\nStuff.', '# Plan\nSteps.', 'worker-a');
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', 'worker-a');
     expect(prompt).not.toContain('Repo-Specific');
+  });
+
+  it('should include context refresh discipline', () => {
+    const prompt = buildWorkerPrompt('Build auth', 'auth-session', 'worker-a');
+    expect(prompt).toContain('Context Refresh');
+    expect(prompt).toContain('RE-READ EVERY TURN');
   });
 });
 
 describe('runWorkerFanout', () => {
   it('should create a worktree for each worker', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     expect(mockCreateWorktree).toHaveBeenCalledTimes(3);
   });
 
   it('should launch claude once per worker', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
   });
 
   it('should return success when all workers complete', async () => {
     mockAllWorkersSucceed();
-    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     expect(result.success).toBe(true);
     expect(result.workerResults).toHaveLength(3);
     expect(result.workerResults.every(r => r.success)).toBe(true);
@@ -135,7 +141,7 @@ describe('runWorkerFanout', () => {
 
   it('should return failure when any worker fails', async () => {
     mockWorkerFailure('worker-b');
-    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     expect(result.success).toBe(false);
     expect(result.workerResults).toHaveLength(3);
     const failedWorker = result.workerResults.find(r => r.workerId === 'worker-b');
@@ -144,29 +150,29 @@ describe('runWorkerFanout', () => {
 
   it('should include worker ids in results', async () => {
     mockAllWorkersSucceed();
-    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    const result = await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     const ids = result.workerResults.map(r => r.workerId).sort();
     expect(ids).toEqual(['worker-a', 'worker-b', 'worker-c']);
   });
 
-  it('should pass worker-specific prompts containing each workers brief', async () => {
+  it('should pass worker-specific prompts referencing each workers brief path', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan\nDo all the things.' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
-    expect(prompts.some(p => p.includes('Do auth'))).toBe(true);
-    expect(prompts.some(p => p.includes('Do API'))).toBe(true);
-    expect(prompts.some(p => p.includes('Do DB'))).toBe(true);
+    expect(prompts.some(p => p.includes('worker-a/brief.md'))).toBe(true);
+    expect(prompts.some(p => p.includes('worker-b/brief.md'))).toBe(true);
+    expect(prompts.some(p => p.includes('worker-c/brief.md'))).toBe(true);
   });
 
   it('should not create worktrees when existingWorktrees is provided', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
     expect(mockCreateWorktree).not.toHaveBeenCalled();
   });
 
   it('should use existing worktree paths as working directories when provided', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', existingWorktrees: { 'worker-a': '/tmp/existing-a', 'worker-b': '/tmp/existing-b', 'worker-c': '/tmp/existing-c' } });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, existingWorktrees: { 'worker-a': '/tmp/existing-a', 'worker-b': '/tmp/existing-b', 'worker-c': '/tmp/existing-c' } });
     const workDirs = mockLaunchClaude.mock.calls.map(c => c[0]!.workingDirectory);
     expect(workDirs).toContain('/tmp/existing-a');
     expect(workDirs).toContain('/tmp/existing-b');
@@ -175,7 +181,7 @@ describe('runWorkerFanout', () => {
 
   it('should still launch claude for all workers when using existing worktrees', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, existingWorktrees: { 'worker-a': '/tmp/a', 'worker-b': '/tmp/b', 'worker-c': '/tmp/c' } });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(3);
   });
 
@@ -195,7 +201,7 @@ describe('runWorkerFanout', () => {
       };
     });
 
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
 
     expect(callOrder).toEqual([
       'launch:worker-a', 'exit:worker-a',
@@ -206,7 +212,7 @@ describe('runWorkerFanout', () => {
 
   it('should pass previous workers branch as startPoint in serial mode', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
 
     const calls = mockCreateWorktree.mock.calls;
     expect(calls[0]![3]).toBeUndefined();
@@ -233,7 +239,7 @@ describe('runWorkerFanout', () => {
       };
     });
 
-    const fanoutPromise = runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+    const fanoutPromise = runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, parallel: true });
 
     await vi.waitFor(() => expect(resolvers).toHaveLength(3));
     expect(callOrder).toEqual(['launch:worker-a', 'launch:worker-b', 'launch:worker-c']);
@@ -244,7 +250,7 @@ describe('runWorkerFanout', () => {
 
   it('should not pass startPoint in parallel mode', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, parallel: true });
 
     const calls = mockCreateWorktree.mock.calls;
     for (const call of calls) {
@@ -254,14 +260,14 @@ describe('runWorkerFanout', () => {
 
   it('should include repoPromptContent in worker prompts when set on context', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    await runWorkerFanout(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
   });
 
   it('should register and unregister executor handles for all workers', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan' });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3 });
 
     expect(mockRegister).toHaveBeenCalledTimes(3);
     expect(mockUnregister).toHaveBeenCalledTimes(3);
@@ -274,7 +280,7 @@ describe('runWorkerFanout', () => {
 
   it('should register all handles in parallel mode', async () => {
     mockAllWorkersSucceed();
-    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, planContent: '# Plan', parallel: true });
+    await runWorkerFanout(makeCtx(), { ledger: LEDGER_3_WORKERS, ownership: OWNERSHIP_3, parallel: true });
 
     expect(mockRegister).toHaveBeenCalledTimes(3);
     expect(mockUnregister).toHaveBeenCalledTimes(3);

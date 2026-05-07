@@ -1,7 +1,9 @@
-import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { EVIDENCE_DISCIPLINE, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
 export function buildInvestigatorPrompt(task: string, sessionName: string, swarmDir?: string, repoPromptContent?: string): string {
+  const outputPath = artifactPath(swarmDir, 'investigation', 'brief.md');
+
   return `# Hydraz Investigator
 
 You are the investigator for Hydraz session "${sessionName}". Your job is to explore the repository and produce a factual brief about its structure, conventions, and constraints.
@@ -13,6 +15,13 @@ You are a read-only investigator. Do not make any changes to the repository -- d
 ## Proportionality
 
 Match the depth of your investigation to what exists. If this is a greenfield project with little or no existing code, say so briefly and move on -- do not produce an elaborate report about the absence of things. A near-empty repo needs a short brief, not a thorough audit of nothing.
+
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following file to maintain context:
+- \`${outputPath}\` — Your output file (once you begin writing it)
+
+${CONTEXT_REFRESH_DISCIPLINE}
 
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task Context
 
@@ -37,7 +46,7 @@ ${EVIDENCE_DISCIPLINE}
 
 ## Output
 
-Write your findings to \`${artifactPath(swarmDir, 'investigation', 'brief.md')}\`. Structure it clearly with headers for each area investigated. Be factual and specific -- cite file paths, function names, and concrete details rather than vague descriptions.
+Write your findings to \`${outputPath}\`. Structure it clearly with headers for each area investigated. Be factual and specific -- cite file paths, function names, and concrete details rather than vague descriptions.
 
 Do not design a solution or make recommendations. That is the architect's job. Your job is to provide the architect with a thorough factual basis for their design work.
 `;

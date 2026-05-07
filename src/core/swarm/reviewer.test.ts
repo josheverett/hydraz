@@ -59,48 +59,54 @@ function mockReviewerFailure() {
 }
 
 describe('buildReviewerPrompt', () => {
-  it('should include the task description', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer')).toContain('Build auth'); });
-  it('should include the reviewer persona', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer')).toContain('Review for correctness'); });
-  it('should include the reviewer name', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer')).toContain('reviewer'); });
-  it('should include the plan content', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan\nDetailed steps.', '# Arch', 'Review for correctness.', 'reviewer')).toContain('Detailed steps'); });
-  it('should include the architecture design', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch\nMiddleware pattern.', 'Review for correctness.', 'reviewer')).toContain('Middleware pattern'); });
-  it('should instruct categorizing findings as architectural or implementation', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer'); expect(p).toContain('architectural'); expect(p).toContain('implementation'); });
-  it('should instruct writing review to reviews/<name>.md', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer')).toContain('reviewer.md'); });
-  it('should include evidence discipline principles', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer'); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
-  it('should include the absolute swarm directory path when provided', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer', '/tmp/swarm')).toContain('/tmp/swarm'); });
+  it('should include the task description', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer')).toContain('Build auth'); });
+  it('should include the reviewer persona', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer')).toContain('Review for correctness'); });
+  it('should include the reviewer name', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer')).toContain('reviewer'); });
+  it('should reference the plan path', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer', '/tmp/swarm')).toContain('plan/plan.md'); });
+  it('should reference the architecture design path', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer', '/tmp/swarm')).toContain('architecture/design.md'); });
+  it('should instruct categorizing findings as architectural or implementation', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer'); expect(p).toContain('architectural'); expect(p).toContain('implementation'); });
+  it('should instruct writing review to reviews/<name>.md', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer')).toContain('reviewer.md'); });
+  it('should include evidence discipline principles', () => { const p = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer'); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
+  it('should include the absolute swarm directory path when provided', () => { expect(buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer', '/tmp/swarm')).toContain('/tmp/swarm'); });
 
   it('should not include persona embodiment language', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer');
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer');
     expect(prompt).not.toContain('Embody this perspective');
     expect(prompt).not.toContain('ships working code');
   });
 
   it('should include verdict formatting instructions', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer');
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer');
     expect(prompt).toContain('no markdown formatting, no headings, no bold, no prefixes');
   });
 
   it('should include repo prompt content when provided', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer', undefined, 'Always read CLAUDE.md files.');
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer', undefined, 'Always read CLAUDE.md files.');
     expect(prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
-    const prompt = buildReviewerPrompt('Build auth', 'auth-session', '# Plan', '# Arch', 'Review for correctness.', 'reviewer');
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer');
     expect(prompt).not.toContain('Repo-Specific');
+  });
+
+  it('should include context refresh discipline', () => {
+    const prompt = buildReviewerPrompt('Build auth', 'auth-session', 'Review for correctness.', 'reviewer');
+    expect(prompt).toContain('Context Refresh');
+    expect(prompt).toContain('RE-READ EVERY TURN');
   });
 });
 
 describe('runReviewPanel', () => {
   it('should launch claude once per reviewer', async () => {
     mockAllReviewersSucceed();
-    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(1);
   });
 
   it('should return success when all reviewers complete', async () => {
     mockAllReviewersSucceed();
-    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    const result = await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
     expect(result.success).toBe(true);
     expect(result.reviews).toHaveLength(1);
     expect(result.reviews.every(r => r.success)).toBe(true);
@@ -108,7 +114,7 @@ describe('runReviewPanel', () => {
 
   it('should include reviewer names in results', async () => {
     mockAllReviewersSucceed();
-    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    const result = await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
     const names = result.reviews.map(r => r.reviewerName);
     expect(names).toEqual(['reviewer']);
   });
@@ -118,28 +124,28 @@ describe('runReviewPanel', () => {
       process: {} as never, pid: 12345, kill: vi.fn(),
       waitForExit: vi.fn().mockResolvedValue({ exitCode: 1, signal: null, success: false, cost: 0.20 }),
     });
-    const result = await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    const result = await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
     expect(result.success).toBe(false);
     expect(result.reviews.some(r => !r.success)).toBe(true);
   });
 
   it('should pass reviewer persona content in prompt', async () => {
     mockAllReviewersSucceed();
-    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts[0]).toContain('correctness');
   });
 
   it('should include repoPromptContent in reviewer prompts when set on context', async () => {
     mockAllReviewersSucceed();
-    await runReviewPanel(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    await runReviewPanel(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { reviewerPersonas: DEFAULT_PERSONAS });
     const prompts = mockLaunchClaude.mock.calls.map(c => c[0]!.prompt);
     expect(prompts.every(p => p.includes('Always read CLAUDE.md files.'))).toBe(true);
   });
 
   it('should register and unregister executor handles for all reviewers', async () => {
     mockAllReviewersSucceed();
-    await runReviewPanel(makeCtx(), { planContent: '# Plan', architectureDesign: '# Arch', reviewerPersonas: DEFAULT_PERSONAS });
+    await runReviewPanel(makeCtx(), { reviewerPersonas: DEFAULT_PERSONAS });
 
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledTimes(1);

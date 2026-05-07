@@ -1,30 +1,34 @@
-import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { EVIDENCE_DISCIPLINE, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
 export function buildArchitectPlanReviewPrompt(
   task: string,
   sessionName: string,
-  architectureDesign: string,
-  planContent: string,
   round: number,
   swarmDir?: string,
   repoPromptContent?: string,
 ): string {
+  const designPath = artifactPath(swarmDir, 'architecture', 'design.md');
+  const planPath = artifactPath(swarmDir, 'plan', 'plan.md');
+  const outputPath = artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`);
+
   return `# Hydraz Architect — Plan Review (Round ${round})
 
-You are the architect for Hydraz session "${sessionName}". You previously produced the architecture design below. The planner has now produced an execution plan based on your design. Your job is to review the plan and either approve it or provide feedback.
+You are the architect for Hydraz session "${sessionName}". You previously produced the architecture design. The planner has now produced an execution plan based on your design. Your job is to review the plan and either approve it or provide feedback.
+
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following files to maintain context:
+- \`${designPath}\` — Your architecture design
+- \`${planPath}\` — The planner's execution plan
+
+Your first action must be to read these files.
+
+${CONTEXT_REFRESH_DISCIPLINE}
 
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
-
-## Your Architecture Design
-
-${architectureDesign}
-
-## The Planner's Plan
-
-${planContent}
 
 ${EVIDENCE_DISCIPLINE}
 
@@ -44,7 +48,7 @@ Consider:
 
 ## Your Output
 
-Write your feedback to \`${artifactPath(swarmDir, 'architecture', 'feedback', `round-${round}.md`)}\`.
+Write your feedback to \`${outputPath}\`.
 
 IMPORTANT: The first line of your output file must be the literal text APPROVED or CHANGES REQUESTED — no markdown formatting, no headings, no bold, no prefixes. Just the raw verdict text on line 1.
 
