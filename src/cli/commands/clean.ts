@@ -5,11 +5,12 @@ import {
   findAllOrphanedWorkspaces,
   destroyOrphanedWorkspace,
 } from '../../core/orchestration/index.js';
+import { isTerminalState } from '../../core/sessions/schema.js';
 
 export function registerCleanCommand(program: Command): void {
   program
     .command('clean')
-    .description('Clean up orphaned DevPod workspaces from completed/stopped/failed sessions')
+    .description('Clean up orphaned DevPod workspaces from terminated or stale sessions')
     .option('--force', 'Skip confirmation prompt')
     .option('--dry-run', 'List orphans without destroying')
     .action(async (options: { force?: boolean; dryRun?: boolean }) => {
@@ -29,9 +30,10 @@ export function registerCleanCommand(program: Command): void {
       if (known.length > 0) {
         console.log(`\nOrphaned workspaces with known sessions (${known.length}):\n`);
         for (const orphan of known) {
+          const staleTag = !isTerminalState(orphan.sessionState) ? ' (stale)' : '';
           console.log(
             `  ${orphan.sessionName.padEnd(30)} ${orphan.workspaceName.padEnd(35)} ` +
-            `[${orphan.sessionState}]  DevPod: ${orphan.devpodStatus}`,
+            `[${orphan.sessionState}${staleTag}]  DevPod: ${orphan.devpodStatus}`,
           );
         }
       }

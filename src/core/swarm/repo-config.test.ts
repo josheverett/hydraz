@@ -298,7 +298,25 @@ describe('processHydrazIncludes', () => {
     }
   });
 
-  it('should expand tilde in container paths', async () => {
+  it('should expand tilde in container paths using containerHome when provided', async () => {
+    const root = setupRepoRoot();
+    const existingDir = join(root, 'some-dir');
+    mkdirSync(existingDir, { recursive: true });
+
+    writeHydrazConfig(root, JSON.stringify({
+      hydrazincludes: [
+        { host: existingDir, container: '~/.config/tool' },
+      ],
+    }));
+
+    const mockScp = vi.fn<ScpFunction>();
+    await processHydrazIncludes(root, 'hydraz-test-ws', mockScp, undefined, '/root');
+
+    expect(mockScp).toHaveBeenCalledTimes(1);
+    expect(mockScp.mock.calls[0]![2]).toBe('/root/.config/tool');
+  });
+
+  it('should fall back to host homedir for container paths when containerHome is not provided', async () => {
     const root = setupRepoRoot();
     const existingDir = join(root, 'some-dir');
     mkdirSync(existingDir, { recursive: true });

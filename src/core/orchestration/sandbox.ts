@@ -5,8 +5,9 @@ import { getGitHubAutomationReadiness } from '../github/requirements.js';
 import { getProvider } from './controller.js';
 import { createNewSession, initRepoState } from '../sessions/index.js';
 import { suggestBranchName } from '../branches/index.js';
-import { scpToContainer, getDistRoot, devpodSsh, devpodDelete } from '../providers/devpod.js';
+import { scpToContainer, getDistRoot, devpodSsh, devpodDelete, getContainerHome } from '../providers/devpod.js';
 import { CONTAINER_DIST_PATH } from '../swarm/pipeline-runner.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
 import { debug, debugTiming } from '../debug.js';
 import type { ExecutionTarget } from '../config/schema.js';
 
@@ -28,6 +29,7 @@ export interface SandboxOptions {
   repoRoot: string;
   cleanup: boolean;
   branchOverride?: string;
+  skipClone?: boolean;
   onStep?: (step: SandboxStep) => void;
 }
 
@@ -70,13 +72,15 @@ export async function runSandbox(options: SandboxOptions): Promise<SandboxResult
   }
   emitStep(steps, onStep, { name: 'Container auth', status: 'ok' });
 
-  const ghReady = getGitHubAutomationReadiness(config, repoRoot);
-  debug(`runSandbox: githubAutomation ok=${ghReady.ok}`);
-  if (!ghReady.ok) {
-    emitStep(steps, onStep, { name: 'GitHub config', status: 'fail', detail: ghReady.error });
-    return { entered: false, steps };
+  if (!options.skipClone) {
+    const ghReady = getGitHubAutomationReadiness(config, repoRoot);
+    debug(`runSandbox: githubAutomation ok=${ghReady.ok}`);
+    if (!ghReady.ok) {
+      emitStep(steps, onStep, { name: 'GitHub config', status: 'fail', detail: ghReady.error });
+      return { entered: false, steps };
+    }
+    emitStep(steps, onStep, { name: 'GitHub config', status: 'ok' });
   }
-  emitStep(steps, onStep, { name: 'GitHub config', status: 'ok' });
 
   const provider = getProvider(executionTarget);
   debug(`runSandbox: provider type=${provider.type}`);
@@ -107,7 +111,7 @@ export async function runSandbox(options: SandboxOptions): Promise<SandboxResult
   const wsStart = Date.now();
   let workspace;
   try {
-    workspace = await provider.createWorkspace({ session, config, branchOverride: options.branchOverride });
+    workspace = await provider.createWorkspace({ session, config, branchOverride: options.branchOverride, skipClone: options.skipClone });
     debugTiming('runSandbox: createWorkspace', timed(wsStart));
     emitStep(steps, onStep, {
       name: 'Workspace',
@@ -140,6 +144,19 @@ export async function runSandbox(options: SandboxOptions): Promise<SandboxResult
     emitStep(steps, onStep, { name: 'Container setup', status: 'fail', detail: msg, durationMs: timed(scpStart) });
     try { devpodDelete(workspaceName); } catch { /* best-effort cleanup */ }
     return { entered: false, steps };
+  }
+
+  try {
+    const containerHome = getContainerHome(workspaceName);
+    await processHydrazIncludes(
+      repoRoot,
+      workspaceName,
+      scpToContainer,
+      (msg) => emitStep(steps, onStep, { name: 'Includes', status: 'ok', detail: msg }),
+      containerHome,
+    );
+  } catch {
+    // non-fatal, matches controller.ts behavior
   }
 
   debug(`runSandbox: entering interactive shell in ${workspaceName}`);

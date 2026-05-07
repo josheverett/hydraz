@@ -14,6 +14,7 @@ export interface CreateWorkspaceParams {
   session: SessionMetadata;
   config: HydrazConfig;
   branchOverride?: string;
+  skipClone?: boolean;
   onHeartbeat?: (label: string, elapsedMs: number) => void;
 }
 

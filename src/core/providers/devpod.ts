@@ -1,6 +1,7 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { shellEscape } from '../claude/ssh.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
@@ -107,24 +108,41 @@ export async function devpodUp(
   provider?: string,
   branch?: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
+  env?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
-  const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName];
+  const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
   if (provider) {
     args.push('--provider', provider);
   }
+
+  let envFilePath: string | undefined;
+  if (env && Object.keys(env).length > 0) {
+    envFilePath = join(tmpdir(), `hydraz-env-${workspaceName}`);
+    const content = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n');
+    writeFileSync(envFilePath, content, { mode: 0o600 });
+    args.push('--workspace-env-file', envFilePath);
+  }
+
   if (isVerbose()) {
     args.push('--debug');
   }
   debugExec('devpod', args);
   const start = Date.now();
-  await spawnWithHeartbeat('devpod', args, { timeout: 900_000 }, {
-    label: 'DevPod provisioning',
-    intervalMs: 15_000,
-    onHeartbeat: onHeartbeat ?? (() => {}),
-    onStdoutLine: isVerbose() ? (line) => debugOutput('devpod up stdout', line) : undefined,
-  });
-  debugTiming('devpod up', Date.now() - start);
+  const spawnEnv = env ? { ...process.env, ...env } : undefined;
+  try {
+    await spawnWithHeartbeat('devpod', args, { timeout: 900_000, env: spawnEnv }, {
+      label: 'DevPod provisioning',
+      intervalMs: 15_000,
+      onHeartbeat: onHeartbeat ?? (() => {}),
+      onStdoutLine: isVerbose() ? (line) => debugOutput('devpod up stdout', line) : undefined,
+    });
+    debugTiming('devpod up', Date.now() - start);
+  } finally {
+    if (envFilePath) {
+      try { unlinkSync(envFilePath); } catch { /* best-effort cleanup */ }
+    }
+  }
 }
 
 export function devpodDelete(workspaceName: string, force?: boolean): void {
@@ -202,6 +220,10 @@ export function sshExec(workspaceName: string, command: string): string {
   debugOutput('ssh stdout', output);
   debugTiming('sshExec', Date.now() - start);
   return output;
+}
+
+export function getContainerHome(workspaceName: string): string {
+  return sshExec(workspaceName, 'echo $HOME').trim();
 }
 
 export function devpodSsh(workspaceName: string): Promise<number> {

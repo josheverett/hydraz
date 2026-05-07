@@ -29,13 +29,14 @@ export function findOrphanedWorkspaces(repoRoot: string): OrphanedWorkspace[] {
   const orphans: OrphanedWorkspace[] = [];
 
   for (const session of sessions) {
-    if (!isTerminalState(session.state)) continue;
     if (!isContainerExecutionTarget(session.executionTarget)) continue;
 
     const workspaceName = `${HYDRAZ_PREFIX}${session.id}`;
     const status = devpodStatus(workspaceName);
 
-    if (status !== 'NotFound') {
+    if (status === 'NotFound') continue;
+
+    if (isTerminalState(session.state) || status === 'Stopped') {
       orphans.push({
         sessionId: session.id,
         sessionName: session.name,
@@ -65,7 +66,8 @@ export function findUnknownOrphanedWorkspaces(repoRoot: string): UnknownOrphaned
   return hydrazEntries
     .filter(e => {
       const sessionId = e.name.slice(HYDRAZ_PREFIX.length);
-      return !activeSessionIds.has(sessionId);
+      if (!activeSessionIds.has(sessionId)) return true;
+      return e.status === 'Stopped';
     })
     .map(e => ({
       workspaceName: e.name,

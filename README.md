@@ -68,13 +68,16 @@ hydraz run --reviewers reviewer-a,reviewer-b "refactor the database layer"
 | `--local` | Run locally (bare metal) | Default |
 | `--container` | Run locally in a Docker container | |
 | `--cloud` | Run on a cloud VM via DevPod | |
+| `--verbose` | Enable diagnostic output | Off |
+| `--no-clone` | Use local repo path instead of cloning from remote | Off |
 
 ## Commands
 
 ```bash
 hydraz                 # interactive mode — start sessions, attach, review
 hydraz run "<task>"    # launch a task directly
-hydraz hello-world     # infrastructure sanity check (supports --local, --container, --cloud, --verbose, --branch)
+hydraz hello-world     # infrastructure sanity check (supports --local, --container, --cloud, --verbose, --branch, --no-clone)
+hydraz sandbox         # set up a container workspace and drop into an interactive shell
 
 hydraz sessions        # list all sessions in this repo
 hydraz status          # show current session state and swarm phase

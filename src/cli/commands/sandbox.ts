@@ -11,12 +11,14 @@ export function registerSandboxCommand(program: Command): void {
     .option('--cloud', 'Run in cloud')
     .option('--verbose', 'Print detailed debug output to stderr')
     .option('--no-cleanup', 'Leave workspace alive after exiting the shell')
+    .option('--no-clone', 'Use local repo path instead of cloning from remote')
     .option('--branch <name>', 'Override the branch cloned into the container')
     .action(async (options: {
       container?: boolean;
       cloud?: boolean;
       verbose?: boolean;
       cleanup?: boolean;
+      clone?: boolean;
       branch?: string;
     }) => {
       if (options.verbose) {
@@ -45,6 +47,7 @@ export function registerSandboxCommand(program: Command): void {
         executionTarget,
         repoRoot: repo.root,
         cleanup: options.cleanup !== false,
+        skipClone: options.clone === false,
         branchOverride: options.branch,
         onStep: (step) => {
           const detail = step.detail ? ` (${step.detail})` : '';

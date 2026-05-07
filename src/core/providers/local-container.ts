@@ -20,6 +20,7 @@ import {
   scpFilesToContainer,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
+import { prepareContainerAuthEnv } from './container-auth.js';
 import { getGitHubRepo, hasGitRemote, getCurrentBranch } from '../repo/detect.js';
 import { debug } from '../debug.js';
 
@@ -56,7 +57,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
   async createWorkspace(params: CreateWorkspaceParams): Promise<WorkspaceInfo> {
     const { session } = params;
     const includeDestinationRoot = join(session.repoRoot, '.hydraz-container-worktree');
-    debug(`createWorkspace: repoRoot=${session.repoRoot} executionTarget=${session.executionTarget}`);
+    debug(`createWorkspace: repoRoot=${session.repoRoot} executionTarget=${session.executionTarget} skipClone=${!!params.skipClone}`);
 
     if (!hasDevcontainerJson(session.repoRoot)) {
       throw new Error(
@@ -70,35 +71,46 @@ export class LocalContainerProvider implements WorkspaceProvider {
       throw new Error(platformCheck.message ?? 'devcontainer.json platform mismatch');
     }
 
-    if (!hasGitRemote(session.repoRoot)) {
-      throw new Error(
-        'Container mode requires a git remote. Work inside containers can only be delivered via push to a remote branch.',
-      );
+    let devpodSource: string;
+
+    if (params.skipClone) {
+      devpodSource = session.repoRoot;
+      debug(`createWorkspace: skipClone — using local path ${devpodSource}`);
+    } else {
+      if (!hasGitRemote(session.repoRoot)) {
+        throw new Error(
+          'Container mode requires a git remote. Work inside containers can only be delivered via push to a remote branch.',
+        );
+      }
+
+      if (!params.config.github.token) {
+        throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
+      }
+
+      const ghRepo = getGitHubRepo(session.repoRoot);
+      if (!ghRepo) {
+        throw new Error(
+          'Container mode beta automation is currently GitHub-only. Configure `origin` to point at github.com and try again.',
+        );
+      }
+      debug(`createWorkspace: github remote=${ghRepo.remoteUrl} (${ghRepo.owner}/${ghRepo.repo})`);
+      devpodSource = ghRepo.remoteUrl;
     }
 
-    if (!params.config.github.token) {
-      throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
-    }
-
-    const ghRepo = getGitHubRepo(session.repoRoot);
-    if (!ghRepo) {
-      throw new Error(
-        'Container mode beta automation is currently GitHub-only. Configure `origin` to point at github.com and try again.',
-      );
-    }
-    debug(`createWorkspace: github remote=${ghRepo.remoteUrl} (${ghRepo.owner}/${ghRepo.repo})`);
-
-    const includes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
+    const includes = params.skipClone ? [] : listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
     debug(`createWorkspace: worktree includes=[${includes.join(', ')}]`);
 
     const workspaceName = `hydraz-${session.id}`;
     debug(`createWorkspace: workspaceName=${workspaceName}`);
     const devpodProvider = this.type === 'local-container' ? 'docker' : undefined;
-    const currentBranch = params.branchOverride ?? (this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined);
-    debug(`createWorkspace: devpodUp source=${ghRepo.remoteUrl} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'default'}`);
+    const currentBranch = params.skipClone
+      ? undefined
+      : params.branchOverride ?? (this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined);
+    debug(`createWorkspace: devpodUp source=${devpodSource} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'none'}`);
 
     try {
-      await devpodUp(ghRepo.remoteUrl, workspaceName, devpodProvider, currentBranch, params.onHeartbeat);
+      const authEnv = prepareContainerAuthEnv(params.config);
+      await devpodUp(devpodSource, workspaceName, devpodProvider, currentBranch, params.onHeartbeat, authEnv);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
@@ -114,6 +126,18 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     const containerRepoPath = `/workspaces/${workspaceName}`;
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);
+
+    if (params.skipClone) {
+      debug(`createWorkspace: complete (skipClone) — directory=${containerRepoPath}`);
+      return {
+        id: session.id,
+        type: session.executionTarget,
+        directory: containerRepoPath,
+        branchName: session.branchName,
+        sessionId: session.id,
+      };
+    }
+
     let worktreePath: string;
 
     try {

@@ -44,8 +44,13 @@ vi.mock('../branches/index.js', () => ({
 vi.mock('../providers/devpod.js', () => ({
   scpToContainer: vi.fn(() => Promise.resolve()),
   getDistRoot: vi.fn(() => '/dist'),
+  getContainerHome: vi.fn(() => '/home/vscode'),
   devpodSsh: vi.fn(() => Promise.resolve(0)),
   devpodDelete: vi.fn(),
+}));
+
+vi.mock('../swarm/repo-config.js', () => ({
+  processHydrazIncludes: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../config/claude.js');
@@ -66,6 +71,7 @@ import { validateContainerAuth, prepareContainerAuthEnv } from '../providers/con
 import { getGitHubAutomationReadiness } from '../github/requirements.js';
 import { getProvider } from './controller.js';
 import { scpToContainer, devpodSsh, devpodDelete } from '../providers/devpod.js';
+import { processHydrazIncludes } from '../swarm/repo-config.js';
 import type { HydrazConfig } from '../config/schema.js';
 
 const mockLoadConfig = vi.mocked(loadConfig);
@@ -77,6 +83,7 @@ const mockScpToContainer = vi.mocked(scpToContainer);
 const mockDevpodSsh = vi.mocked(devpodSsh);
 const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockPrepareContainerAuthEnv = vi.mocked(prepareContainerAuthEnv);
+const mockProcessHydrazIncludes = vi.mocked(processHydrazIncludes);
 
 const fakeConfig: HydrazConfig = {
   executionTarget: 'local-container',
@@ -256,6 +263,41 @@ describe('runSandbox', () => {
       'hydraz-test-session-id',
       '/dist',
       expect.any(String),
+    );
+  });
+
+  it('passes skipClone through to createWorkspace', async () => {
+    setupHappyPath();
+
+    await runSandbox(makeDefaultOptions({ skipClone: true }));
+
+    const fakeProvider = mockGetProvider.mock.results[0]!.value;
+    expect(fakeProvider.createWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ skipClone: true }),
+    );
+  });
+
+  it('skips GitHub readiness check when skipClone is true', async () => {
+    setupHappyPath();
+
+    const steps: SandboxStep[] = [];
+    await runSandbox(makeDefaultOptions({ skipClone: true, onStep: (s) => steps.push(s) }));
+
+    expect(mockGetGitHubReadiness).not.toHaveBeenCalled();
+    expect(steps.map((s) => s.name)).not.toContain('GitHub config');
+  });
+
+  it('calls processHydrazIncludes with the correct workspace name after dist SCP', async () => {
+    setupHappyPath();
+
+    await runSandbox(makeDefaultOptions());
+
+    expect(mockProcessHydrazIncludes).toHaveBeenCalledWith(
+      '/test/repo',
+      'hydraz-test-session-id',
+      scpToContainer,
+      expect.any(Function),
+      '/home/vscode',
     );
   });
 });
