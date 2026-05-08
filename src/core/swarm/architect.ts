@@ -11,12 +11,8 @@ export interface ArchitectResult {
   error?: string;
 }
 
-export interface ArchitectOptions {
-  investigationBrief: string;
-}
-
-export async function runArchitect(ctx: ExecutionContext, opts: ArchitectOptions): Promise<ArchitectResult> {
-  const prompt = buildArchitectPrompt(ctx.task, ctx.sessionName, opts.investigationBrief, ctx.swarmDir, ctx.repoPromptContent);
+export async function runArchitect(ctx: ExecutionContext): Promise<ArchitectResult> {
+  const prompt = buildArchitectPrompt(ctx.task, ctx.sessionName, ctx.swarmDir, ctx.repoPromptContent);
 
   const executor = launchClaude({
     workingDirectory: ctx.workingDirectory,

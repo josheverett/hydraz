@@ -1,30 +1,33 @@
-import { PROVE_IT_METHODOLOGY, STRICT_TDD_METHODOLOGY } from './core-principles.js';
+import { PROVE_IT_METHODOLOGY, STRICT_TDD_METHODOLOGY, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
 export function buildWorkerPrompt(
   task: string,
   sessionName: string,
-  workerBrief: string,
-  planContent: string,
   workerId: string,
   swarmDir?: string,
   repoPromptContent?: string,
 ): string {
+  const briefPath = artifactPath(swarmDir, 'workers', workerId, 'brief.md');
+  const progressPath = artifactPath(swarmDir, 'workers', workerId, 'progress.md');
+
   return `# Hydraz Worker — ${workerId}
 
 You are ${workerId} in Hydraz session "${sessionName}". You are one of several parallel workers, each implementing a scoped slice of the overall task in an isolated worktree.
 
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following files to maintain context:
+- \`${briefPath}\` — Your assignment, owned paths, interface contracts, and acceptance criteria
+- \`${progressPath}\` — Your progress so far (once you begin writing it)
+
+Your first action must be to read your brief file.
+
+${CONTEXT_REFRESH_DISCIPLINE}
+
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Overall Task
 
 ${task}
-
-## Execution Plan
-
-${planContent}
-
-## Your Assignment
-
-${workerBrief}
 
 ${STRICT_TDD_METHODOLOGY}
 
@@ -32,11 +35,11 @@ ${PROVE_IT_METHODOLOGY}
 
 ## Ownership Constraints
 
-You may ONLY modify files within your owned paths as specified in your assignment above. Do not create, modify, or delete files outside your ownership scope. If you need a file that belongs to another worker, implement against the interface contract specified in the plan -- do not modify the dependency directly.
+You may ONLY modify files within your owned paths as specified in your brief. Do not create, modify, or delete files outside your ownership scope. If you need a file that belongs to another worker, implement against the interface contract specified in the plan -- do not modify the dependency directly.
 
 ## Progress Reporting
 
-When your work is complete, write a progress file to \`${artifactPath(swarmDir, 'workers', workerId, 'progress.md')}\` documenting:
+Update your progress file at \`${progressPath}\` periodically (after each completed sub-task) documenting:
 - What was implemented
 - What tests were written and their results (with Runtime proof -- actual test output)
 - What interface contracts were implemented

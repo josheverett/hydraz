@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { launchClaude } from '../claude/executor.js';
 import type { TaskLedger, OwnershipMap, ExecutionContext } from './types.js';
 import { CONSENSUS_MAX_ROUNDS } from './state.js';
-import { readPlan, getSwarmDir } from './artifacts.js';
+import { getSwarmDir } from './artifacts.js';
 import { runPlanner } from './planner.js';
 import { buildArchitectPlanReviewPrompt } from './prompts/architect-review.js';
 import { parseReviewVerdict } from './review-aggregate.js';
@@ -18,11 +18,9 @@ export interface ConsensusResult {
 }
 
 export interface ConsensusOptions {
-  investigationBrief: string;
-  architectureDesign: string;
   workerCount: number;
   maxRounds?: number;
-  reviewFeedback?: string;
+  hasReviewFeedback?: boolean;
   verbose?: boolean;
   onEvent?: (type: string, message: string) => void;
 }
@@ -34,20 +32,14 @@ function readFeedback(repoRoot: string, sessionId: string, round: number): strin
 }
 
 export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions): Promise<ConsensusResult> {
-  let currentDesign = opts.architectureDesign;
-  let previousFeedback: string | null = null;
   const maxRounds = opts.maxRounds ?? CONSENSUS_MAX_ROUNDS;
 
   for (let round = 1; round <= maxRounds; round++) {
     opts.onEvent?.('swarm.consensus_round_started', `Consensus round ${round}/${maxRounds}`);
 
     const plannerResult = await runPlanner(ctx, {
-      investigationBrief: opts.investigationBrief,
-      architectureDesign: currentDesign + (previousFeedback
-        ? `\n\n## Architect Feedback from Previous Round\n\n${previousFeedback}\n\nPlease revise the plan to address this feedback.`
-        : ''),
       workerCount: opts.workerCount,
-      reviewFeedback: opts.reviewFeedback,
+      hasReviewFeedback: opts.hasReviewFeedback,
     });
 
     if (plannerResult.executorResult && opts.verbose) {
@@ -75,7 +67,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
 
     const ledger = plannerResult.ledger!;
     const ownership = plannerResult.ownership!;
-    const plan = readPlan(ctx.repoRoot, ctx.sessionId);
 
     if (round === maxRounds) {
       return {
@@ -91,8 +82,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
     const reviewPrompt = buildArchitectPlanReviewPrompt(
       ctx.task,
       ctx.sessionName,
-      currentDesign,
-      plan!,
       round,
       ctx.swarmDir,
       ctx.repoPromptContent,
@@ -144,7 +133,6 @@ export async function runConsensus(ctx: ExecutionContext, opts: ConsensusOptions
       const feedbackExcerpt = feedback.split('\n').slice(0, 2).join('\n');
       opts.onEvent?.('verbose.consensus', `Re-planning after architect feedback. Architect said:\n${feedbackExcerpt}`);
     }
-    previousFeedback = feedback;
   }
 
   return {

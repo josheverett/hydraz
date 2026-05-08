@@ -53,6 +53,17 @@ You MUST follow a strictly atomic test-driven development workflow without excep
 - Run lint, type-check, and the full test suite before declaring any unit of work complete.
 `;
 
+export const CONTEXT_REFRESH_DISCIPLINE = `## Context Refresh (MANDATORY)
+
+You MUST re-read your context files at the start of EVERY turn. This is non-negotiable.
+Your context files are listed in the "Context Files" section above. Before taking any
+action — reading code, writing code, running commands — first re-read all listed context
+files. This ensures you never drift from your assignment or lose track of progress.
+
+If you have already read these files on this turn, you do not need to read them again
+within the same turn. But the NEXT turn must begin with a fresh read.
+`;
+
 export const EVIDENCE_DISCIPLINE = `## Evidence Discipline
 
 Every assertion you make must be grounded in evidence. Distinguish clearly between:

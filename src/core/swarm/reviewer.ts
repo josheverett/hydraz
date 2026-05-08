@@ -17,8 +17,6 @@ export interface ReviewPanelResult {
 }
 
 export interface ReviewPanelOptions {
-  planContent: string;
-  architectureDesign: string;
   reviewerPersonas: Array<{ name: string; persona: string }>;
 }
 
@@ -30,8 +28,6 @@ async function runSingleReviewer(
   const prompt = buildReviewerPrompt(
     ctx.task,
     ctx.sessionName,
-    opts.planContent,
-    opts.architectureDesign,
     reviewerInfo.persona,
     reviewerInfo.name,
     ctx.swarmDir,

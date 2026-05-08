@@ -27,8 +27,6 @@ let repoRoot: string;
 let sessionId: string;
 let config: ReturnType<typeof createDefaultConfig>;
 
-const SAMPLE_BRIEF = '# Investigation\nTypeScript + Vitest project.';
-const SAMPLE_DESIGN = '# Architecture\nUse middleware pattern.';
 
 const VALID_LEDGER: TaskLedger = {
   swarmPhase: 'planning', baseCommit: 'abc123', outerLoop: 0, consensusRound: 0,
@@ -70,50 +68,56 @@ function writePlannerArtifacts() {
 }
 
 describe('buildPlannerPrompt', () => {
-  it('should include the task description', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3)).toContain('Build the auth system'); });
-  it('should include the session name', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3)).toContain('auth-session'); });
-  it('should include the investigation brief', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3)).toContain('TypeScript + Vitest'); });
-  it('should include the architecture design', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3)).toContain('middleware pattern'); });
-  it('should include the worker count', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 5)).toContain('5'); });
-  it('should instruct writing task-ledger.json and ownership.json', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3); expect(p).toContain('task-ledger.json'); expect(p).toContain('ownership.json'); });
-  it('should include evidence discipline principles', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
-  it('should include the absolute swarm directory path when provided', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, '/tmp/swarm')).toContain('/tmp/swarm'); });
+  it('should include the task description', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 3)).toContain('Build the auth system'); });
+  it('should include the session name', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 3)).toContain('auth-session'); });
+  it('should reference the investigation brief path', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 3, '/tmp/swarm')).toContain('investigation/brief.md'); });
+  it('should reference the architecture design path', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 3, '/tmp/swarm')).toContain('architecture/design.md'); });
+  it('should include the worker count', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 5)).toContain('5'); });
+  it('should instruct writing task-ledger.json and ownership.json', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', 3); expect(p).toContain('task-ledger.json'); expect(p).toContain('ownership.json'); });
+  it('should include evidence discipline principles', () => { const p = buildPlannerPrompt('Build the auth system', 'auth-session', 3); expect(p).toContain('Verified facts'); expect(p).toContain('Assumptions'); });
+  it('should include the absolute swarm directory path when provided', () => { expect(buildPlannerPrompt('Build the auth system', 'auth-session', 3, '/tmp/swarm')).toContain('/tmp/swarm'); });
 
   it('should include repo prompt content when provided', () => {
-    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, undefined, 'Always read CLAUDE.md files.');
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', 3, undefined, 'Always read CLAUDE.md files.');
     expect(prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should not include repo-specific section when repoPromptContent is not provided', () => {
-    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', 3);
     expect(prompt).not.toContain('Repo-Specific');
   });
 
-  it('should include review feedback section when reviewFeedback is provided', () => {
-    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3, undefined, undefined, 'CHANGES REQUESTED\n\nMissing null check in auth handler.');
-    expect(prompt).toContain('Previous Review Feedback');
-    expect(prompt).toContain('Missing null check in auth handler');
+  it('should reference review files when hasReviewFeedback is true', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', 3, '/tmp/swarm', undefined, true);
+    expect(prompt).toContain('reviews');
+    expect(prompt).toContain('Previous review feedback');
   });
 
-  it('should not include review feedback section when reviewFeedback is not provided', () => {
-    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', SAMPLE_BRIEF, SAMPLE_DESIGN, 3);
-    expect(prompt).not.toContain('Previous Review Feedback');
+  it('should not reference review files when hasReviewFeedback is not provided', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', 3);
+    expect(prompt).not.toContain('Previous review feedback');
+  });
+
+  it('should include context refresh discipline', () => {
+    const prompt = buildPlannerPrompt('Build the auth system', 'auth-session', 3);
+    expect(prompt).toContain('Context Refresh');
+    expect(prompt).toContain('RE-READ EVERY TURN');
   });
 });
 
 describe('runPlanner', () => {
   it('should launch claude with the planner prompt', async () => {
     mockSuccessfulClaude(); writePlannerArtifacts();
-    await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    await runPlanner(makeCtx(), { workerCount: 3 });
     expect(mockLaunchClaude).toHaveBeenCalledTimes(1);
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.prompt).toContain('Build the auth system');
-    expect(callArgs.prompt).toContain('middleware pattern');
+    expect(callArgs.prompt).toContain('investigation/brief.md');
   });
 
   it('should return success with parsed ledger and ownership when all artifacts exist', async () => {
     mockSuccessfulClaude(); writePlannerArtifacts();
-    const result = await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runPlanner(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(true);
     expect(result.ledger).toBeTruthy();
     expect(result.ledger!.tasks).toHaveLength(1);
@@ -123,7 +127,7 @@ describe('runPlanner', () => {
 
   it('should return failure when claude exits with error', async () => {
     mockFailedClaude();
-    const result = await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runPlanner(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(false);
     expect(result.executorResult).toBeTruthy();
     expect(result.executorResult!.success).toBe(false);
@@ -133,7 +137,7 @@ describe('runPlanner', () => {
     mockSuccessfulClaude();
     writePlan(repoRoot, sessionId, '# Plan\nStuff.');
     writeOwnershipMap(repoRoot, sessionId, VALID_OWNERSHIP);
-    const result = await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runPlanner(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(false);
     expect(result.error).toContain('task-ledger');
   });
@@ -142,14 +146,14 @@ describe('runPlanner', () => {
     mockSuccessfulClaude();
     writePlan(repoRoot, sessionId, '# Plan\nStuff.');
     writeTaskLedger(repoRoot, sessionId, VALID_LEDGER);
-    const result = await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    const result = await runPlanner(makeCtx(), { workerCount: 3 });
     expect(result.success).toBe(false);
     expect(result.error).toContain('ownership');
   });
 
   it('should pass working directory and config to the executor', async () => {
     mockSuccessfulClaude(); writePlannerArtifacts();
-    await runPlanner(makeCtx({ workingDirectory: '/tmp/custom' }), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    await runPlanner(makeCtx({ workingDirectory: '/tmp/custom' }), { workerCount: 3 });
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.workingDirectory).toBe('/tmp/custom');
     expect(callArgs.config).toBe(config);
@@ -157,14 +161,14 @@ describe('runPlanner', () => {
 
   it('should include repoPromptContent in the Claude prompt when set on context', async () => {
     mockSuccessfulClaude(); writePlannerArtifacts();
-    await runPlanner(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    await runPlanner(makeCtx({ repoPromptContent: 'Always read CLAUDE.md files.' }), { workerCount: 3 });
     const callArgs = mockLaunchClaude.mock.calls[0]![0]!;
     expect(callArgs.prompt).toContain('Always read CLAUDE.md files.');
   });
 
   it('should register executor handle before waitForExit and unregister after', async () => {
     mockSuccessfulClaude(); writePlannerArtifacts();
-    await runPlanner(makeCtx(), { investigationBrief: SAMPLE_BRIEF, architectureDesign: SAMPLE_DESIGN, workerCount: 3 });
+    await runPlanner(makeCtx(), { workerCount: 3 });
 
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledTimes(1);

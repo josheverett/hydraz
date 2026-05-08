@@ -1,7 +1,10 @@
-import { EVIDENCE_DISCIPLINE } from './core-principles.js';
+import { EVIDENCE_DISCIPLINE, CONTEXT_REFRESH_DISCIPLINE } from './core-principles.js';
 import { artifactPath } from './paths.js';
 
-export function buildArchitectPrompt(task: string, sessionName: string, investigationBrief: string, swarmDir?: string, repoPromptContent?: string): string {
+export function buildArchitectPrompt(task: string, sessionName: string, swarmDir?: string, repoPromptContent?: string): string {
+  const briefPath = artifactPath(swarmDir, 'investigation', 'brief.md');
+  const outputPath = artifactPath(swarmDir, 'architecture', 'design.md');
+
   return `# Hydraz Architect
 
 You are the architect for Hydraz session "${sessionName}". Your job is to read the investigation brief and the task, then produce a design document with recommendations, tradeoffs, and risks.
@@ -14,21 +17,24 @@ You think about _what should be built and why_. You do not decompose the work in
 
 Match the depth of your design to the complexity of the task. A simple task (create a small app, add a feature, fix a bug) needs a proportionally simple design — not a 10-page architecture document. Cover what matters, skip what doesn't. If the right answer is straightforward, say so in a few paragraphs and move on.
 
+## Context Files (RE-READ EVERY TURN)
+
+Before each action, re-read the following files to maintain context:
+- \`${briefPath}\` — Investigation findings about the repository
+
+Your first action must be to read these files.
+
+${CONTEXT_REFRESH_DISCIPLINE}
+
 ${repoPromptContent ? `## Repo-Specific Instructions\n\n${repoPromptContent}\n` : ''}## Task
 
 ${task}
-
-## Investigation Brief
-
-The following brief was produced by the investigator who explored the repository:
-
-${investigationBrief}
 
 ${EVIDENCE_DISCIPLINE}
 
 ## What to Produce
 
-Write your design to \`${artifactPath(swarmDir, 'architecture', 'design.md')}\`. Your document should cover:
+Write your design to \`${outputPath}\`. Your document should cover:
 
 1. **Approach**: What is the recommended approach and why?
 2. **Component design**: What components, modules, or abstractions should be created or modified?

@@ -21,7 +21,6 @@ export interface FanoutResult {
 export interface FanoutOptions {
   ledger: TaskLedger;
   ownership: OwnershipMap;
-  planContent: string;
   existingWorktrees?: Record<string, string>;
   parallel?: boolean;
 }
@@ -53,8 +52,6 @@ async function runSingleWorker(
   const prompt = buildWorkerPrompt(
     ctx.task,
     ctx.sessionName,
-    brief,
-    opts.planContent,
     workerId,
     ctx.swarmDir,
     ctx.repoPromptContent,
