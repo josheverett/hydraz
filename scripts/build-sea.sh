@@ -10,7 +10,7 @@ BINARY_NAME="hydraz"
 VERSION=$(node -p "require('./package.json').version")
 
 echo "==> Bundling with esbuild..."
-npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/hydraz-sea.cjs \
+pnpm exec esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/hydraz-sea.cjs \
   --define:__HYDRAZ_VERSION__="\"$VERSION\""
 
 echo "==> Generating SEA blob..."
@@ -32,7 +32,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   POSTJECT_ARGS+=(--macho-segment-name NODE_SEA)
 fi
 
-npx postject "${POSTJECT_ARGS[@]}"
+pnpm exec postject "${POSTJECT_ARGS[@]}"
 
 if [[ "$(uname)" == "Darwin" ]]; then
   echo "==> Re-signing for macOS..."

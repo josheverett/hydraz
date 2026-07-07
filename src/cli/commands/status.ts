@@ -5,6 +5,7 @@ import {
   getActiveSessions,
   type SessionMetadata,
 } from '../../core/sessions/index.js';
+import { refreshSessionStatus } from '../../core/orchestration/index.js';
 
 export function registerStatusCommand(program: Command): void {
   program
@@ -35,6 +36,8 @@ export function registerStatusCommand(program: Command): void {
         session = active[0];
       }
 
+      const selected = session;
+      session = refreshSessionStatus(selected.id, repo.root);
       renderStatus(session);
     });
 }
@@ -44,10 +47,15 @@ function renderStatus(session: SessionMetadata): void {
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
-  console.log(`  Personas:   ${session.personas.join(', ')}`);
-  console.log(`  Task:       ${truncate(session.task, 80)}`);
+  console.log(`  Goal:       ${truncate(session.task, 80)}`);
   console.log(`  Created:    ${session.createdAt}`);
   console.log(`  Updated:    ${session.updatedAt}`);
+  if (session.codex?.threadId) {
+    console.log(`  Codex:      ${session.codex.threadId}`);
+  }
+  if (session.codex?.remotePid) {
+    console.log(`  Runner PID: ${session.codex.remotePid}`);
+  }
 
   if (session.blockerMessage) {
     console.log(`  Blocker:    ${session.blockerMessage}`);

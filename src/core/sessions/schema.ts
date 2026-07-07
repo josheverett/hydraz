@@ -45,6 +45,19 @@ export interface SessionMetadata {
   workspaceDir?: string;
   blockerMessage?: string;
   failureMessage?: string;
+  codex?: {
+    remotePid?: number;
+    threadId?: string;
+    codexDir?: string;
+    eventsPath?: string;
+    stderrPath?: string;
+    finalPath?: string;
+    resultPath?: string;
+    runnerOutPath?: string;
+    runnerErrPath?: string;
+    exitCode?: number | null;
+    delivery?: unknown;
+  };
 }
 
 const SAFE_SESSION_ID = /^[a-z0-9][a-z0-9-]*$/;

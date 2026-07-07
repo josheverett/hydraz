@@ -5,6 +5,7 @@ export {
   startSession,
   stopSession,
   resumeSession,
+  refreshSessionStatus,
   isSessionRunning,
   getProvider,
 } from './controller.js';

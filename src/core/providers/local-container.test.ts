@@ -298,14 +298,16 @@ describe('LocalContainerProvider', () => {
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('fails early when GitHub auth is not configured', async () => {
+    it('allows workspace creation when Hydraz GitHub auth is not configured', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig(false);
 
-      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/GitHub token/i);
-      expect(mockDevpodUp).not.toHaveBeenCalled();
-      expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
+      await expect(provider.createWorkspace({ session, config })).resolves.toMatchObject({
+        directory: '/tmp/hydraz-worktrees/session-id',
+      });
+      expect(mockDevpodUp).toHaveBeenCalled();
+      expect(mockCreateWorktreeInContainer).toHaveBeenCalled();
     });
 
     it('tears down workspace if Claude Code is not found in the container', async () => {

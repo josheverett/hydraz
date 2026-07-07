@@ -11,32 +11,38 @@ import { suggestBranchName, isValidBranchName, isValidSessionName } from '../../
 import { startSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
 
+type Sandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
+
 export function registerRunCommand(program: Command): void {
   program
     .command('run')
-    .description('Launch a task directly (non-interactive)')
-    .argument('<task>', 'Task description')
+    .description('Launch a detached Codex goal in a Hydraz-managed workspace')
+    .argument('<goal>', 'Goal description')
     .option('--session <name>', 'Session name')
     .option('--branch <name>', 'Branch name')
     .option('--local', 'Run locally (bare metal)')
     .option('--container', 'Run locally in a container')
-    .option('--cloud', 'Run in cloud')
-    .option('--swarm', 'No-op (swarm pipeline always runs)')
-    .option('--workers <count>', 'Number of workers (default: 3)')
-    .option('--parallel', 'Run workers in parallel (default: serial)')
-    .option('--reviewers <names>', 'Comma-separated reviewer names (default: reviewer)')
+    .option('--cloud', 'Run in cloud (default)')
+    .option('--model <model>', 'Codex model override')
+    .option('--sandbox <mode>', 'Codex sandbox mode: read-only, workspace-write, danger-full-access')
+    .option('--search', 'Enable live Codex web search')
+    .option('--no-push', 'Do not push the session branch after Codex completes')
+    .option('--no-pr', 'Do not create a draft pull request after Codex completes')
+    .option('--keep-workspace', 'Preserve the workspace after successful delivery')
     .option('--no-clone', 'Use local repo path instead of cloning from remote')
-    .option('--verbose', 'Enable exhaustive diagnostic output')
-    .action(async (task: string, options: {
+    .option('--verbose', 'Enable diagnostic output')
+    .action(async (goal: string, options: {
       session?: string;
       branch?: string;
       local?: boolean;
       container?: boolean;
       cloud?: boolean;
-      swarm?: boolean;
-      workers?: string;
-      parallel?: boolean;
-      reviewers?: string;
+      model?: string;
+      sandbox?: Sandbox;
+      search?: boolean;
+      push?: boolean;
+      pr?: boolean;
+      keepWorkspace?: boolean;
       clone?: boolean;
       verbose?: boolean;
     }) => {
@@ -54,7 +60,7 @@ export function registerRunCommand(program: Command): void {
       initRepoState(repo.root);
 
       const config = loadConfig();
-      const sessionName = options.session ?? generateSessionName(task);
+      const sessionName = options.session ?? generateSessionName(goal);
 
       if (options.session && !isValidSessionName(sessionName)) {
         console.error(`Invalid session name: "${sessionName}". Use 2-64 chars: lowercase letters, numbers, hyphens.`);
@@ -62,16 +68,21 @@ export function registerRunCommand(program: Command): void {
       }
 
       const branchName = options.branch ?? suggestBranchName(sessionName, config.branchNaming.prefix);
-
       if (!isValidBranchName(branchName)) {
         console.error(`Invalid branch name: "${branchName}". Branch names must not contain shell metacharacters.`);
         return;
       }
-      const executionTarget = options.cloud
-        ? 'cloud' as const
+
+      if (options.sandbox && !['read-only', 'workspace-write', 'danger-full-access'].includes(options.sandbox)) {
+        console.error(`Invalid sandbox mode: "${options.sandbox}".`);
+        return;
+      }
+
+      const executionTarget = options.local
+        ? 'local' as const
         : options.container
           ? 'local-container' as const
-          : 'local' as const;
+          : 'cloud' as const;
 
       let session;
       try {
@@ -81,7 +92,7 @@ export function registerRunCommand(program: Command): void {
           branchName,
           personas: config.defaultPersonas,
           executionTarget,
-          task,
+          task: goal,
         });
       } catch (err) {
         if (err instanceof SessionError) {
@@ -97,37 +108,29 @@ export function registerRunCommand(program: Command): void {
         createEvent(session.id, 'session.created', `Session "${sessionName}" created`),
       );
 
-      const workerCount = options.workers ? parseInt(options.workers, 10) : undefined;
-      if (options.workers && (isNaN(workerCount!) || workerCount! < 1)) {
-        console.error(`Invalid worker count: "${options.workers}". Must be a positive integer.`);
-        return;
-      }
-
-      const reviewerNames = options.reviewers
-        ? options.reviewers.split(',').map(s => s.trim()).filter(Boolean)
-        : undefined;
-
       console.log(`\nSession "${sessionName}" started on branch ${branchName}`);
-      console.log(`Task: ${task}`);
-      if (workerCount) console.log(`Workers: ${workerCount}`);
-      if (reviewerNames) console.log(`Reviewers: ${reviewerNames.join(', ')}`);
+      console.log(`Goal: ${goal}`);
+      console.log(`Target: ${executionTarget}`);
       console.log('');
 
       await startSession(session.id, repo.root, {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
       }, {
-        workerCount,
-        reviewerNames,
-        parallel: options.parallel,
+        model: options.model,
+        sandbox: options.sandbox,
+        search: options.search,
         skipClone: options.clone === false,
+        noPush: options.push === false,
+        noPr: options.pr === false,
+        keepWorkspace: options.keepWorkspace,
         verbose: options.verbose,
       });
     });
 }
 
-function generateSessionName(task: string): string {
-  const slug = task
+function generateSessionName(goal: string): string {
+  const slug = goal
     .toLowerCase()
     .replace(/https?:\/\/\S+/g, '')
     .replace(/[^a-z0-9]+/g, '-')

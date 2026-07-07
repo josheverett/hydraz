@@ -83,10 +83,6 @@ export class LocalContainerProvider implements WorkspaceProvider {
         );
       }
 
-      if (!params.config.github.token) {
-        throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
-      }
-
       const ghRepo = getGitHubRepo(session.repoRoot);
       if (!ghRepo) {
         throw new Error(

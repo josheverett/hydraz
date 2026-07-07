@@ -24,7 +24,7 @@ export function createProgram(): Command {
 
   program
     .name('hydraz')
-    .description('An opinionated CLI for autonomous, multi-process coding swarms')
+    .description('A Codex cloud harness for detached long-running coding goals')
     .version(readPackageVersion())
     .action(async () => {
       await runInteractive();

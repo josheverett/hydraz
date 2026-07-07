@@ -1,22 +1,28 @@
 import type { Command } from 'commander';
 import { select } from '@inquirer/prompts';
 import { detectRepo } from '../../core/repo/detect.js';
-import { listSessions, findSessionByName, isTerminalState } from '../../core/sessions/index.js';
+import { listSessions, findSessionByName } from '../../core/sessions/index.js';
 import { resumeSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
 
 export function registerResumeCommand(program: Command): void {
   program
     .command('resume')
-    .description('Resume a paused, interrupted, or blocked session')
+    .description('Resume a preserved Codex session with a follow-up prompt')
     .argument('[session]', 'Session name (prompted if not provided)')
-    .option('--verbose', 'Enable exhaustive diagnostic output')
-    .action(async (sessionName: string | undefined, options: { verbose?: boolean }) => {
+    .argument('[prompt]', 'Prompt to send to codex exec resume')
+    .option('--verbose', 'Enable diagnostic output')
+    .action(async (sessionName: string | undefined, prompt: string | undefined, options: { verbose?: boolean }) => {
       if (options.verbose) setVerbose(true);
 
       const repo = detectRepo();
       if (!repo) {
         console.error('Not in a git repository.');
+        return;
+      }
+
+      if (!prompt?.trim()) {
+        console.error('A resume prompt is required.');
         return;
       }
 
@@ -27,36 +33,30 @@ export function registerResumeCommand(program: Command): void {
           return;
         }
 
-        console.log(`\nResuming session "${sessionName}"...\n`);
         await resumeSession(session.id, repo.root, {
           onStreamLine: (line) => console.log(line),
           onError: (msg) => console.error(msg),
-        }, { verbose: options.verbose });
+        }, { verbose: options.verbose, prompt });
         return;
       }
 
-      const resumable = listSessions(repo.root).filter(
-        (s) => s.state !== 'completed' && (isTerminalState(s.state) || s.state !== 'created'),
-      );
-
+      const resumable = listSessions(repo.root).filter((s) => Boolean(s.codex?.threadId && s.workspaceDir));
       if (resumable.length === 0) {
-        console.log('\nNo sessions available to resume.\n');
+        console.log('\nNo Codex sessions available to resume.\n');
         return;
       }
 
       const chosen = await select({
         message: 'Select session to resume',
         choices: resumable.map((s) => ({
-          name: `${s.name} [${s.state}]${s.blockerMessage ? ` — ${s.blockerMessage}` : ''}`,
+          name: `${s.name} [${s.state}]`,
           value: s.id,
         })),
       });
 
-      const session = resumable.find((s) => s.id === chosen)!;
-      console.log(`\nResuming session "${session.name}"...\n`);
       await resumeSession(chosen, repo.root, {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
-      }, { verbose: options.verbose });
+      }, { verbose: options.verbose, prompt });
     });
 }

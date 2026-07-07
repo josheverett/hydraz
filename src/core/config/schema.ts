@@ -23,12 +23,20 @@ export interface RetentionConfig {
   keepTestLogs: boolean;
 }
 
+export interface CodexConfig {
+  command: string;
+  model?: string;
+  sandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
+  search: boolean;
+}
+
 export interface HydrazConfig {
   executionTarget: ExecutionTarget;
   defaultPersonas: [string, string, string];
   branchNaming: BranchNamingConfig;
   claudeAuth: ClaudeAuthConfig;
   github: GitHubAuthConfig;
+  codex: CodexConfig;
   retention: RetentionConfig;
   displayVerbosity: DisplayVerbosity;
 }
@@ -52,7 +60,7 @@ export const DEFAULT_SWARM: [string, string, string] = [
 
 export function createDefaultConfig(): HydrazConfig {
   return {
-    executionTarget: 'local',
+    executionTarget: 'cloud',
     defaultPersonas: [...DEFAULT_SWARM],
     branchNaming: {
       prefix: 'hydraz/',
@@ -61,6 +69,11 @@ export function createDefaultConfig(): HydrazConfig {
       mode: 'claude-ai-oauth',
     },
     github: {},
+    codex: {
+      command: 'codex',
+      sandbox: 'workspace-write',
+      search: false,
+    },
     retention: {
       keepTranscripts: false,
       keepTestLogs: false,
@@ -106,6 +119,22 @@ export function validateConfig(data: unknown): HydrazConfig {
     token: expectOptionalString(val as Record<string, unknown>, 'token'),
   }));
 
+  const codex = expectObject(obj, 'codex', defaults.codex, (val) => ({
+    command: expectString(val as Record<string, unknown>, 'command', defaults.codex.command),
+    model: expectOptionalString(val as Record<string, unknown>, 'model'),
+    sandbox: expectEnum(
+      val as Record<string, unknown>,
+      'sandbox',
+      ['read-only', 'workspace-write', 'danger-full-access'] as const,
+      defaults.codex.sandbox,
+    ),
+    search: expectBoolean(
+      val as Record<string, unknown>,
+      'search',
+      defaults.codex.search,
+    ),
+  }));
+
   const retention = expectObject(obj, 'retention', defaults.retention, (val) => ({
     keepTranscripts: expectBoolean(
       val as Record<string, unknown>,
@@ -132,6 +161,7 @@ export function validateConfig(data: unknown): HydrazConfig {
     branchNaming,
     claudeAuth,
     github,
+    codex,
     retention,
     displayVerbosity,
   };

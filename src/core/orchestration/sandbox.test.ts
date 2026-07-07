@@ -91,6 +91,7 @@ const fakeConfig: HydrazConfig = {
   branchNaming: { prefix: 'hydraz/' },
   claudeAuth: { mode: 'claude-ai-oauth', oauthToken: 'tok' },
   github: { token: 'gh-token' },
+  codex: { command: 'codex', sandbox: 'workspace-write', search: false },
   retention: { keepTranscripts: false, keepTestLogs: false },
   displayVerbosity: 'compact',
 };

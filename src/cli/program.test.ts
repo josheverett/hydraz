@@ -11,18 +11,14 @@ const packageJson = JSON.parse(
 const EXPECTED_COMMANDS = [
   'config',
   'run',
-  'hello-world',
-  'sandbox',
   'attach',
   'sessions',
   'status',
-  'review',
   'resume',
   'stop',
-  'events',
-  'personas',
-  'mcp',
+  'logs',
   'clean',
+  'shell',
 ] as const;
 
 describe('createProgram', () => {
@@ -36,23 +32,10 @@ describe('createProgram', () => {
     expect(program.version()).toBe(packageJson.version);
   });
 
-  it('has a description', () => {
+  it('registers the v3 command surface only', () => {
     const program = createProgram();
-    expect(program.description()).toBeTruthy();
-  });
-
-  it('registers all expected commands', () => {
-    const program = createProgram();
-    const commandNames = program.commands.map((cmd) => cmd.name());
-
-    for (const name of EXPECTED_COMMANDS) {
-      expect(commandNames, `missing command: ${name}`).toContain(name);
-    }
-  });
-
-  it('registers exactly the expected number of commands', () => {
-    const program = createProgram();
-    expect(program.commands).toHaveLength(EXPECTED_COMMANDS.length);
+    const commandNames = program.commands.map((cmd) => cmd.name()).sort();
+    expect(commandNames).toEqual([...EXPECTED_COMMANDS].sort());
   });
 
   it('every command has a description', () => {
@@ -62,34 +45,27 @@ describe('createProgram', () => {
     }
   });
 
-  it('run command accepts a task argument', () => {
+  it('run command accepts a required goal argument', () => {
     const program = createProgram();
     const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
     expect(runCmd).toBeDefined();
-
-    const args = runCmd!.registeredArguments;
-    expect(args).toHaveLength(1);
-    expect(args[0].required).toBe(true);
+    expect(runCmd!.registeredArguments).toHaveLength(1);
+    expect(runCmd!.registeredArguments[0].required).toBe(true);
   });
 
-  it('run command has local and cloud options', () => {
+  it('run command exposes Codex v3 options and rejects old swarm options', () => {
     const program = createProgram();
-    const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
-    expect(runCmd).toBeDefined();
+    const runCmd = program.commands.find((cmd) => cmd.name() === 'run')!;
+    const optionNames = runCmd.options.map((opt) => opt.long);
 
-    const optionNames = runCmd!.options.map((opt) => opt.long);
-    expect(optionNames).toContain('--local');
-    expect(optionNames).toContain('--cloud');
-    expect(optionNames).toContain('--session');
-    expect(optionNames).toContain('--branch');
-  });
-
-  it('run command has --parallel option', () => {
-    const program = createProgram();
-    const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
-    expect(runCmd).toBeDefined();
-
-    const optionNames = runCmd!.options.map((opt) => opt.long);
-    expect(optionNames).toContain('--parallel');
+    expect(optionNames).toContain('--model');
+    expect(optionNames).toContain('--sandbox');
+    expect(optionNames).toContain('--search');
+    expect(optionNames).toContain('--no-push');
+    expect(optionNames).toContain('--no-pr');
+    expect(optionNames).toContain('--keep-workspace');
+    expect(optionNames).not.toContain('--workers');
+    expect(optionNames).not.toContain('--reviewers');
+    expect(optionNames).not.toContain('--parallel');
   });
 });

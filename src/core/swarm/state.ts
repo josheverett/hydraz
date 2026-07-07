@@ -32,13 +32,13 @@ export const SWARM_RESUMABLE_STATES: readonly SwarmPhase[] = [
 
 export const SWARM_VALID_TRANSITIONS: Record<SwarmPhase, readonly SwarmPhase[]> = {
   created: ['starting', 'failed', 'blocked', 'stopped'],
-  starting: ['investigating', 'failed', 'blocked', 'stopped'],
+  starting: ['investigating', 'syncing', 'failed', 'blocked', 'stopped'],
   investigating: ['architecting', 'failed', 'blocked', 'stopped'],
   architecting: ['planning', 'failed', 'blocked', 'stopped'],
   planning: ['architect-reviewing', 'failed', 'blocked', 'stopped'],
   'architect-reviewing': ['fanning-out', 'planning', 'failed', 'blocked', 'stopped'],
   'fanning-out': ['syncing', 'failed', 'blocked', 'stopped'],
-  syncing: ['merging', 'failed', 'blocked', 'stopped'],
+  syncing: ['merging', 'delivering', 'failed', 'blocked', 'stopped'],
   merging: ['reviewing', 'failed', 'blocked', 'stopped'],
   reviewing: ['delivering', 'planning', 'failed', 'blocked', 'stopped'],
   delivering: ['completed', 'failed', 'blocked', 'stopped'],
@@ -59,4 +59,3 @@ export function isSwarmTerminalState(phase: SwarmPhase): boolean {
 export function isSwarmActiveState(phase: SwarmPhase): boolean {
   return (SWARM_ACTIVE_STATES as readonly string[]).includes(phase);
 }
-

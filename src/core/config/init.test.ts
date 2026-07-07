@@ -33,7 +33,8 @@ describe('initializeConfigDir', () => {
     expect(existsSync(paths.configFile)).toBe(true);
     const raw = readFileSync(paths.configFile, 'utf-8');
     const config = JSON.parse(raw);
-    expect(config.executionTarget).toBe('local');
+    expect(config.executionTarget).toBe('cloud');
+    expect(config.codex.sandbox).toBe('workspace-write');
   });
 
   it('creates master-prompt.md', () => {
