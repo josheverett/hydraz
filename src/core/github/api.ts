@@ -4,6 +4,16 @@ interface GitHubRepoResponse {
   default_branch?: string;
 }
 
+interface GitHubUserResponse {
+  id?: number;
+  login?: string;
+}
+
+export interface GitHubGitIdentity {
+  name: string;
+  email: string;
+}
+
 interface GitHubPullRequestResponse {
   number?: number;
   html_url?: string;
@@ -56,6 +66,23 @@ export async function getGitHubDefaultBranch(
     throw new GitHubApiError('GitHub repo metadata did not include a default branch');
   }
   return data.default_branch;
+}
+
+export async function getGitHubAuthenticatedUserIdentity(token: string): Promise<GitHubGitIdentity> {
+  const response = await githubRequest('/user', token);
+  if (!response.ok) {
+    throw new GitHubApiError(`Failed to load GitHub authenticated user (${response.status})`);
+  }
+
+  const data = await response.json() as GitHubUserResponse;
+  if (typeof data.id !== 'number' || !data.login) {
+    throw new GitHubApiError('GitHub authenticated user response did not include id and login');
+  }
+
+  return {
+    name: data.login,
+    email: `${data.id}+${data.login}@users.noreply.github.com`,
+  };
 }
 
 export async function githubBranchExists(

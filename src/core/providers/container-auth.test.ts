@@ -25,6 +25,22 @@ describe('prepareContainerAuthEnv', () => {
     expect(env['GH_TOKEN']).toBe('github_pat_test');
   });
 
+  it('includes managed git identity env when identity is provided', () => {
+    const config = createDefaultConfig();
+    config.github.token = 'github_pat_test';
+    const env = prepareContainerAuthEnv(config, {
+      name: 'josheverett',
+      email: '151150+josheverett@users.noreply.github.com',
+    });
+
+    expect(env['GIT_AUTHOR_NAME']).toBe('josheverett');
+    expect(env['GIT_AUTHOR_EMAIL']).toBe('151150+josheverett@users.noreply.github.com');
+    expect(env['GIT_COMMITTER_NAME']).toBe('josheverett');
+    expect(env['GIT_COMMITTER_EMAIL']).toBe('151150+josheverett@users.noreply.github.com');
+    expect(env['GH_TOKEN']).toBe('github_pat_test');
+    expect(env['GIT_CONFIG_KEY_2']).toBe('http.https://github.com/.extraheader');
+  });
+
   it('does not include GH_TOKEN when no GitHub token is configured', () => {
     const config = createDefaultConfig();
     const env = prepareContainerAuthEnv(config);

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
+import type { GitHubGitIdentity } from '../github/api.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -277,6 +278,22 @@ export function copyWorktreeIncludesInContainer(
   const start = Date.now();
   execFileSync('ssh', [`${workspaceName}.devpod`, joined], EXEC_OPTIONS);
   debugTiming('copyWorktreeIncludesInContainer', Date.now() - start);
+}
+
+export function configureGitIdentityInContainer(
+  workspaceName: string,
+  containerWorktreePath: string,
+  identity: GitHubGitIdentity,
+): void {
+  const command = [
+    `cd ${shellEscape(containerWorktreePath)}`,
+    `git config user.name ${shellEscape(identity.name)}`,
+    `git config user.email ${shellEscape(identity.email)}`,
+  ].join('\n');
+  debugExec('ssh', [`${workspaceName}.devpod`, command]);
+  const start = Date.now();
+  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
+  debugTiming('configureGitIdentityInContainer', Date.now() - start);
 }
 
 export function verifyBranchPushed(

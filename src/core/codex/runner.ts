@@ -9,6 +9,7 @@ import { parseCodexJsonLine } from './events.js';
 import type { CodexDeliveryResult } from './delivery.js';
 import { finalizeCodexDelivery } from './delivery.js';
 import type { WorkspaceProvider } from '../providers/provider.js';
+import type { GitHubGitIdentity } from '../github/api.js';
 
 export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
@@ -28,6 +29,7 @@ export interface CodexRunnerOptions {
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   skipGitRepoCheck?: boolean;
+  gitIdentity?: GitHubGitIdentity;
   resumeThreadId?: string;
   resumePrompt?: string;
   delivery?: {
@@ -163,6 +165,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       },
       provider: NOOP_PROVIDER,
       githubToken: options.config.github.token,
+      gitIdentity: options.gitIdentity,
       createPullRequest: options.delivery.createPullRequest,
       keepWorkspace: options.delivery.keepWorkspace,
     });

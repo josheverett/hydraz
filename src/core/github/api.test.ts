@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   compareGitHubBranches,
   ensureGitHubPullRequest,
+  getGitHubAuthenticatedUserIdentity,
   getGitHubDefaultBranch,
   githubBranchExists,
 } from './api.js';
@@ -29,6 +30,26 @@ describe('github api helpers', () => {
     }), { status: 200 }));
 
     await expect(getGitHubDefaultBranch(repo, 'token')).resolves.toBe('main');
+  });
+
+  it('derives a GitHub noreply identity for the authenticated token user', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      id: 151150,
+      login: 'josheverett',
+    }), { status: 200 }));
+
+    await expect(getGitHubAuthenticatedUserIdentity('token')).resolves.toEqual({
+      name: 'josheverett',
+      email: '151150+josheverett@users.noreply.github.com',
+    });
+  });
+
+  it('throws a clear error when the authenticated GitHub user cannot be loaded', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 401 }));
+
+    await expect(getGitHubAuthenticatedUserIdentity('token')).rejects.toThrow(
+      'Failed to load GitHub authenticated user (401)',
+    );
   });
 
   it('returns true when the branch exists on GitHub', async () => {

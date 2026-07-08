@@ -184,6 +184,30 @@ describe('Codex controller', () => {
     });
   });
 
+  it('passes the managed git identity from the workspace to the detached runner', async () => {
+    vi.spyOn(CloudProvider.prototype, 'createWorkspace').mockImplementation(async (params: any) => ({
+      id: params.session.id,
+      type: 'cloud' as const,
+      directory: '/workspaces/hydraz-test',
+      branchName: params.session.branchName,
+      sessionId: params.session.id,
+      gitIdentity: {
+        name: 'josheverett',
+        email: '151150+josheverett@users.noreply.github.com',
+      },
+    }));
+    const session = makeSession('cloud-git-identity');
+
+    await startSession(session.id, repoRoot);
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      gitIdentity: {
+        name: 'josheverett',
+        email: '151150+josheverett@users.noreply.github.com',
+      },
+    });
+  });
+
   it('refreshes a finished runner result into completed state', () => {
     const session = makeSession('refresh-finished');
     transitionState(repoRoot, session.id, 'starting');

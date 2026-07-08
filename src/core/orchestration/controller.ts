@@ -189,7 +189,7 @@ async function startCodexRunner(
     }
 
     const codexDir = `/tmp/hydraz-codex/${session.id}`;
-    const runnerOptions = buildRunnerOptions(repoRoot, session, workspace.directory, codexDir, options);
+    const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
     const resultPath = `${codexDir}/${CODEX_RESULT_FILE}`;
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
@@ -225,7 +225,7 @@ async function startCodexRunner(
   }
 
   const codexDir = join(getSessionDir(repoRoot, session.id), 'codex');
-  const runnerOptions = buildRunnerOptions(repoRoot, session, workspace.directory, codexDir, options);
+  const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
   const runnerScript = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'codex', 'runner.js');
   const child = spawn(process.execPath, [runnerScript], {
     cwd: workspace.directory,
@@ -251,7 +251,7 @@ async function startCodexRunner(
 function buildRunnerOptions(
   repoRoot: string,
   session: SessionMetadata,
-  workingDirectory: string,
+  workspace: WorkspaceInfo,
   codexDir: string,
   options: SwarmOptions & { resumeThreadId?: string; resumePrompt?: string },
 ): CodexRunnerOptions {
@@ -263,18 +263,19 @@ function buildRunnerOptions(
   );
 
   return {
-    repoRoot: workingDirectory,
+    repoRoot: workspace.directory,
     sessionId: session.id,
     sessionName: session.name,
     branchName: session.branchName,
     goal: session.task,
-    workingDirectory,
+    workingDirectory: workspace.directory,
     codexDir,
     config,
     model: options.model,
     sandbox,
     search: options.search ?? true,
     skipGitRepoCheck: isContainerExecutionTarget(session.executionTarget),
+    gitIdentity: workspace.gitIdentity,
     resumeThreadId: options.resumeThreadId,
     resumePrompt: options.resumePrompt,
     delivery: {

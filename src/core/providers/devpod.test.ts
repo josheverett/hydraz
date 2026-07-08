@@ -16,6 +16,7 @@ import {
   devpodSsh,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
+  configureGitIdentityInContainer,
   scpToContainer,
   scpFilesToContainer,
   getDistRoot,
@@ -429,6 +430,22 @@ describe('copyWorktreeIncludesInContainer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
     expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('configureGitIdentityInContainer', () => {
+  it('sets git user.name and user.email inside the managed worktree', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+
+    configureGitIdentityInContainer('my-ws', '/tmp/hydraz-worktrees/session-id', {
+      name: 'josheverett',
+      email: '151150+josheverett@users.noreply.github.com',
+    });
+
+    const command = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
+    expect(command).toContain("cd '/tmp/hydraz-worktrees/session-id'");
+    expect(command).toContain("git config user.name 'josheverett'");
+    expect(command).toContain("git config user.email '151150+josheverett@users.noreply.github.com'");
   });
 });
 

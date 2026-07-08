@@ -52,6 +52,10 @@ describe('finalizeCodexDelivery', () => {
       workspace: makeWorkspace(),
       provider,
       githubToken: 'ghp-test',
+      gitIdentity: {
+        name: 'josheverett',
+        email: '151150+josheverett@users.noreply.github.com',
+      },
       createPullRequest: true,
       execFile,
       createPullRequestForBranch,
@@ -63,7 +67,15 @@ describe('finalizeCodexDelivery', () => {
     });
 
     expect(execFile).toHaveBeenCalledWith('git', ['add', '-A'], expect.objectContaining({ cwd: '/workspace' }));
-    expect(execFile).toHaveBeenCalledWith('git', ['commit', '-m', 'Hydraz Codex: codex-v3'], expect.objectContaining({ cwd: '/workspace' }));
+    expect(execFile).toHaveBeenCalledWith('git', ['commit', '-m', 'Hydraz Codex: codex-v3'], expect.objectContaining({
+      cwd: '/workspace',
+      env: expect.objectContaining({
+        GIT_AUTHOR_NAME: 'josheverett',
+        GIT_AUTHOR_EMAIL: '151150+josheverett@users.noreply.github.com',
+        GIT_COMMITTER_NAME: 'josheverett',
+        GIT_COMMITTER_EMAIL: '151150+josheverett@users.noreply.github.com',
+      }),
+    }));
     expect(execFile).toHaveBeenCalledWith('git', ['push', 'origin', 'hydraz/codex-v3'], expect.objectContaining({ cwd: '/workspace' }));
     expect(createPullRequestForBranch).toHaveBeenCalledOnce();
     expect(provider.destroyWorkspace).toHaveBeenCalledWith('/repo', makeWorkspace());

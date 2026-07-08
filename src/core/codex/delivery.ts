@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import type { SessionMetadata } from '../sessions/schema.js';
 import type { WorkspaceInfo, WorkspaceProvider } from '../providers/provider.js';
 import { getGitHubRepo } from '../repo/detect.js';
@@ -7,6 +7,7 @@ import {
   compareGitHubBranches,
   ensureGitHubPullRequest,
   getGitHubDefaultBranch,
+  type GitHubGitIdentity,
 } from '../github/api.js';
 
 export interface CodexDeliveryResult {
@@ -24,6 +25,7 @@ export interface CodexDeliveryOptions {
   workspace: WorkspaceInfo;
   provider: WorkspaceProvider;
   githubToken?: string;
+  gitIdentity?: GitHubGitIdentity;
   createPullRequest: boolean;
   keepWorkspace?: boolean;
   execFile?: typeof execFileSync;
@@ -41,32 +43,29 @@ export interface CodexDeliveryOptions {
 
 export async function finalizeCodexDelivery(options: CodexDeliveryOptions): Promise<CodexDeliveryResult> {
   const execFile = options.execFile ?? execFileSync;
+  const gitEnv = buildGitIdentityEnv(options.gitIdentity);
+  const gitExecOptions = (): ExecFileSyncOptions => ({
+    cwd: options.workspace.directory,
+    stdio: 'pipe',
+    ...gitEnv,
+  });
   let committed = false;
   let pushed = false;
 
   try {
-    const status = execFile('git', ['status', '--porcelain'], {
-      cwd: options.workspace.directory,
-      stdio: 'pipe',
+    const statusOptions: ExecFileSyncOptions = {
+      ...gitExecOptions(),
       encoding: 'utf-8',
-    }) as unknown as string;
+    };
+    const status = execFile('git', ['status', '--porcelain'], statusOptions) as unknown as string;
 
     if (status.trim().length > 0) {
-      execFile('git', ['add', '-A'], {
-        cwd: options.workspace.directory,
-        stdio: 'pipe',
-      });
-      execFile('git', ['commit', '-m', `Hydraz Codex: ${options.session.name}`], {
-        cwd: options.workspace.directory,
-        stdio: 'pipe',
-      });
+      execFile('git', ['add', '-A'], gitExecOptions());
+      execFile('git', ['commit', '-m', `Hydraz Codex: ${options.session.name}`], gitExecOptions());
       committed = true;
     }
 
-    execFile('git', ['push', 'origin', options.session.branchName], {
-      cwd: options.workspace.directory,
-      stdio: 'pipe',
-    });
+    execFile('git', ['push', 'origin', options.session.branchName], gitExecOptions());
     pushed = true;
   } catch (err) {
     return preserve(committed, pushed, err instanceof Error ? err.message : String(err));
@@ -173,5 +172,19 @@ function preserve(committed: boolean, pushed: boolean, error: string): CodexDeli
     pushed,
     error,
     message: `Workspace preserved: ${error}`,
+  };
+}
+
+function buildGitIdentityEnv(identity?: GitHubGitIdentity): { env?: NodeJS.ProcessEnv } {
+  if (!identity) return {};
+
+  return {
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: identity.name,
+      GIT_AUTHOR_EMAIL: identity.email,
+      GIT_COMMITTER_NAME: identity.name,
+      GIT_COMMITTER_EMAIL: identity.email,
+    },
   };
 }
