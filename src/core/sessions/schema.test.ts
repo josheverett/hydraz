@@ -15,7 +15,6 @@ describe('createSession', () => {
       name: 'test-session',
       repoRoot: '/tmp/repo',
       branchName: 'hydraz/test-session',
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local',
       task: 'Fix the auth bug',
     });
@@ -30,7 +29,6 @@ describe('createSession', () => {
       name: 'test',
       repoRoot: '/tmp/repo',
       branchName: 'hydraz/test',
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local',
       task: 'Fix it',
     });
@@ -43,7 +41,6 @@ describe('createSession', () => {
       name: 'test',
       repoRoot: '/tmp/repo',
       branchName: 'hydraz/test',
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local',
       task: 'Fix it',
     });
@@ -52,19 +49,16 @@ describe('createSession', () => {
     expect(session.updatedAt).toBe(session.createdAt);
   });
 
-  it('copies personas array', () => {
-    const personas: [string, string, string] = ['a', 'b', 'c'];
+  it('stores the goal task', () => {
     const session = createSession({
       name: 'test',
       repoRoot: '/tmp/repo',
       branchName: 'hydraz/test',
-      personas,
       executionTarget: 'local',
       task: 'Fix it',
     });
 
-    expect(session.personas).toEqual(personas);
-    expect(session.personas).not.toBe(personas);
+    expect(session.task).toBe('Fix it');
   });
 });
 
@@ -73,8 +67,8 @@ describe('isValidTransition', () => {
     expect(isValidTransition('created', 'starting')).toBe(true);
   });
 
-  it('allows starting → investigating', () => {
-    expect(isValidTransition('starting', 'investigating')).toBe(true);
+  it('allows starting → syncing', () => {
+    expect(isValidTransition('starting', 'syncing')).toBe(true);
   });
 
   it('allows any active state → stopped', () => {
@@ -93,16 +87,8 @@ describe('isValidTransition', () => {
     expect(isValidTransition('delivering', 'completed')).toBe(true);
   });
 
-  it('allows architect-reviewing → planning (consensus loop)', () => {
-    expect(isValidTransition('architect-reviewing', 'planning')).toBe(true);
-  });
-
-  it('allows reviewing → planning (outer loop feedback)', () => {
-    expect(isValidTransition('reviewing', 'planning')).toBe(true);
-  });
-
-  it('blocks reviewing → architecting (not a valid pipeline path)', () => {
-    expect(isValidTransition('reviewing', 'architecting')).toBe(false);
+  it('allows syncing → delivering', () => {
+    expect(isValidTransition('syncing', 'delivering')).toBe(true);
   });
 
   it('blocks transitions from terminal states', () => {
@@ -112,8 +98,8 @@ describe('isValidTransition', () => {
   });
 
   it('blocks skipping phases', () => {
-    expect(isValidTransition('created', 'investigating')).toBe(false);
-    expect(isValidTransition('planning', 'syncing')).toBe(false);
+    expect(isValidTransition('created', 'syncing')).toBe(false);
+    expect(isValidTransition('starting', 'delivering')).toBe(false);
   });
 });
 

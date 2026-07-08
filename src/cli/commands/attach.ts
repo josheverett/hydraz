@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { select } from '@inquirer/prompts';
+import { spawn } from 'node:child_process';
 import { detectRepo } from '../../core/repo/detect.js';
 import { getActiveSessions, findSessionByName, type SessionMetadata } from '../../core/sessions/index.js';
 import { readEvents, formatEvent } from '../../core/events/index.js';
@@ -51,8 +52,10 @@ function renderAttachView(session: SessionMetadata, repoRoot: string): void {
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
-  console.log(`  Personas:   ${session.personas.join(', ')}`);
-  console.log(`  Task:       ${session.task}`);
+  console.log(`  Goal:       ${session.task}`);
+  if (session.codex?.threadId) {
+    console.log(`  Codex:      ${session.codex.threadId}`);
+  }
 
   if (session.blockerMessage) {
     console.log(`  Blocker:    ${session.blockerMessage}`);
@@ -67,5 +70,15 @@ function renderAttachView(session: SessionMetadata, repoRoot: string): void {
     }
   }
 
-  console.log();
+  if (session.executionTarget !== 'local' && session.codex?.eventsPath) {
+    console.log('\n  Streaming Codex events. Press Ctrl+C to detach.\n');
+    const child = spawn('ssh', [`hydraz-${session.id}.devpod`, `tail -f ${session.codex.eventsPath}`], {
+      stdio: 'inherit',
+    });
+    child.on('error', (err) => {
+      console.error(`Unable to attach: ${err.message}`);
+    });
+  } else {
+    console.log();
+  }
 }

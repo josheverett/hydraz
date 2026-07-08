@@ -1,11 +1,12 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
-import { dirname, join, posix, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { shellEscape } from '../claude/ssh.js';
+import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
+import type { GitHubGitIdentity } from '../github/api.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -279,6 +280,22 @@ export function copyWorktreeIncludesInContainer(
   debugTiming('copyWorktreeIncludesInContainer', Date.now() - start);
 }
 
+export function configureGitIdentityInContainer(
+  workspaceName: string,
+  containerWorktreePath: string,
+  identity: GitHubGitIdentity,
+): void {
+  const command = [
+    `cd ${shellEscape(containerWorktreePath)}`,
+    `git config user.name ${shellEscape(identity.name)}`,
+    `git config user.email ${shellEscape(identity.email)}`,
+  ].join('\n');
+  debugExec('ssh', [`${workspaceName}.devpod`, command]);
+  const start = Date.now();
+  execFileSync('ssh', [`${workspaceName}.devpod`, command], EXEC_OPTIONS);
+  debugTiming('configureGitIdentityInContainer', Date.now() - start);
+}
+
 export function verifyBranchPushed(
   workspaceName: string,
   worktreePath: string,
@@ -317,8 +334,13 @@ export async function scpToContainer(
   onHeartbeat?: (label: string, elapsedMs: number) => void,
 ): Promise<void> {
   const sshTarget = `${workspaceName}.devpod`;
-  const remoteCmd = `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
-  const shCmd = `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
+  const isFile = existsSync(localPath) && !statSync(localPath).isDirectory();
+  const remoteCmd = isFile
+    ? `rm -rf ${remotePath} && mkdir -p ${posix.dirname(remotePath)} && tar -C ${posix.dirname(remotePath)} -xf -`
+    : `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
+  const shCmd = isFile
+    ? `tar -C ${shellEscape(dirname(localPath))} --no-xattrs -cf - ${shellEscape(basename(localPath))} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`
+    : `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
   debugExec('sh', ['-c', shCmd]);
   const start = Date.now();
   await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {
@@ -349,22 +371,22 @@ export function scpFilesToContainer(
   debugTiming('scpFilesToContainer', Date.now() - start);
 }
 
-export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
-  debugExec('ssh', [`${workspaceName}.devpod`, 'claude --version']);
+export function verifyCodexInContainer(workspaceName: string): DevPodCheckResult {
+  debugExec('ssh', [`${workspaceName}.devpod`, 'codex --version']);
   const start = Date.now();
   try {
-    const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {
+    const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'codex --version'], {
       ...EXEC_OPTIONS,
       encoding: 'utf-8',
     });
-    debugOutput('claude --version stdout', output);
-    debugTiming('verifyClaudeInContainer', Date.now() - start);
+    debugOutput('codex --version stdout', output);
+    debugTiming('verifyCodexInContainer', Date.now() - start);
     return { available: true, version: output.trim() };
   } catch {
-    debugTiming('verifyClaudeInContainer (failed)', Date.now() - start);
+    debugTiming('verifyCodexInContainer (failed)', Date.now() - start);
     return {
       available: false,
-      error: 'Claude Code CLI is not available inside the container. Ensure your devcontainer includes Claude Code.',
+      error: 'Codex CLI is not available inside the container. Ensure your devcontainer includes Codex.',
     };
   }
 }

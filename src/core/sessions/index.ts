@@ -26,6 +26,7 @@ export {
   findSessionByName,
   getActiveSessions,
   getArtifactPath,
+  clearRepoSessions,
 } from './manager.js';
 export {
   type ArtifactSummary,

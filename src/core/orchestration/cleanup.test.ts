@@ -41,7 +41,6 @@ function makeSession(overrides: {
     name: overrides.name ?? 'test-session',
     repoRoot: '/fake/repo',
     branchName: overrides.branchName ?? 'hydraz/test-session',
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: overrides.executionTarget ?? 'local-container',
     task: 'Fix it',
     state: overrides.state ?? 'completed',
@@ -73,7 +72,7 @@ describe('findOrphanedWorkspaces', () => {
 
   it('ignores active sessions', () => {
     mockListSessions.mockReturnValue([
-      makeSession({ state: 'planning' }),
+      makeSession({ state: 'syncing' }),
       makeSession({ id: 'sess-002', state: 'syncing' }),
     ]);
     mockDevpodStatus.mockReturnValue('Running');
@@ -166,7 +165,7 @@ describe('findOrphanedWorkspaces', () => {
 
   it('finds stale workspaces for active sessions with a stopped DevPod workspace', () => {
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'stale-001', name: 'stale-session', state: 'planning' }),
+      makeSession({ id: 'stale-001', name: 'stale-session', state: 'syncing' }),
     ]);
     mockDevpodStatus.mockReturnValue('Stopped');
 
@@ -174,13 +173,13 @@ describe('findOrphanedWorkspaces', () => {
 
     expect(orphans).toHaveLength(1);
     expect(orphans[0]!.workspaceName).toBe('hydraz-stale-001');
-    expect(orphans[0]!.sessionState).toBe('planning');
+    expect(orphans[0]!.sessionState).toBe('syncing');
     expect(orphans[0]!.devpodStatus).toBe('Stopped');
   });
 
   it('does not flag active sessions whose DevPod workspace is still running', () => {
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'active-001', state: 'investigating' }),
+      makeSession({ id: 'active-001', state: 'syncing' }),
     ]);
     mockDevpodStatus.mockReturnValue('Running');
 
@@ -235,7 +234,7 @@ describe('findUnknownOrphanedWorkspaces', () => {
       { name: 'hydraz-active-sess', status: 'Running' },
     ]);
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'active-sess', state: 'planning' }),
+      makeSession({ id: 'active-sess', state: 'syncing' }),
     ]);
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
@@ -290,7 +289,7 @@ describe('findUnknownOrphanedWorkspaces', () => {
       { name: 'other-ws', status: 'Running' },
     ]);
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'active', state: 'planning' }),
+      makeSession({ id: 'active', state: 'syncing' }),
       makeSession({ id: 'done', state: 'completed' }),
     ]);
 
@@ -307,7 +306,7 @@ describe('findUnknownOrphanedWorkspaces', () => {
       { name: 'hydraz-local-sess', status: 'Running' },
     ]);
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'local-sess', state: 'planning', executionTarget: 'local' }),
+      makeSession({ id: 'local-sess', state: 'syncing', executionTarget: 'local' }),
     ]);
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
@@ -320,7 +319,7 @@ describe('findUnknownOrphanedWorkspaces', () => {
       { name: 'hydraz-zombie-sess', status: 'Stopped' },
     ]);
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'zombie-sess', state: 'planning' }),
+      makeSession({ id: 'zombie-sess', state: 'syncing' }),
     ]);
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
@@ -334,7 +333,7 @@ describe('findUnknownOrphanedWorkspaces', () => {
       { name: 'hydraz-active-sess', status: 'Running' },
     ]);
     mockListSessions.mockReturnValue([
-      makeSession({ id: 'active-sess', state: 'investigating' }),
+      makeSession({ id: 'active-sess', state: 'syncing' }),
     ]);
 
     const orphans = findUnknownOrphanedWorkspaces('/fake/repo');
@@ -407,8 +406,8 @@ describe('findAllOrphanedWorkspaces', () => {
   it('includes stale active sessions in the total', () => {
     mockListSessions.mockReturnValue([
       makeSession({ id: 'terminal-001', name: 'done', state: 'completed' }),
-      makeSession({ id: 'stale-001', name: 'zombie', state: 'planning' }),
-      makeSession({ id: 'active-001', name: 'running', state: 'investigating' }),
+      makeSession({ id: 'stale-001', name: 'zombie', state: 'syncing' }),
+      makeSession({ id: 'active-001', name: 'running', state: 'syncing' }),
     ]);
     mockDevpodStatus.mockImplementation((name: string) => {
       if (name === 'hydraz-terminal-001') return 'Running';

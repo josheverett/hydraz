@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  compareGitHubBranches,
   ensureGitHubPullRequest,
+  getGitHubAuthenticatedUserIdentity,
   getGitHubDefaultBranch,
   githubBranchExists,
 } from './api.js';
@@ -30,6 +32,26 @@ describe('github api helpers', () => {
     await expect(getGitHubDefaultBranch(repo, 'token')).resolves.toBe('main');
   });
 
+  it('derives a GitHub noreply identity for the authenticated token user', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      id: 151150,
+      login: 'josheverett',
+    }), { status: 200 }));
+
+    await expect(getGitHubAuthenticatedUserIdentity('token')).resolves.toEqual({
+      name: 'josheverett',
+      email: '151150+josheverett@users.noreply.github.com',
+    });
+  });
+
+  it('throws a clear error when the authenticated GitHub user cannot be loaded', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 401 }));
+
+    await expect(getGitHubAuthenticatedUserIdentity('token')).rejects.toThrow(
+      'Failed to load GitHub authenticated user (401)',
+    );
+  });
+
   it('returns true when the branch exists on GitHub', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 200 }));
 
@@ -40,6 +62,18 @@ describe('github api helpers', () => {
     vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 404 }));
 
     await expect(githubBranchExists(repo, 'hydraz/test', 'token')).resolves.toBe(false);
+  });
+
+  it('compares base and head branches on GitHub', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      ahead_by: 2,
+      total_commits: 2,
+    }), { status: 200 }));
+
+    await expect(compareGitHubBranches(repo, 'main', 'hydraz/test', 'token')).resolves.toEqual({
+      aheadBy: 2,
+      totalCommits: 2,
+    });
   });
 
   it('creates a pull request and returns its URL', async () => {
@@ -78,5 +112,23 @@ describe('github api helpers', () => {
       url: 'https://github.com/octocat/hello-world/pull/12',
       existing: true,
     });
+  });
+
+  it('includes GitHub validation details when PR creation fails with no existing PR', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: 'Validation Failed',
+        errors: [
+          { message: 'No commits between main and hydraz/test' },
+        ],
+      }), { status: 422 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    await expect(ensureGitHubPullRequest(repo, 'token', {
+      title: 'Title',
+      body: 'Body',
+      head: 'hydraz/test',
+      base: 'main',
+    })).rejects.toThrow('Failed to create GitHub pull request (422): Validation Failed: No commits between main and hydraz/test');
   });
 });

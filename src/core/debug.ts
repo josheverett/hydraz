@@ -1,3 +1,5 @@
+import { redactSecrets } from './display/sanitize.js';
+
 let verbose = false;
 
 function ts(): string {
@@ -19,20 +21,20 @@ export function isVerbose(): boolean {
 
 export function debug(msg: string): void {
   if (!verbose) return;
-  process.stderr.write(`[debug ${ts()}] ${msg}\n`);
+  process.stderr.write(`[debug ${ts()}] ${redactSecrets(msg)}\n`);
 }
 
 export function debugExec(cmd: string, args: string[]): void {
   if (!verbose) return;
-  process.stderr.write(`[debug ${ts()}] exec: ${cmd} ${args.join(' ')}\n`);
+  process.stderr.write(`[debug ${ts()}] ${redactSecrets(`exec: ${cmd} ${args.join(' ')}`)}\n`);
 }
 
 export function debugOutput(label: string, output: string): void {
   if (!verbose) return;
-  process.stderr.write(`[debug ${ts()}] ${label}: ${output.trimEnd()}\n`);
+  process.stderr.write(`[debug ${ts()}] ${redactSecrets(`${label}: ${output.trimEnd()}`)}\n`);
 }
 
 export function debugTiming(label: string, ms: number): void {
   if (!verbose) return;
-  process.stderr.write(`[debug ${ts()}] ${label}: ${ms}ms\n`);
+  process.stderr.write(`[debug ${ts()}] ${redactSecrets(label)}: ${ms}ms\n`);
 }

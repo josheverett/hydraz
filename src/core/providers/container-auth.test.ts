@@ -1,29 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { prepareContainerAuthEnv, validateContainerAuth } from './container-auth.js';
+import { prepareContainerAuthEnv } from './container-auth.js';
 import { createDefaultConfig } from '../config/schema.js';
 
 describe('prepareContainerAuthEnv', () => {
-  it('returns CLAUDE_CODE_OAUTH_TOKEN when token is configured', () => {
+  it('returns empty env when no GitHub token is configured', () => {
     const config = createDefaultConfig();
-    config.claudeAuth.mode = 'claude-ai-oauth';
-    config.claudeAuth.oauthToken = 'sk-ant-oat01-test-token';
-    const env = prepareContainerAuthEnv(config);
-    expect(env['CLAUDE_CODE_OAUTH_TOKEN']).toBe('sk-ant-oat01-test-token');
-  });
-
-  it('returns empty env when no token is configured', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'claude-ai-oauth';
     const env = prepareContainerAuthEnv(config);
     expect(Object.keys(env)).toHaveLength(0);
-  });
-
-  it('returns ANTHROPIC_API_KEY for api-key mode when set', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'api-key';
-    config.claudeAuth.apiKey = 'sk-ant-api-test';
-    const env = prepareContainerAuthEnv(config);
-    expect(env['ANTHROPIC_API_KEY']).toBe('sk-ant-api-test');
   });
 
   it('includes GitHub HTTPS git auth env when a GitHub token is configured', () => {
@@ -42,43 +25,25 @@ describe('prepareContainerAuthEnv', () => {
     expect(env['GH_TOKEN']).toBe('github_pat_test');
   });
 
+  it('includes managed git identity env when identity is provided', () => {
+    const config = createDefaultConfig();
+    config.github.token = 'github_pat_test';
+    const env = prepareContainerAuthEnv(config, {
+      name: 'josheverett',
+      email: '151150+josheverett@users.noreply.github.com',
+    });
+
+    expect(env['GIT_AUTHOR_NAME']).toBe('josheverett');
+    expect(env['GIT_AUTHOR_EMAIL']).toBe('151150+josheverett@users.noreply.github.com');
+    expect(env['GIT_COMMITTER_NAME']).toBe('josheverett');
+    expect(env['GIT_COMMITTER_EMAIL']).toBe('151150+josheverett@users.noreply.github.com');
+    expect(env['GH_TOKEN']).toBe('github_pat_test');
+    expect(env['GIT_CONFIG_KEY_2']).toBe('http.https://github.com/.extraheader');
+  });
+
   it('does not include GH_TOKEN when no GitHub token is configured', () => {
     const config = createDefaultConfig();
     const env = prepareContainerAuthEnv(config);
     expect(env['GH_TOKEN']).toBeUndefined();
-  });
-});
-
-describe('validateContainerAuth', () => {
-  it('returns valid when oauth token is configured', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'claude-ai-oauth';
-    config.claudeAuth.oauthToken = 'sk-ant-oat01-test-token';
-    const result = validateContainerAuth(config);
-    expect(result.valid).toBe(true);
-  });
-
-  it('returns invalid when oauth mode but no token', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'claude-ai-oauth';
-    const result = validateContainerAuth(config);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('OAuth token');
-  });
-
-  it('returns valid for api-key mode when key is configured', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'api-key';
-    config.claudeAuth.apiKey = 'sk-ant-api-test';
-    const result = validateContainerAuth(config);
-    expect(result.valid).toBe(true);
-  });
-
-  it('returns invalid for api-key mode when key is missing', () => {
-    const config = createDefaultConfig();
-    config.claudeAuth.mode = 'api-key';
-    const result = validateContainerAuth(config);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('API key');
   });
 });

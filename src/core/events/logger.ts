@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sanitizeInlineTerminalText } from '../display/sanitize.js';
+import { redactSecrets, sanitizeInlineTerminalText } from '../display/sanitize.js';
 import { getSessionDir } from '../sessions/manager.js';
 
 export interface HydrazEvent {
@@ -23,35 +23,13 @@ export type EventType =
   | 'session.warning'
   | 'workspace.created'
   | 'branch.created'
-  | 'claude.ready'
-  | 'claude.auth_resolved'
-  | 'swarm.started'
-  | 'swarm.container_setup'
-  | 'swarm.phase_changed'
-  | 'swarm.investigate_started'
-  | 'swarm.investigate_completed'
-  | 'swarm.architect_started'
-  | 'swarm.architect_completed'
-  | 'swarm.plan_started'
-  | 'swarm.plan_completed'
-  | 'swarm.consensus_round'
-  | 'swarm.consensus_round_started'
-  | 'swarm.consensus_planner_completed'
-  | 'swarm.consensus_planner_failed'
-  | 'swarm.consensus_review_started'
-  | 'swarm.consensus_review_completed'
-  | 'swarm.worker_launched'
-  | 'swarm.worker_completed'
-  | 'swarm.worker_failed'
-  | 'swarm.merge_started'
-  | 'swarm.merge_completed'
-  | 'swarm.merge_conflict'
-  | 'swarm.review_started'
-  | 'swarm.review_completed'
-  | 'swarm.review_feedback'
-  | 'swarm.outer_loop'
-  | 'swarm.delivery_started'
-  | 'swarm.delivery_completed'
+  | 'codex.runner_started'
+  | 'codex.runner_completed'
+  | 'codex.runner_failed'
+  | 'codex.thread_started'
+  | 'codex.container_setup'
+  | 'codex.delivery_completed'
+  | 'codex.delivery_failed'
   | 'artifact.created'
   | 'verification.passed'
   | 'verification.failed'
@@ -59,8 +37,7 @@ export type EventType =
   | 'pull_request.created'
   | 'workspace.destroyed'
   | 'workspace.preserved'
-  | 'workspace.heartbeat'
-  | 'swarm.heartbeat';
+  | 'workspace.heartbeat';
 
 export function createEvent(
   sessionId: string,
@@ -72,9 +49,9 @@ export function createEvent(
     timestamp: new Date().toISOString(),
     sessionId,
     type,
-    message,
+    message: redactSecrets(message),
     state: extra?.state,
-    metadata: extra?.metadata,
+    metadata: redactMetadata(extra?.metadata),
   };
 }
 
@@ -110,6 +87,25 @@ export function formatEvent(event: HydrazEvent): string {
   const time = sanitizeInlineTerminalText(event.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z'));
   const type = sanitizeInlineTerminalText(event.type);
   const state = event.state ? ` [${sanitizeInlineTerminalText(event.state)}]` : '';
-  const message = sanitizeInlineTerminalText(event.message);
+  const message = sanitizeInlineTerminalText(redactSecrets(event.message));
   return `${time}  ${type}${state}  ${message}`;
+}
+
+function redactMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  return redactMetadataValue(metadata) as Record<string, unknown>;
+}
+
+function redactMetadataValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(redactMetadataValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        redactMetadataValue(entry),
+      ]),
+    );
+  }
+  return value;
 }

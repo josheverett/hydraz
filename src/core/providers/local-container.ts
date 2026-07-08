@@ -14,8 +14,9 @@ import {
   checkDevcontainerPlatform,
   devpodUp,
   devpodDelete,
-  verifyClaudeInContainer,
+  verifyCodexInContainer,
   createWorktreeInContainer,
+  configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
 } from './devpod.js';
@@ -23,6 +24,7 @@ import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { prepareContainerAuthEnv } from './container-auth.js';
 import { getGitHubRepo, hasGitRemote, getCurrentBranch } from '../repo/detect.js';
 import { debug } from '../debug.js';
+import { getGitHubAuthenticatedUserIdentity } from '../github/api.js';
 
 export class LocalContainerProvider implements WorkspaceProvider {
   readonly type: ExecutionTarget = 'local-container';
@@ -83,10 +85,6 @@ export class LocalContainerProvider implements WorkspaceProvider {
         );
       }
 
-      if (!params.config.github.token) {
-        throw new Error('Container mode beta automation requires a GitHub token configured in `hydraz config`.');
-      }
-
       const ghRepo = getGitHubRepo(session.repoRoot);
       if (!ghRepo) {
         throw new Error(
@@ -107,22 +105,36 @@ export class LocalContainerProvider implements WorkspaceProvider {
       ? undefined
       : params.branchOverride ?? (this.type === 'local-container' ? getCurrentBranch(session.repoRoot) ?? undefined : undefined);
     debug(`createWorkspace: devpodUp source=${devpodSource} provider=${devpodProvider ?? 'default'} branch=${currentBranch ?? 'none'}`);
+    let gitIdentity = params.gitIdentity;
+    if (!params.skipClone) {
+      if (!gitIdentity && params.config.github.token) {
+        try {
+          gitIdentity = await getGitHubAuthenticatedUserIdentity(params.config.github.token);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(`Failed to load managed git identity: ${message}`);
+        }
+      }
+      if (!gitIdentity) {
+        throw new Error('GitHub token is required to configure managed git identity');
+      }
+    }
 
     try {
-      const authEnv = prepareContainerAuthEnv(params.config);
+      const authEnv = prepareContainerAuthEnv(params.config, gitIdentity);
       await devpodUp(devpodSource, workspaceName, devpodProvider, currentBranch, params.onHeartbeat, authEnv);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
 
-    debug('createWorkspace: verifying Claude Code in container');
-    const claudeCheck = verifyClaudeInContainer(workspaceName);
-    if (!claudeCheck.available) {
+    debug('createWorkspace: verifying Codex CLI in container');
+    const codexCheck = verifyCodexInContainer(workspaceName);
+    if (!codexCheck.available) {
       devpodDelete(workspaceName);
-      throw new Error(claudeCheck.error ?? 'Claude Code CLI is not available inside the container');
+      throw new Error(codexCheck.error ?? 'Codex CLI is not available inside the container');
     }
-    debug(`createWorkspace: claude available — ${claudeCheck.version}`);
+    debug(`createWorkspace: codex available — ${codexCheck.version}`);
 
     const containerRepoPath = `/workspaces/${workspaceName}`;
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);
@@ -135,6 +147,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
         directory: containerRepoPath,
         branchName: session.branchName,
         sessionId: session.id,
+        gitIdentity,
       };
     }
 
@@ -148,6 +161,9 @@ export class LocalContainerProvider implements WorkspaceProvider {
         session.id,
       );
       debug(`createWorkspace: worktreePath=${worktreePath} branch=${session.branchName}`);
+      if (gitIdentity) {
+        configureGitIdentityInContainer(workspaceName, worktreePath, gitIdentity);
+      }
       const safeIncludes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
       debug(`createWorkspace: copying ${safeIncludes.length} include files into worktree`);
       if (safeIncludes.length > 0) {
@@ -167,6 +183,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
       directory: worktreePath,
       branchName: session.branchName,
       sessionId: session.id,
+      gitIdentity,
     };
   }
 

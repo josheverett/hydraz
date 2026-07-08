@@ -20,6 +20,13 @@ vi.mock('./worktree-include.js', () => ({
   listCopyableWorktreeIncludes: vi.fn(() => ['agent/.env']),
 }));
 
+vi.mock('../github/api.js', () => ({
+  getGitHubAuthenticatedUserIdentity: vi.fn(async () => ({
+    name: 'josheverett',
+    email: '151150+josheverett@users.noreply.github.com',
+  })),
+}));
+
 vi.mock('./devpod.js', () => ({
   checkDevPodAvailability: vi.fn(() => ({ available: true, version: 'v0.6.15' })),
   checkDockerAvailability: vi.fn(() => true),
@@ -27,8 +34,9 @@ vi.mock('./devpod.js', () => ({
   checkDevcontainerPlatform: vi.fn(() => ({ ok: true })),
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
-  verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
+  verifyCodexInContainer: vi.fn(() => ({ available: true, version: 'codex-cli 0.142.5' })),
   createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
+  configureGitIdentityInContainer: vi.fn(),
   copyWorktreeIncludesInContainer: vi.fn(),
   scpFilesToContainer: vi.fn(),
   setupContainerGitSsh: vi.fn(),
@@ -42,21 +50,24 @@ import {
   hasDevcontainerJson,
   devpodUp,
   devpodDelete,
-  verifyClaudeInContainer,
+  verifyCodexInContainer,
   createWorktreeInContainer,
+  configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
   sshExec,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
+import { getGitHubAuthenticatedUserIdentity } from '../github/api.js';
 
 const mockCheckDevPod = vi.mocked(checkDevPodAvailability);
 const mockCheckDocker = vi.mocked(checkDockerAvailability);
 const mockHasDevcontainer = vi.mocked(hasDevcontainerJson);
 const mockDevpodUp = vi.mocked(devpodUp);
 const mockDevpodDelete = vi.mocked(devpodDelete);
-const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
+const mockVerifyCodex = vi.mocked(verifyCodexInContainer);
 const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
+const mockConfigureGitIdentity = vi.mocked(configureGitIdentityInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const mockScpFiles = vi.mocked(scpFilesToContainer);
 const _mockSshExec = vi.mocked(sshExec);
@@ -64,13 +75,13 @@ const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
 const mockGetCurrentBranch = vi.mocked(getCurrentBranch);
 const mockListCopyableIncludes = vi.mocked(listCopyableWorktreeIncludes);
+const mockGetGitHubIdentity = vi.mocked(getGitHubAuthenticatedUserIdentity);
 
 function makeSession(name: string = 'test-session', executionTarget: 'local-container' | 'cloud' = 'local-container') {
   return createSession({
     name,
     repoRoot: '/fake/repo',
     branchName: `hydraz/${name}`,
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget,
     task: 'Fix it',
   });
@@ -97,10 +108,14 @@ beforeEach(() => {
     repo: 'hello-world',
     httpsUrl: 'https://github.com/octocat/hello-world.git',
   });
-  mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
+  mockVerifyCodex.mockReturnValue({ available: true, version: 'codex-cli 0.142.5' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
   mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
+  mockGetGitHubIdentity.mockResolvedValue({
+    name: 'josheverett',
+    email: '151150+josheverett@users.noreply.github.com',
+  });
 });
 
 describe('LocalContainerProvider', () => {
@@ -164,6 +179,61 @@ describe('LocalContainerProvider', () => {
         session.branchName,
         session.id,
       );
+    });
+
+    it('configures managed git identity inside the created worktree when provided', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+      const gitIdentity = {
+        name: 'josheverett',
+        email: '151150+josheverett@users.noreply.github.com',
+      };
+
+      await provider.createWorkspace({ session, config, gitIdentity });
+
+      expect(mockConfigureGitIdentity).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/tmp/hydraz-worktrees/session-id',
+        gitIdentity,
+      );
+    });
+
+    it('fetches managed git identity from the configured GitHub token', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      expect(mockGetGitHubIdentity).toHaveBeenCalledWith('github_pat_test');
+      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      expect(envArg).toMatchObject({
+        GIT_AUTHOR_NAME: 'josheverett',
+        GIT_AUTHOR_EMAIL: '151150+josheverett@users.noreply.github.com',
+        GIT_COMMITTER_NAME: 'josheverett',
+        GIT_COMMITTER_EMAIL: '151150+josheverett@users.noreply.github.com',
+      });
+      expect(mockConfigureGitIdentity).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/tmp/hydraz-worktrees/session-id',
+        {
+          name: 'josheverett',
+          email: '151150+josheverett@users.noreply.github.com',
+        },
+      );
+    });
+
+    it('fails before launching devpod when managed git identity cannot be loaded', async () => {
+      mockGetGitHubIdentity.mockRejectedValue(new Error('Failed to load GitHub authenticated user (401)'));
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(
+        'Failed to load managed git identity',
+      );
+      expect(mockDevpodUp).not.toHaveBeenCalled();
     });
 
     it('copies .worktreeinclude files inside the container', async () => {
@@ -231,7 +301,7 @@ describe('LocalContainerProvider', () => {
 
       await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/symlink/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
-      expect(mockVerifyClaude).not.toHaveBeenCalled();
+      expect(mockVerifyCodex).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
@@ -298,23 +368,25 @@ describe('LocalContainerProvider', () => {
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('fails early when GitHub auth is not configured', async () => {
+    it('fails before launching devpod when Hydraz GitHub auth is not configured', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig(false);
 
-      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/GitHub token/i);
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(
+        'GitHub token is required to configure managed git identity',
+      );
       expect(mockDevpodUp).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
-    it('tears down workspace if Claude Code is not found in the container', async () => {
-      mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
+    it('tears down workspace if Codex CLI is not found in the container', async () => {
+      mockVerifyCodex.mockReturnValue({ available: false, error: 'Codex CLI is not available inside the container' });
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('Claude Code');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('Codex CLI');
       expect(mockDevpodDelete).toHaveBeenCalled();
     });
 

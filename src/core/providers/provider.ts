@@ -1,5 +1,6 @@
 import type { SessionMetadata } from '../sessions/schema.js';
 import type { HydrazConfig, ExecutionTarget } from '../config/schema.js';
+import type { GitHubGitIdentity } from '../github/api.js';
 import { getWorkspaceDir as resolveWorkspaceDir } from '../repo/paths.js';
 
 export interface WorkspaceInfo {
@@ -8,6 +9,7 @@ export interface WorkspaceInfo {
   directory: string;
   branchName: string;
   sessionId: string;
+  gitIdentity?: GitHubGitIdentity;
 }
 
 export interface CreateWorkspaceParams {
@@ -16,6 +18,7 @@ export interface CreateWorkspaceParams {
   branchOverride?: string;
   skipClone?: boolean;
   onHeartbeat?: (label: string, elapsedMs: number) => void;
+  gitIdentity?: GitHubGitIdentity;
 }
 
 export interface ProviderCheckResult {

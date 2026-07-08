@@ -34,7 +34,6 @@ const session = createSession({
   name: 'beta-delivery',
   repoRoot: '/repo',
   branchName: 'hydraz/beta-delivery',
-  personas: ['architect', 'implementer', 'verifier'],
   executionTarget: 'local-container',
   task: 'Deliver work to GitHub',
 });

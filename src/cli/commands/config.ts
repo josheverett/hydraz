@@ -5,18 +5,15 @@ import {
   saveConfig,
   configExists,
   initializeConfigDir,
-  loadMasterPrompt,
-  resetMasterPrompt,
-  checkClaudeAvailability,
   type ExecutionTarget,
-  type AuthMode,
 } from '../../core/config/index.js';
-import { changeDefaultSwarm } from './personas.js';
+
+type CodexSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
 
 export function registerConfigCommand(program: Command): void {
   program
     .command('config')
-    .description('Configure global defaults and advanced settings')
+    .description('Configure Hydraz v3 defaults')
     .action(async () => {
       if (!configExists()) {
         const shouldInit = await confirm({
@@ -41,11 +38,10 @@ export async function configMenu(): Promise<void> {
     choices: [
       { name: 'View current config', value: 'view' as const },
       { name: 'Set default execution target', value: 'execution-target' as const },
-      { name: 'Set default personas', value: 'personas' as const },
-      { name: 'Master prompt', value: 'master-prompt' as const },
-      { name: 'Claude Code auth', value: 'auth' as const },
-      { name: 'GitHub push/PR auth', value: 'github-auth' as const },
-      { name: 'Check Claude Code availability', value: 'claude-check' as const },
+      { name: 'Set Codex command', value: 'codex-command' as const },
+      { name: 'Set Codex model', value: 'codex-model' as const },
+      { name: 'Set Codex sandbox', value: 'codex-sandbox' as const },
+      { name: 'Set GitHub push/PR auth', value: 'github-auth' as const },
       { name: 'Exit', value: 'exit' as const },
     ],
   });
@@ -57,20 +53,17 @@ export async function configMenu(): Promise<void> {
     case 'execution-target':
       await setExecutionTarget();
       break;
-    case 'personas':
-      await changeDefaultSwarm();
+    case 'codex-command':
+      await setCodexCommand();
       break;
-    case 'master-prompt':
-      await masterPromptMenu();
+    case 'codex-model':
+      await setCodexModel();
       break;
-    case 'auth':
-      await setAuthMode();
+    case 'codex-sandbox':
+      await setCodexSandbox();
       break;
     case 'github-auth':
       await setGitHubAuth();
-      break;
-    case 'claude-check':
-      claudeCheck();
       break;
     case 'exit':
       return;
@@ -83,14 +76,12 @@ function viewConfig(): void {
   const config = loadConfig();
   console.log('\nCurrent config:');
   console.log(`  Execution target:  ${config.executionTarget}`);
-  console.log(`  Default personas:  ${config.defaultPersonas.join(', ')}`);
   console.log(`  Branch prefix:     ${config.branchNaming.prefix}`);
-  console.log(`  Auth mode:         ${config.claudeAuth.mode}`);
-  console.log(`  OAuth token:       ${config.claudeAuth.oauthToken ? 'configured' : 'not set'}`);
-  console.log(`  API key:           ${config.claudeAuth.apiKey ? 'configured' : 'not set'}`);
+  console.log(`  Codex command:     ${config.codex.command}`);
+  console.log(`  Codex model:       ${config.codex.model ?? 'default'}`);
+  console.log(`  Codex sandbox:     ${config.codex.sandbox}`);
+  console.log(`  Codex search:      ${config.codex.search}`);
   console.log(`  GitHub token:      ${config.github.token ? 'configured' : 'not set'}`);
-  console.log(`  Keep transcripts:  ${config.retention.keepTranscripts}`);
-  console.log(`  Keep test logs:    ${config.retention.keepTestLogs}`);
   console.log(`  Display verbosity: ${config.displayVerbosity}`);
   console.log();
 }
@@ -100,9 +91,9 @@ async function setExecutionTarget(): Promise<void> {
   const target = await select({
     message: 'Default execution target',
     choices: [
-      { name: 'Local', value: 'local' as ExecutionTarget },
-      { name: 'Local (container)', value: 'local-container' as ExecutionTarget },
       { name: 'Cloud', value: 'cloud' as ExecutionTarget },
+      { name: 'Local (container)', value: 'local-container' as ExecutionTarget },
+      { name: 'Local', value: 'local' as ExecutionTarget },
     ],
     default: config.executionTarget,
   });
@@ -112,108 +103,45 @@ async function setExecutionTarget(): Promise<void> {
   console.log(`\nDefault execution target set to: ${target}\n`);
 }
 
-async function masterPromptMenu(): Promise<void> {
-  const action = await select({
-    message: 'Master prompt',
-    choices: [
-      { name: 'View current prompt', value: 'view' as const },
-      { name: 'Reset to default', value: 'reset' as const },
-      { name: 'Back', value: 'back' as const },
-    ],
+async function setCodexCommand(): Promise<void> {
+  const config = loadConfig();
+  const command = await input({
+    message: 'Codex command',
+    default: config.codex.command,
   });
-
-  switch (action) {
-    case 'view': {
-      const prompt = loadMasterPrompt();
-      console.log('\n--- Master Prompt ---');
-      console.log(prompt);
-      console.log('--- End ---\n');
-      break;
-    }
-    case 'reset': {
-      const shouldReset = await confirm({
-        message: 'Reset master prompt to default?',
-        default: false,
-      });
-      if (shouldReset) {
-        resetMasterPrompt();
-        console.log('\nMaster prompt reset to default.\n');
-      }
-      break;
-    }
-    case 'back':
-      return;
+  if (command.trim()) {
+    config.codex.command = command.trim();
+    saveConfig(config);
   }
 }
 
-async function setAuthMode(): Promise<void> {
+async function setCodexModel(): Promise<void> {
   const config = loadConfig();
-  const action = await select({
-    message: 'Claude Code auth',
-    choices: [
-      { name: 'Set auth mode', value: 'mode' as const },
-      { name: `Set OAuth token ${config.claudeAuth.oauthToken ? '(configured)' : '(not set)'}`, value: 'oauth-token' as const },
-      { name: `Set API key ${config.claudeAuth.apiKey ? '(configured)' : '(not set)'}`, value: 'api-key' as const },
-      { name: 'Clear stored credentials', value: 'clear' as const },
-      { name: 'Back', value: 'back' as const },
-    ],
+  const model = await input({
+    message: 'Codex model (blank for Codex default)',
+    default: config.codex.model ?? '',
   });
-
-  switch (action) {
-    case 'mode': {
-      const mode = await select({
-        message: 'Claude Code auth mode',
-        choices: [
-          { name: 'Claude.ai subscription (OAuth)', value: 'claude-ai-oauth' as AuthMode },
-          { name: 'API key', value: 'api-key' as AuthMode },
-        ],
-        default: config.claudeAuth.mode,
-      });
-      config.claudeAuth.mode = mode;
-      saveConfig(config);
-      console.log(`\nAuth mode set to: ${mode}\n`);
-      break;
-    }
-    case 'oauth-token': {
-      console.log('\nGenerate a token with: claude setup-token');
-      const token = await password({
-        message: 'Paste OAuth token',
-        mask: '*',
-      });
-      if (token.trim()) {
-        config.claudeAuth.oauthToken = token.trim();
-        saveConfig(config);
-        console.log('\nOAuth token saved.\n');
-      }
-      break;
-    }
-    case 'api-key': {
-      const key = await input({
-        message: 'Enter API key',
-      });
-      if (key.trim()) {
-        config.claudeAuth.apiKey = key.trim();
-        saveConfig(config);
-        console.log('\nAPI key saved.\n');
-      }
-      break;
-    }
-    case 'clear': {
-      const shouldClear = await confirm({
-        message: 'Clear all stored auth credentials?',
-        default: false,
-      });
-      if (shouldClear) {
-        delete config.claudeAuth.oauthToken;
-        delete config.claudeAuth.apiKey;
-        saveConfig(config);
-        console.log('\nCredentials cleared.\n');
-      }
-      break;
-    }
-    case 'back':
-      return;
+  if (model.trim()) {
+    config.codex.model = model.trim();
+  } else {
+    delete config.codex.model;
   }
+  saveConfig(config);
+}
+
+async function setCodexSandbox(): Promise<void> {
+  const config = loadConfig();
+  const sandbox = await select({
+    message: 'Codex sandbox',
+    choices: [
+      { name: 'workspace-write', value: 'workspace-write' as CodexSandbox },
+      { name: 'read-only', value: 'read-only' as CodexSandbox },
+      { name: 'danger-full-access', value: 'danger-full-access' as CodexSandbox },
+    ],
+    default: config.codex.sandbox,
+  });
+  config.codex.sandbox = sandbox;
+  saveConfig(config);
 }
 
 async function setGitHubAuth(): Promise<void> {
@@ -255,16 +183,4 @@ async function setGitHubAuth(): Promise<void> {
     case 'back':
       return;
   }
-}
-
-function claudeCheck(): void {
-  console.log('\nChecking Claude Code availability...');
-  const result = checkClaudeAvailability();
-
-  if (result.available) {
-    console.log(`  Claude Code is available${result.version ? ` (v${result.version})` : ''}`);
-  } else {
-    console.log(`  ${result.error}`);
-  }
-  console.log();
 }

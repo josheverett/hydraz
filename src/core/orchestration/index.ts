@@ -5,6 +5,7 @@ export {
   startSession,
   stopSession,
   resumeSession,
+  refreshSessionStatus,
   isSessionRunning,
   getProvider,
 } from './controller.js';
@@ -21,7 +22,5 @@ export {
   registerSession,
   unregisterSession,
   registerSshChild,
-  registerExecutorHandle,
-  unregisterExecutorHandle,
   gracefulShutdown,
 } from './shutdown.js';
