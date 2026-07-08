@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
-import { dirname, join, posix, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { shellEscape } from '../shell.js';
@@ -317,8 +317,13 @@ export async function scpToContainer(
   onHeartbeat?: (label: string, elapsedMs: number) => void,
 ): Promise<void> {
   const sshTarget = `${workspaceName}.devpod`;
-  const remoteCmd = `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
-  const shCmd = `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
+  const isFile = existsSync(localPath) && !statSync(localPath).isDirectory();
+  const remoteCmd = isFile
+    ? `rm -rf ${remotePath} && mkdir -p ${posix.dirname(remotePath)} && tar -C ${posix.dirname(remotePath)} -xf -`
+    : `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
+  const shCmd = isFile
+    ? `tar -C ${shellEscape(dirname(localPath))} --no-xattrs -cf - ${shellEscape(basename(localPath))} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`
+    : `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
   debugExec('sh', ['-c', shCmd]);
   const start = Date.now();
   await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {

@@ -457,6 +457,22 @@ describe('scpToContainer', () => {
     );
   });
 
+  it('copies a file include from its parent directory into the remote parent directory', async () => {
+    const codexDir = join(testDir, '.codex');
+    mkdirSync(codexDir, { recursive: true });
+    const configPath = join(codexDir, 'config.toml');
+    writeFileSync(configPath, 'model = "gpt-5"\n');
+
+    await scpToContainer('my-ws', configPath, '/home/vscode/.codex/config.toml');
+
+    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
+    expect(cmd).toContain(`tar -C '${codexDir}' --no-xattrs -cf - 'config.toml'`);
+    expect(cmd).toContain('rm -rf /home/vscode/.codex/config.toml');
+    expect(cmd).toContain('mkdir -p /home/vscode/.codex');
+    expect(cmd).toContain('tar -C /home/vscode/.codex -xf -');
+    expect(cmd).not.toContain('/home/vscode/.codex/config.toml/package.json');
+  });
+
   it('pipes tar output to ssh targeting the correct devpod host', async () => {
     await scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
     const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
