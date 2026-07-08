@@ -4,9 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const testConfig = {
   executionTarget: 'cloud',
-  defaultPersonas: ['architect', 'implementer', 'verifier'],
   branchNaming: { prefix: 'hydraz/' },
-  claudeAuth: { mode: 'claude-ai-oauth' },
   github: { token: 'ghp-test' },
   codex: { command: 'codex', sandbox: 'workspace-write', search: false },
   retention: { keepTranscripts: false, keepTestLogs: false },
@@ -50,7 +48,6 @@ vi.mock('../repo/paths.js', async () => {
         repoDataDir,
         sessionsDir: path.join(repoDataDir, 'sessions'),
         workspacesDir: path.join(repoDataDir, 'workspaces'),
-        repoMcpFile: path.join(repoDataDir, 'mcp.json'),
       };
     },
     getSessionDir: (repoRoot: string, sessionId: string) =>
@@ -117,7 +114,6 @@ describe('Codex controller', () => {
       name,
       repoRoot,
       branchName: `hydraz/${name}`,
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'cloud',
       task: 'Implement v3',
     });
@@ -169,7 +165,6 @@ describe('Codex controller', () => {
       name: 'refresh-local',
       repoRoot,
       branchName: 'hydraz/refresh-local',
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local',
       task: 'Implement v3',
     });

@@ -9,6 +9,5 @@
 
 ## Follow Ups
 
-- Delete legacy v2 swarm/persona internals once the v3 runner has enough regression coverage.
-- Replace vestigial config fields (`defaultPersonas`, `claudeAuth`) with a migration that tolerates old config files but no longer exposes those fields publicly.
+- Add a saved config migration command if users need old config files rewritten eagerly instead of passively normalized on save.
 - Add a first-class local monitor process if automatic cleanup must happen without a later `status` call.

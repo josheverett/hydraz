@@ -14,7 +14,7 @@ import {
   checkDevcontainerPlatform,
   devpodUp,
   devpodDelete,
-  verifyClaudeInContainer,
+  verifyCodexInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
@@ -112,13 +112,13 @@ export class LocalContainerProvider implements WorkspaceProvider {
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
     }
 
-    debug('createWorkspace: verifying Claude Code in container');
-    const claudeCheck = verifyClaudeInContainer(workspaceName);
-    if (!claudeCheck.available) {
+    debug('createWorkspace: verifying Codex CLI in container');
+    const codexCheck = verifyCodexInContainer(workspaceName);
+    if (!codexCheck.available) {
       devpodDelete(workspaceName);
-      throw new Error(claudeCheck.error ?? 'Claude Code CLI is not available inside the container');
+      throw new Error(codexCheck.error ?? 'Codex CLI is not available inside the container');
     }
-    debug(`createWorkspace: claude available — ${claudeCheck.version}`);
+    debug(`createWorkspace: codex available — ${codexCheck.version}`);
 
     const containerRepoPath = `/workspaces/${workspaceName}`;
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);

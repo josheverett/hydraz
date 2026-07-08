@@ -1,25 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { ExecutionTarget } from '../config/schema.js';
-import type { SwarmPhase } from '../swarm/types.js';
 import {
-  SWARM_ACTIVE_STATES,
-  SWARM_TERMINAL_STATES,
-  SWARM_RESUMABLE_STATES,
-  SWARM_VALID_TRANSITIONS,
-  isValidSwarmTransition,
-  isSwarmActiveState,
-  isSwarmTerminalState,
-} from '../swarm/state.js';
+  type SessionState,
+  ACTIVE_STATES,
+  TERMINAL_STATES,
+  RESUMABLE_STATES,
+  VALID_TRANSITIONS,
+  isValidTransition as isValidSessionTransition,
+  isActiveState as isSessionActiveState,
+  isTerminalState as isSessionTerminalState,
+} from './state.js';
 
-export type SessionState = SwarmPhase;
-
-export const ACTIVE_STATES: readonly SessionState[] = SWARM_ACTIVE_STATES;
-
-export const TERMINAL_STATES: readonly SessionState[] = SWARM_TERMINAL_STATES;
-
-export const VALID_TRANSITIONS: Record<SessionState, readonly SessionState[]> = SWARM_VALID_TRANSITIONS;
-
-export const RESUMABLE_STATES: readonly SessionState[] = SWARM_RESUMABLE_STATES;
+export type { SessionState };
+export { ACTIVE_STATES, TERMINAL_STATES, RESUMABLE_STATES, VALID_TRANSITIONS };
 
 export const ARTIFACT_FILES = [
   'intake.md',
@@ -36,7 +29,6 @@ export interface SessionMetadata {
   name: string;
   repoRoot: string;
   branchName: string;
-  personas: [string, string, string];
   executionTarget: ExecutionTarget;
   task: string;
   state: SessionState;
@@ -70,7 +62,6 @@ export function createSession(params: {
   name: string;
   repoRoot: string;
   branchName: string;
-  personas: [string, string, string];
   executionTarget: ExecutionTarget;
   task: string;
 }): SessionMetadata {
@@ -80,7 +71,6 @@ export function createSession(params: {
     name: params.name,
     repoRoot: params.repoRoot,
     branchName: params.branchName,
-    personas: [...params.personas],
     executionTarget: params.executionTarget,
     task: params.task,
     state: 'created',
@@ -90,15 +80,15 @@ export function createSession(params: {
 }
 
 export function isValidTransition(from: SessionState, to: SessionState): boolean {
-  return isValidSwarmTransition(from, to);
+  return isValidSessionTransition(from, to);
 }
 
 export function isActiveState(state: SessionState): boolean {
-  return isSwarmActiveState(state);
+  return isSessionActiveState(state);
 }
 
 export function isTerminalState(state: SessionState): boolean {
-  return isSwarmTerminalState(state);
+  return isSessionTerminalState(state);
 }
 
 export class SessionError extends Error {

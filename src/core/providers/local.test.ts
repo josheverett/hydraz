@@ -31,7 +31,6 @@ function makeSession(name: string = 'test-session') {
     name,
     repoRoot: testRepo,
     branchName: `hydraz/${name}`,
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: 'local',
     task: 'Fix it',
   });

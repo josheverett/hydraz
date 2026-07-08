@@ -144,7 +144,6 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         name: options.sessionName,
         repoRoot: options.repoRoot,
         branchName,
-        personas: ['architect', 'implementer', 'verifier'],
         executionTarget: options.config.executionTarget,
         task: options.goal,
         state: 'delivering',

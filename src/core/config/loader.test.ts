@@ -70,13 +70,30 @@ describe('saveConfig', () => {
 
   it('round-trips a modified config', () => {
     const config = createDefaultConfig();
-    config.claudeAuth.mode = 'api-key';
     config.retention.keepTranscripts = true;
     saveConfig(config, testDir);
 
     const loaded = loadConfig(testDir);
-    expect(loaded.claudeAuth.mode).toBe('api-key');
     expect(loaded.retention.keepTranscripts).toBe(true);
+  });
+
+  it('drops unknown legacy v2 fields while loading', () => {
+    writeFileSync(join(testDir, 'config.json'), JSON.stringify({
+      executionTarget: 'cloud',
+      legacyAgents: ['planner', 'implementer', 'verifier'],
+      legacyAuth: { mode: 'api-key', apiKey: 'sk-test' },
+      branchNaming: { prefix: 'hydraz/' },
+      github: {},
+      codex: { command: 'codex', sandbox: 'workspace-write', search: false },
+      retention: { keepTranscripts: false, keepTestLogs: false },
+      displayVerbosity: 'compact',
+    }));
+
+    const loaded = loadConfig(testDir) as unknown as Record<string, unknown>;
+
+    expect(loaded['legacyAuth']).toBeUndefined();
+    expect(loaded['legacyAgents']).toBeUndefined();
+    expect(loaded['codex']).toEqual({ command: 'codex', sandbox: 'workspace-write', search: false });
   });
 
   it('sets config file permissions to 0600 (owner-only)', () => {

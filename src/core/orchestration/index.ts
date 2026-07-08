@@ -22,7 +22,5 @@ export {
   registerSession,
   unregisterSession,
   registerSshChild,
-  registerExecutorHandle,
-  unregisterExecutorHandle,
   gracefulShutdown,
 } from './shutdown.js';

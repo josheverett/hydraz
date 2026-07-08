@@ -27,7 +27,7 @@ vi.mock('./devpod.js', () => ({
   checkDevcontainerPlatform: vi.fn(() => ({ ok: true })),
   devpodUp: vi.fn(),
   devpodDelete: vi.fn(),
-  verifyClaudeInContainer: vi.fn(() => ({ available: true, version: 'Claude Code v2.1.74' })),
+  verifyCodexInContainer: vi.fn(() => ({ available: true, version: 'codex-cli 0.142.5' })),
   createWorktreeInContainer: vi.fn(() => '/tmp/hydraz-worktrees/session-id'),
   copyWorktreeIncludesInContainer: vi.fn(),
   scpFilesToContainer: vi.fn(),
@@ -42,7 +42,7 @@ import {
   hasDevcontainerJson,
   devpodUp,
   devpodDelete,
-  verifyClaudeInContainer,
+  verifyCodexInContainer,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
@@ -55,7 +55,7 @@ const mockCheckDocker = vi.mocked(checkDockerAvailability);
 const mockHasDevcontainer = vi.mocked(hasDevcontainerJson);
 const mockDevpodUp = vi.mocked(devpodUp);
 const mockDevpodDelete = vi.mocked(devpodDelete);
-const mockVerifyClaude = vi.mocked(verifyClaudeInContainer);
+const mockVerifyCodex = vi.mocked(verifyCodexInContainer);
 const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const mockScpFiles = vi.mocked(scpFilesToContainer);
@@ -70,7 +70,6 @@ function makeSession(name: string = 'test-session', executionTarget: 'local-cont
     name,
     repoRoot: '/fake/repo',
     branchName: `hydraz/${name}`,
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget,
     task: 'Fix it',
   });
@@ -97,7 +96,7 @@ beforeEach(() => {
     repo: 'hello-world',
     httpsUrl: 'https://github.com/octocat/hello-world.git',
   });
-  mockVerifyClaude.mockReturnValue({ available: true, version: 'Claude Code v2.1.74' });
+  mockVerifyCodex.mockReturnValue({ available: true, version: 'codex-cli 0.142.5' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
   mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
@@ -231,7 +230,7 @@ describe('LocalContainerProvider', () => {
 
       await expect(provider.createWorkspace({ session, config })).rejects.toThrow(/symlink/i);
       expect(mockDevpodUp).not.toHaveBeenCalled();
-      expect(mockVerifyClaude).not.toHaveBeenCalled();
+      expect(mockVerifyCodex).not.toHaveBeenCalled();
       expect(mockCreateWorktreeInContainer).not.toHaveBeenCalled();
     });
 
@@ -310,13 +309,13 @@ describe('LocalContainerProvider', () => {
       expect(mockCreateWorktreeInContainer).toHaveBeenCalled();
     });
 
-    it('tears down workspace if Claude Code is not found in the container', async () => {
-      mockVerifyClaude.mockReturnValue({ available: false, error: 'Claude Code CLI is not available inside the container' });
+    it('tears down workspace if Codex CLI is not found in the container', async () => {
+      mockVerifyCodex.mockReturnValue({ available: false, error: 'Codex CLI is not available inside the container' });
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
-      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('Claude Code');
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow('Codex CLI');
       expect(mockDevpodDelete).toHaveBeenCalled();
     });
 

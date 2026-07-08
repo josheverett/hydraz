@@ -16,7 +16,6 @@ beforeEach(() => {
     name: 'event-test',
     repoRoot,
     branchName: 'hydraz/event-test',
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: 'local',
     task: 'Test events',
   });
@@ -70,7 +69,7 @@ describe('appendEvent + readEvents', () => {
     if (process.platform === 'win32') return;
     const eventsFile = join(getSessionDir(repoRoot, sessionId), 'events.jsonl');
     expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
-    appendEvent(repoRoot, createEvent(sessionId, 'claude.ready', 'ok'));
+    appendEvent(repoRoot, createEvent(sessionId, 'codex.runner_started', 'ok'));
     expect(statSync(eventsFile).mode & 0o777).toBe(0o600);
   });
 

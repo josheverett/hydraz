@@ -90,7 +90,6 @@ export function registerRunCommand(program: Command): void {
           name: sessionName,
           repoRoot: repo.root,
           branchName,
-          personas: config.defaultPersonas,
           executionTarget,
           task: goal,
         });

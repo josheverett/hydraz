@@ -19,18 +19,4 @@ describe('resolveConfigPaths', () => {
     expect(paths.configFile).toBe('/tmp/test/config.json');
   });
 
-  it('resolves master-prompt.md inside the config directory', () => {
-    const paths = resolveConfigPaths('/tmp/test');
-    expect(paths.masterPromptFile).toBe('/tmp/test/master-prompt.md');
-  });
-
-  it('resolves personas directory inside the config directory', () => {
-    const paths = resolveConfigPaths('/tmp/test');
-    expect(paths.personasDir).toBe('/tmp/test/personas');
-  });
-
-  it('resolves mcp servers file inside mcp directory', () => {
-    const paths = resolveConfigPaths('/tmp/test');
-    expect(paths.mcpServersFile).toBe('/tmp/test/mcp/servers.json');
-  });
 });

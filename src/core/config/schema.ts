@@ -1,17 +1,8 @@
-import { isValidPersonaName } from '../personas/naming.js';
-
 export type ExecutionTarget = 'local' | 'local-container' | 'cloud';
-export type AuthMode = 'claude-ai-oauth' | 'api-key';
 export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
 
 export interface BranchNamingConfig {
   prefix: string;
-}
-
-export interface ClaudeAuthConfig {
-  mode: AuthMode;
-  oauthToken?: string;
-  apiKey?: string;
 }
 
 export interface GitHubAuthConfig {
@@ -32,41 +23,18 @@ export interface CodexConfig {
 
 export interface HydrazConfig {
   executionTarget: ExecutionTarget;
-  defaultPersonas: [string, string, string];
   branchNaming: BranchNamingConfig;
-  claudeAuth: ClaudeAuthConfig;
   github: GitHubAuthConfig;
   codex: CodexConfig;
   retention: RetentionConfig;
   displayVerbosity: DisplayVerbosity;
 }
 
-export const BUILT_IN_PERSONAS = [
-  'architect',
-  'implementer',
-  'verifier',
-  'skeptic',
-  'product-generalist',
-  'performance-reliability',
-] as const;
-
-export type BuiltInPersona = (typeof BUILT_IN_PERSONAS)[number];
-
-export const DEFAULT_SWARM: [string, string, string] = [
-  'architect',
-  'implementer',
-  'verifier',
-];
-
 export function createDefaultConfig(): HydrazConfig {
   return {
     executionTarget: 'cloud',
-    defaultPersonas: [...DEFAULT_SWARM],
     branchNaming: {
       prefix: 'hydraz/',
-    },
-    claudeAuth: {
-      mode: 'claude-ai-oauth',
     },
     github: {},
     codex: {
@@ -97,22 +65,8 @@ export function validateConfig(data: unknown): HydrazConfig {
     ['local', 'local-container', 'cloud'] as const,
     defaults.executionTarget,
   );
-
-  const defaultPersonas = expectPersonasTuple(obj, defaults.defaultPersonas);
-
   const branchNaming = expectObject(obj, 'branchNaming', defaults.branchNaming, (val) => ({
     prefix: expectString(val as Record<string, unknown>, 'prefix', defaults.branchNaming.prefix),
-  }));
-
-  const claudeAuth = expectObject(obj, 'claudeAuth', defaults.claudeAuth, (val) => ({
-    mode: expectEnum(
-      val as Record<string, unknown>,
-      'mode',
-      ['claude-ai-oauth', 'api-key'] as const,
-      defaults.claudeAuth.mode,
-    ),
-    oauthToken: expectOptionalString(val as Record<string, unknown>, 'oauthToken'),
-    apiKey: expectOptionalString(val as Record<string, unknown>, 'apiKey'),
   }));
 
   const github = expectObject(obj, 'github', defaults.github, (val) => ({
@@ -157,9 +111,7 @@ export function validateConfig(data: unknown): HydrazConfig {
 
   return {
     executionTarget,
-    defaultPersonas,
     branchNaming,
-    claudeAuth,
     github,
     codex,
     retention,
@@ -233,33 +185,4 @@ function expectObject<T>(
     throw new ConfigValidationError(`"${key}" must be an object`);
   }
   return parse(obj[key]);
-}
-
-function expectPersonasTuple(
-  obj: Record<string, unknown>,
-  fallback: [string, string, string],
-): [string, string, string] {
-  if (!('defaultPersonas' in obj)) return fallback;
-
-  const val = obj['defaultPersonas'];
-  if (!Array.isArray(val)) {
-    throw new ConfigValidationError('"defaultPersonas" must be an array');
-  }
-  if (val.length !== 3) {
-    throw new ConfigValidationError('"defaultPersonas" must contain exactly 3 personas');
-  }
-  if (!val.every((v) => typeof v === 'string' && v.length > 0)) {
-    throw new ConfigValidationError('"defaultPersonas" entries must be non-empty strings');
-  }
-  for (const p of val) {
-    if (typeof p === 'string' && !isValidPersonaName(p)) {
-      throw new ConfigValidationError(
-        '"defaultPersonas" entries must be valid persona names (lowercase letters, numbers, hyphens; 2-64 chars)',
-      );
-    }
-  }
-  if (new Set(val).size !== 3) {
-    throw new ConfigValidationError('"defaultPersonas" must contain 3 distinct personas');
-  }
-  return val as [string, string, string];
 }

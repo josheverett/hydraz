@@ -2,9 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ChildProcess } from 'node:child_process';
-import type { ExecutorHandle } from '../claude/executor.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
-import type { ControllerCallbacks } from './controller.js';
 import {
   createNewSession,
   initRepoState,
@@ -16,8 +14,6 @@ import {
   registerSession,
   unregisterSession,
   registerSshChild,
-  registerExecutorHandle,
-  unregisterExecutorHandle,
   gracefulShutdown,
   _resetForTesting,
 } from './shutdown.js';
@@ -42,7 +38,6 @@ describe('shutdown manager', () => {
       name,
       repoRoot,
       branchName: `hydraz/${name}`,
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local',
       task: 'Fix the thing',
     });
@@ -53,7 +48,6 @@ describe('shutdown manager', () => {
       name,
       repoRoot,
       branchName: `hydraz/${name}`,
-      personas: ['architect', 'implementer', 'verifier'],
       executionTarget: 'local-container',
       task: 'Fix the thing in container',
     });
@@ -86,15 +80,6 @@ describe('shutdown manager', () => {
     } as unknown as ChildProcess;
   }
 
-  function mockExecutorHandle(): ExecutorHandle {
-    return {
-      process: {} as ChildProcess,
-      pid: 99999,
-      kill: vi.fn(),
-      waitForExit: vi.fn(),
-    };
-  }
-
   describe('registerSession / unregisterSession', () => {
     it('registers and unregisters without error', () => {
       const session = makeSession();
@@ -117,19 +102,6 @@ describe('shutdown manager', () => {
     });
   });
 
-  describe('registerExecutorHandle / unregisterExecutorHandle', () => {
-    it('registers and unregisters executor handles', () => {
-      const handle = mockExecutorHandle();
-      expect(() => registerExecutorHandle(handle)).not.toThrow();
-      expect(() => unregisterExecutorHandle(handle)).not.toThrow();
-    });
-
-    it('unregistering an unregistered handle is a no-op', () => {
-      const handle = mockExecutorHandle();
-      expect(() => unregisterExecutorHandle(handle)).not.toThrow();
-    });
-  });
-
   describe('gracefulShutdown', () => {
     it('is a no-op when no session is registered', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
@@ -141,7 +113,6 @@ describe('shutdown manager', () => {
     it('transitions session to stopped', () => {
       const session = makeSession('shutdown-state');
       transitionState(repoRoot, session.id, 'starting');
-      transitionState(repoRoot, session.id, 'investigating');
 
       const provider = mockProvider();
       const workspace = mockWorkspace(session.id);
@@ -185,44 +156,6 @@ describe('shutdown manager', () => {
       gracefulShutdown();
 
       expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-      exitSpy.mockRestore();
-    });
-
-    it('kills all registered executor handles', () => {
-      const session = makeSession('shutdown-handles');
-      transitionState(repoRoot, session.id, 'starting');
-
-      const provider = mockProvider();
-      const workspace = mockWorkspace(session.id);
-      const handle1 = mockExecutorHandle();
-      const handle2 = mockExecutorHandle();
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
-      registerSession(session.id, repoRoot, provider, workspace, {});
-      registerExecutorHandle(handle1);
-      registerExecutorHandle(handle2);
-      gracefulShutdown();
-
-      expect(handle1.kill).toHaveBeenCalled();
-      expect(handle2.kill).toHaveBeenCalled();
-      exitSpy.mockRestore();
-    });
-
-    it('does not kill unregistered executor handles', () => {
-      const session = makeSession('shutdown-unreg');
-      transitionState(repoRoot, session.id, 'starting');
-
-      const provider = mockProvider();
-      const workspace = mockWorkspace(session.id);
-      const handle = mockExecutorHandle();
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
-      registerSession(session.id, repoRoot, provider, workspace, {});
-      registerExecutorHandle(handle);
-      unregisterExecutorHandle(handle);
-      gracefulShutdown();
-
-      expect(handle.kill).not.toHaveBeenCalled();
       exitSpy.mockRestore();
     });
 
@@ -313,14 +246,7 @@ describe('shutdown manager', () => {
     it('skips state transition when session is already in a terminal state', () => {
       const session = makeSession('shutdown-terminal');
       transitionState(repoRoot, session.id, 'starting');
-      transitionState(repoRoot, session.id, 'investigating');
-      transitionState(repoRoot, session.id, 'architecting');
-      transitionState(repoRoot, session.id, 'planning');
-      transitionState(repoRoot, session.id, 'architect-reviewing');
-      transitionState(repoRoot, session.id, 'fanning-out');
       transitionState(repoRoot, session.id, 'syncing');
-      transitionState(repoRoot, session.id, 'merging');
-      transitionState(repoRoot, session.id, 'reviewing');
       transitionState(repoRoot, session.id, 'delivering');
       transitionState(repoRoot, session.id, 'completed');
 

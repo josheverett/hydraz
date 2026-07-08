@@ -7,7 +7,6 @@ function makeSession() {
     name: 'auth-cleanup',
     repoRoot: '/tmp/repo',
     branchName: 'hydraz/auth-cleanup',
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: 'local-container',
     task: 'Switch container delivery to GitHub HTTPS auth',
   });

@@ -16,7 +16,6 @@ beforeEach(() => {
     name: 'artifact-test',
     repoRoot,
     branchName: 'hydraz/artifact-test',
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: 'local',
     task: 'Test artifacts',
   });

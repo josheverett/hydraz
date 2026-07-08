@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { shellEscape } from '../claude/ssh.js';
+import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 
@@ -349,22 +349,22 @@ export function scpFilesToContainer(
   debugTiming('scpFilesToContainer', Date.now() - start);
 }
 
-export function verifyClaudeInContainer(workspaceName: string): DevPodCheckResult {
-  debugExec('ssh', [`${workspaceName}.devpod`, 'claude --version']);
+export function verifyCodexInContainer(workspaceName: string): DevPodCheckResult {
+  debugExec('ssh', [`${workspaceName}.devpod`, 'codex --version']);
   const start = Date.now();
   try {
-    const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'claude --version'], {
+    const output = execFileSync('ssh', [`${workspaceName}.devpod`, 'codex --version'], {
       ...EXEC_OPTIONS,
       encoding: 'utf-8',
     });
-    debugOutput('claude --version stdout', output);
-    debugTiming('verifyClaudeInContainer', Date.now() - start);
+    debugOutput('codex --version stdout', output);
+    debugTiming('verifyCodexInContainer', Date.now() - start);
     return { available: true, version: output.trim() };
   } catch {
-    debugTiming('verifyClaudeInContainer (failed)', Date.now() - start);
+    debugTiming('verifyCodexInContainer (failed)', Date.now() - start);
     return {
       available: false,
-      error: 'Claude Code CLI is not available inside the container. Ensure your devcontainer includes Claude Code.',
+      error: 'Codex CLI is not available inside the container. Ensure your devcontainer includes Codex.',
     };
   }
 }

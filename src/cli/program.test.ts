@@ -53,7 +53,7 @@ describe('createProgram', () => {
     expect(runCmd!.registeredArguments[0].required).toBe(true);
   });
 
-  it('run command exposes Codex v3 options and rejects old swarm options', () => {
+  it('run command exposes Codex v3 options and rejects old worker/review options', () => {
     const program = createProgram();
     const runCmd = program.commands.find((cmd) => cmd.name() === 'run')!;
     const optionNames = runCmd.options.map((opt) => opt.long);

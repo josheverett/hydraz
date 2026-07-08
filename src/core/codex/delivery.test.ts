@@ -9,7 +9,6 @@ function makeSession(overrides: Partial<SessionMetadata> = {}): SessionMetadata 
     name: 'codex-v3',
     repoRoot: '/repo',
     branchName: 'hydraz/codex-v3',
-    personas: ['architect', 'implementer', 'verifier'],
     executionTarget: 'cloud',
     task: 'Implement v3',
     state: 'delivering',

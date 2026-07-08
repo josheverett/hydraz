@@ -11,7 +11,7 @@ import {
   checkDevcontainerPlatform,
   buildSshCommand,
   verifyBranchPushed,
-  verifyClaudeInContainer,
+  verifyCodexInContainer,
   sshExec,
   devpodSsh,
   createWorktreeInContainer,
@@ -192,9 +192,9 @@ describe('buildSshCommand', () => {
   });
 
   it('handles complex commands', () => {
-    const result = buildSshCommand('ws', 'claude --print --output-format stream-json "do stuff"');
+    const result = buildSshCommand('ws', 'codex exec --json "do stuff"');
     expect(result.args[0]).toBe('ws.devpod');
-    expect(result.args[1]).toContain('claude');
+    expect(result.args[1]).toContain('codex');
   });
 });
 
@@ -237,28 +237,28 @@ describe('verifyBranchPushed', () => {
   });
 });
 
-describe('verifyClaudeInContainer', () => {
-  it('returns available when claude responds inside the container', () => {
-    mockExecFileSync.mockReturnValue('Claude Code v2.1.74\n' as never);
-    const result = verifyClaudeInContainer('my-workspace');
+describe('verifyCodexInContainer', () => {
+  it('returns available when codex responds inside the container', () => {
+    mockExecFileSync.mockReturnValue('codex-cli 0.142.5\n' as never);
+    const result = verifyCodexInContainer('my-workspace');
     expect(result.available).toBe(true);
-    expect(result.version).toContain('2.1.74');
+    expect(result.version).toContain('0.142.5');
   });
 
-  it('returns unavailable when claude is not found in the container', () => {
+  it('returns unavailable when codex is not found in the container', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('command not found'); });
-    const result = verifyClaudeInContainer('my-workspace');
+    const result = verifyCodexInContainer('my-workspace');
     expect(result.available).toBe(false);
-    expect(result.error).toContain('Claude Code');
+    expect(result.error).toContain('Codex CLI');
     expect(result.error).toContain('container');
   });
 
-  it('calls ssh with the correct workspace name and claude --version', () => {
-    mockExecFileSync.mockReturnValue('Claude Code v2.1.74\n' as never);
-    verifyClaudeInContainer('hydraz-abc123');
+  it('calls ssh with the correct workspace name and codex --version', () => {
+    mockExecFileSync.mockReturnValue('codex-cli 0.142.5\n' as never);
+    verifyCodexInContainer('hydraz-abc123');
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['hydraz-abc123.devpod', 'claude --version'],
+      ['hydraz-abc123.devpod', 'codex --version'],
       expect.any(Object),
     );
   });
@@ -666,10 +666,10 @@ describe('devpodUp', () => {
       }
       return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
-    const env = { GH_TOKEN: 'github_pat_test', CLAUDE_CODE_OAUTH_TOKEN: 'oauth_abc' };
+    const env = { GH_TOKEN: 'github_pat_test', OPENAI_API_KEY: 'sk-test' };
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
     expect(capturedContents).toContain('GH_TOKEN=github_pat_test');
-    expect(capturedContents).toContain('CLAUDE_CODE_OAUTH_TOKEN=oauth_abc');
+    expect(capturedContents).toContain('OPENAI_API_KEY=sk-test');
   });
 
   it('creates workspace-env-file with restricted 0o600 permissions', async () => {

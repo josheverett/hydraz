@@ -1,6 +1,6 @@
 # Hydraz v3 Architecture
 
-Hydraz v3 is a Codex CLI harness. It no longer implements a custom multi-agent swarm, reviewer panel, or persona pipeline.
+Hydraz v3 is a Codex CLI harness. It no longer implements a custom multi-agent pipeline, review panel, or role-based orchestration layer.
 
 ## Pipeline
 
@@ -28,7 +28,7 @@ CLI -> Session metadata -> Workspace provider -> Detached Codex runner -> Delive
 
 ## State Model
 
-Hydraz still uses the existing session state machine, but v3 normally follows this shorter path:
+Hydraz uses a small v3 session state machine:
 
 ```
 created -> starting -> syncing -> delivering -> completed
@@ -50,6 +50,6 @@ Global config keeps:
 
 Repo config keeps `.hydraz/config.json` with `hydrazincludes`, plus optional `.hydraz/HYDRAZ.md` prompt content.
 
-## Known Legacy
+## Legacy Removal
 
-Some v2 internals remain in the source tree for compatibility with existing tests and release history. They are no longer registered in the public CLI surface. The follow-up cleanup is to remove `src/core/swarm`, `src/core/claude`, personas, MCP manager, and old artifact names after the v3 runner path has deeper coverage.
+The v2 orchestration internals and public commands have been removed from the source tree. Older config files may contain extra keys; v3 validation ignores unknown legacy fields and saves only the current config shape.

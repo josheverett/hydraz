@@ -55,10 +55,6 @@ describe('resolveRepoDataPaths', () => {
     expect(paths.workspacesDir.endsWith('/workspaces')).toBe(true);
   });
 
-  it('puts MCP config under the repo data dir', () => {
-    const paths = resolveRepoDataPaths('/tmp/myrepo');
-    expect(paths.repoMcpFile.endsWith('/mcp.json')).toBe(true);
-  });
 });
 
 describe('getSessionDir', () => {

@@ -8,7 +8,6 @@ export interface RepoDataPaths {
   repoDataDir: string;
   sessionsDir: string;
   workspacesDir: string;
-  repoMcpFile: string;
 }
 
 export function getHydrazHome(): string {
@@ -35,7 +34,6 @@ export function resolveRepoDataPaths(repoRoot: string): RepoDataPaths {
     repoDataDir,
     sessionsDir: join(repoDataDir, 'sessions'),
     workspacesDir: join(repoDataDir, 'workspaces'),
-    repoMcpFile: join(repoDataDir, 'mcp.json'),
   };
 }
 

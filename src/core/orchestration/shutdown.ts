@@ -1,5 +1,4 @@
 import type { ChildProcess } from 'node:child_process';
-import type { ExecutorHandle } from '../claude/executor.js';
 import type { WorkspaceProvider, WorkspaceInfo } from '../providers/provider.js';
 import { isContainerExecutionTarget } from '../providers/provider.js';
 import { createEvent, appendEvent } from '../events/index.js';
@@ -20,7 +19,6 @@ interface RegisteredSession {
 
 let activeSession: RegisteredSession | null = null;
 let sshChild: ChildProcess | null = null;
-const executorHandles = new Set<ExecutorHandle>();
 let shuttingDown = false;
 
 export function registerSession(
@@ -38,19 +36,10 @@ export function unregisterSession(sessionId: string): void {
     activeSession = null;
   }
   sshChild = null;
-  executorHandles.clear();
 }
 
 export function registerSshChild(child: ChildProcess): void {
   sshChild = child;
-}
-
-export function registerExecutorHandle(handle: ExecutorHandle): void {
-  executorHandles.add(handle);
-}
-
-export function unregisterExecutorHandle(handle: ExecutorHandle): void {
-  executorHandles.delete(handle);
 }
 
 export function gracefulShutdown(): void {
@@ -69,10 +58,6 @@ export function gracefulShutdown(): void {
 
   if (sshChild && !sshChild.killed) {
     sshChild.kill('SIGTERM');
-  }
-
-  for (const handle of executorHandles) {
-    handle.kill();
   }
 
   try {
@@ -101,6 +86,5 @@ export function gracefulShutdown(): void {
 export function _resetForTesting(): void {
   activeSession = null;
   sshChild = null;
-  executorHandles.clear();
   shuttingDown = false;
 }
