@@ -60,7 +60,7 @@ hydraz config              # configure Codex/GitHub defaults
 | `--container` | Run in a local DevPod container |
 | `--cloud` | Run in a cloud DevPod workspace (default) |
 | `--no-clone` | Use local repo path instead of cloning from remote |
-| `--verbose` | Enable diagnostic output |
+| `--verbose` | Enable diagnostic output with known token/API-key values redacted |
 
 ## Repo Configuration
 
@@ -92,6 +92,14 @@ codex exec \
 ```
 
 Hydraz intentionally does not pass `codex exec --search`; in Codex CLI 0.143.x that flag belongs to the interactive entrypoint, not `exec`. Live web search is enabled for `exec` with the `web_search_mode` config override instead.
+
+## Secret Redaction
+
+Hydraz redacts known secret formats before writing verbose debug output or session events. This includes GitHub token prefixes such as `github_pat_` and `ghp_`, OpenAI-style `sk-...` keys, authorization header values, and token-like JSON/env fields.
+
+Redaction is applied only at logging and local event persistence boundaries. Runtime values passed to DevPod, GitHub, Codex, and subprocess environments are not modified.
+
+`--verbose` can still include sensitive paths, branch names, repo names, and other operational metadata. It should be treated as diagnostic output, not a public log format.
 
 ## Session Data
 

@@ -54,6 +54,14 @@ describe('debug', () => {
     const written = stderrSpy.mock.calls[0]?.[0] as string;
     expect(written.endsWith('\n')).toBe(true);
   });
+
+  it('redacts secrets in debug messages', () => {
+    setVerbose(true);
+    debug('token github_pat_abc123');
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toContain('[REDACTED]');
+    expect(written).not.toContain('github_pat_abc123');
+  });
 });
 
 describe('debugExec', () => {
@@ -66,6 +74,24 @@ describe('debugExec', () => {
     expect(written).toContain('git@github.com:org/repo.git');
     expect(written).toContain('--ide');
     expect(written).toContain('none');
+  });
+
+  it('redacts secrets in command arguments while preserving command context', () => {
+    setVerbose(true);
+    debugExec('ssh', [
+      'hydraz-test.devpod',
+      `HYDRAZ_CODEX_RUNNER_OPTIONS='${JSON.stringify({
+        config: { github: { token: 'github_pat_abc123' } },
+        branchName: 'hydraz/test',
+      })}'`,
+    ]);
+
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toContain('exec: ssh');
+    expect(written).toContain('HYDRAZ_CODEX_RUNNER_OPTIONS');
+    expect(written).toContain('hydraz/test');
+    expect(written).toContain('"token":"[REDACTED]"');
+    expect(written).not.toContain('github_pat_abc123');
   });
 
   it('is silent when not verbose', () => {
@@ -95,6 +121,16 @@ describe('debugOutput', () => {
     expect(written).toContain('line1');
     expect(written).toContain('line3');
   });
+
+  it('redacts secrets in command output', () => {
+    setVerbose(true);
+    debugOutput('env', 'GH_TOKEN=github_pat_abc123\nOPENAI_API_KEY=sk-test123\n');
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toContain('GH_TOKEN=[REDACTED]');
+    expect(written).toContain('OPENAI_API_KEY=[REDACTED]');
+    expect(written).not.toContain('github_pat_abc123');
+    expect(written).not.toContain('sk-test123');
+  });
 });
 
 describe('debugTiming', () => {
@@ -104,6 +140,14 @@ describe('debugTiming', () => {
     const written = stderrSpy.mock.calls[0]?.[0] as string;
     expect(written).toContain('devpod up');
     expect(written).toContain('4321ms');
+  });
+
+  it('redacts secrets in timing labels', () => {
+    setVerbose(true);
+    debugTiming('token github_pat_abc123', 1);
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    expect(written).toContain('[REDACTED]');
+    expect(written).not.toContain('github_pat_abc123');
   });
 
   it('is silent when not verbose', () => {

@@ -24,6 +24,7 @@ CLI -> Session metadata -> Workspace provider -> Detached Codex runner -> Delive
 - `src/core/codex/events.ts` parses Codex JSONL events needed by Hydraz.
 - `src/core/codex/runner.ts` is the remote/local detached runner entrypoint.
 - `src/core/codex/delivery.ts` handles commit, push, and draft PR delivery.
+- `src/core/display/sanitize.ts` strips terminal control characters and redacts known secret values before debug or event output is displayed or persisted.
 - `src/core/providers/*` keeps the existing local, local-container, and cloud workspace providers.
 
 ## State Model
@@ -51,6 +52,10 @@ Global config keeps:
 For container-backed runs, runtime options override the configured Codex sandbox to `danger-full-access` unless the CLI explicitly supplies `--sandbox`, and set `skipGitRepoCheck` for Codex exec. `codex.search` is normalized into a `web_search_mode="live"` config override by default.
 
 Repo config keeps `.hydraz/config.json` with `hydrazincludes`, plus optional `.hydraz/HYDRAZ.md` prompt content.
+
+## Secret Handling
+
+Hydraz must pass real GitHub/Codex credentials to DevPod, Codex, Git, and GitHub APIs at runtime, but those values must not be printed or persisted in diagnostic artifacts. Verbose debug output and session events are redacted at the output boundary for known secret formats including GitHub PAT/OAuth token prefixes, OpenAI-style API keys, authorization headers, and token-like JSON/env fields.
 
 ## Legacy Removal
 

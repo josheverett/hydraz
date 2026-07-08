@@ -44,6 +44,31 @@ describe('createEvent', () => {
     expect(event.state).toBe('planning');
     expect(event.metadata).toEqual({ branch: 'hydraz/test' });
   });
+
+  it('redacts secrets from event messages', () => {
+    const event = createEvent(sessionId, 'session.warning', 'token github_pat_abc123');
+
+    expect(event.message).toContain('[REDACTED]');
+    expect(event.message).not.toContain('github_pat_abc123');
+  });
+
+  it('redacts secrets from nested metadata', () => {
+    const event = createEvent(sessionId, 'session.warning', 'metadata', {
+      metadata: {
+        token: 'github_pat_abc123',
+        nested: {
+          authorization: 'Bearer ghp_abc123',
+          values: ['OPENAI_API_KEY=sk-test123'],
+        },
+      },
+    });
+
+    const serialized = JSON.stringify(event.metadata);
+    expect(serialized).toContain('[REDACTED]');
+    expect(serialized).not.toContain('github_pat_abc123');
+    expect(serialized).not.toContain('ghp_abc123');
+    expect(serialized).not.toContain('sk-test123');
+  });
 });
 
 describe('appendEvent + readEvents', () => {
@@ -121,5 +146,17 @@ describe('formatEvent', () => {
     expect(formatted).not.toContain('\u001b');
     expect(formatted).not.toContain('\n');
     expect(formatted).not.toContain('\u0007');
+  });
+
+  it('redacts secrets from legacy unredacted events when formatting', () => {
+    const formatted = formatEvent({
+      timestamp: new Date().toISOString(),
+      sessionId,
+      type: 'session.warning',
+      message: 'token github_pat_abc123',
+    });
+
+    expect(formatted).toContain('[REDACTED]');
+    expect(formatted).not.toContain('github_pat_abc123');
   });
 });

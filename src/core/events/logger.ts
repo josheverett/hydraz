@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sanitizeInlineTerminalText } from '../display/sanitize.js';
+import { redactSecrets, sanitizeInlineTerminalText } from '../display/sanitize.js';
 import { getSessionDir } from '../sessions/manager.js';
 
 export interface HydrazEvent {
@@ -49,9 +49,9 @@ export function createEvent(
     timestamp: new Date().toISOString(),
     sessionId,
     type,
-    message,
+    message: redactSecrets(message),
     state: extra?.state,
-    metadata: extra?.metadata,
+    metadata: redactMetadata(extra?.metadata),
   };
 }
 
@@ -87,6 +87,25 @@ export function formatEvent(event: HydrazEvent): string {
   const time = sanitizeInlineTerminalText(event.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z'));
   const type = sanitizeInlineTerminalText(event.type);
   const state = event.state ? ` [${sanitizeInlineTerminalText(event.state)}]` : '';
-  const message = sanitizeInlineTerminalText(event.message);
+  const message = sanitizeInlineTerminalText(redactSecrets(event.message));
   return `${time}  ${type}${state}  ${message}`;
+}
+
+function redactMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  return redactMetadataValue(metadata) as Record<string, unknown>;
+}
+
+function redactMetadataValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(redactMetadataValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        redactMetadataValue(entry),
+      ]),
+    );
+  }
+  return value;
 }
