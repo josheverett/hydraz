@@ -194,9 +194,17 @@ async function startCodexRunner(
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
     const envJson = shellEscape(JSON.stringify(runnerOptions));
+    const launchRunnerCommand = [
+      `HYDRAZ_CODEX_RUNNER_OPTIONS=${envJson}`,
+      `nohup node ${shellEscape(CONTAINER_RUNNER_SCRIPT)}`,
+      `> ${shellEscape(runnerOutPath)}`,
+      `2> ${shellEscape(runnerErrPath)}`,
+      '< /dev/null',
+      '& echo $!',
+    ].join(' ');
     const command = [
       `mkdir -p ${shellEscape(codexDir)}`,
-      `HYDRAZ_CODEX_RUNNER_OPTIONS=${envJson} nohup node ${shellEscape(CONTAINER_RUNNER_SCRIPT)} > ${shellEscape(runnerOutPath)} 2> ${shellEscape(runnerErrPath)} < /dev/null & echo $!`,
+      `(${launchRunnerCommand})`,
     ].join(' && ');
     const pidText = sshExec(workspaceName, command).trim();
     const pid = Number.parseInt(pidText, 10);

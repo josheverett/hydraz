@@ -136,6 +136,19 @@ describe('Codex controller', () => {
     expect(vi.mocked(sshExec).mock.calls.some((call) => call[1].includes('nohup node'))).toBe(true);
   });
 
+  it('does not background the runner setup command when launching the detached runner', async () => {
+    const session = makeSession('start-detached-runner-only');
+
+    await startSession(session.id, repoRoot);
+
+    const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes('HYDRAZ_CODEX_RUNNER_OPTIONS='),
+    )?.[1];
+    expect(launchCommand).toBeDefined();
+    expect(launchCommand).toContain(' && (');
+    expect(launchCommand).toMatch(/nohup node .* < \/dev\/null & echo \$!\)/);
+  });
+
   it('refreshes a finished runner result into completed state', () => {
     const session = makeSession('refresh-finished');
     transitionState(repoRoot, session.id, 'starting');
