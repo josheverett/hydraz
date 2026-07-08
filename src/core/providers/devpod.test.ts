@@ -20,6 +20,7 @@ import {
   scpToContainer,
   scpFilesToContainer,
   getDistRoot,
+  resolveSeaDistRoot,
   devpodUp,
   devpodDelete,
   devpodList,
@@ -460,6 +461,35 @@ describe('getDistRoot', () => {
     const root = getDistRoot();
     expect(root).not.toMatch(/\/hydraz$/);
     expect(root).not.toContain('node_modules');
+  });
+});
+
+describe('resolveSeaDistRoot', () => {
+  it('returns null when not running as a SEA binary', () => {
+    expect(resolveSeaDistRoot({ isSea: () => false })).toBeNull();
+  });
+
+  it('extracts the embedded runner asset into a dist-shaped temp directory', () => {
+    const writes: Array<{ path: string; content: string }> = [];
+    const root = resolveSeaDistRoot({
+      isSea: () => true,
+      tmpDir: () => testDir,
+      mkdtemp: (prefix) => join(prefix, 'abc'),
+      mkdir: (path) => mkdirSync(path, { recursive: true }),
+      writeFile: (path, content) => {
+        writes.push({ path: String(path), content: String(content) });
+      },
+      getAsset: (key) => {
+        expect(key).toBe('core/codex/runner.js');
+        return 'console.log("runner");';
+      },
+    });
+
+    expect(root).toBe(join(testDir, 'hydraz-sea-dist-', 'abc'));
+    expect(writes).toEqual([{
+      path: join(root!, 'core', 'codex', 'runner.js'),
+      content: 'console.log("runner");',
+    }]);
   });
 });
 

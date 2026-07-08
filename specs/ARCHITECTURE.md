@@ -10,7 +10,7 @@ CLI -> Session metadata -> Workspace provider -> Detached Codex runner -> Delive
 
 1. The CLI creates a Hydraz session and chooses an execution target. Cloud is the default.
 2. The provider creates a local worktree, local DevPod container, or cloud DevPod workspace.
-3. For container/cloud runs, Hydraz copies its built `dist/` directory into `/tmp/hydraz-dist` and processes repo `.hydraz/config.json` `hydrazincludes`.
+3. For container/cloud runs, Hydraz copies its built `dist/` directory into `/tmp/hydraz-dist` and processes repo `.hydraz/config.json` `hydrazincludes`. SEA binaries extract an embedded dist-shaped runner payload first, then copy that extracted payload.
 4. Hydraz starts a detached runner with `nohup node /tmp/hydraz-dist/core/codex/runner.js`.
 5. The runner executes `codex exec --json --sandbox <mode> -o final.md "<goal prompt>"`. For container/cloud targets, Hydraz uses `--sandbox danger-full-access --skip-git-repo-check -c 'web_search_mode="live"'` because DevPod is the external isolation boundary and Codex's `workspace-write` Linux sandbox can fail under DevPod.
 6. The runner writes `events.jsonl`, `stderr.log`, `final.md`, and `result.json`.
@@ -25,6 +25,7 @@ CLI -> Session metadata -> Workspace provider -> Detached Codex runner -> Delive
 - `src/core/codex/runner.ts` is the remote/local detached runner entrypoint.
 - `src/core/codex/delivery.ts` handles commit, push, and draft PR delivery.
 - `src/core/display/sanitize.ts` strips terminal control characters and redacts known secret values before debug or event output is displayed or persisted.
+- `scripts/build-sea.sh` builds the release binary and embeds `core/codex/runner.js` as a SEA asset so the binary can support container/cloud runs without an adjacent `dist/` tree.
 - `src/core/providers/*` keeps the existing local, local-container, and cloud workspace providers.
 
 ## State Model

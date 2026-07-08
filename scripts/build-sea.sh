@@ -11,7 +11,11 @@ VERSION=$(node -p "require('./package.json').version")
 
 echo "==> Bundling with esbuild..."
 pnpm exec esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/hydraz-sea.cjs \
-  --define:__HYDRAZ_VERSION__="\"$VERSION\""
+  --define:__HYDRAZ_VERSION__="\"$VERSION\"" \
+  --log-override:empty-import-meta=silent
+
+echo "==> Bundling container runner asset..."
+pnpm exec esbuild src/core/codex/runner.ts --bundle --platform=node --format=esm --outfile=dist/sea-assets/core/codex/runner.js
 
 echo "==> Generating SEA blob..."
 node --experimental-sea-config sea-config.json
@@ -41,6 +45,7 @@ fi
 
 echo "==> Smoke test:"
 "./$BINARY_NAME" --version
+"./$BINARY_NAME" __sea-runner-payload
 
 VERSION=$(node -p "require('./package.json').version")
 ARCH=$(uname -m)

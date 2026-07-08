@@ -1,8 +1,9 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import * as sea from 'node:sea';
 import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
@@ -20,6 +21,18 @@ export interface DevPodCheckResult {
 }
 
 const EXEC_OPTIONS: ExecFileSyncOptions = { stdio: 'pipe', timeout: 120_000 };
+const SEA_RUNNER_ASSET = 'core/codex/runner.js';
+
+let cachedSeaDistRoot: string | null = null;
+
+export interface SeaDistRootOptions {
+  isSea?: () => boolean;
+  getAsset?: (key: string, encoding: 'utf8') => string | ArrayBuffer | Uint8Array;
+  tmpDir?: () => string;
+  mkdtemp?: (prefix: string) => string;
+  mkdir?: typeof mkdirSync;
+  writeFile?: typeof writeFileSync;
+}
 
 export function checkDevPodAvailability(): DevPodCheckResult {
   debugExec('devpod', ['version']);
@@ -319,12 +332,42 @@ export function verifyBranchPushed(
 }
 
 export function getDistRoot(): string {
+  const seaDistRoot = resolveSeaDistRoot();
+  if (seaDistRoot) return seaDistRoot;
+
   try {
     const thisFile = fileURLToPath(import.meta.url);
     return resolve(dirname(thisFile), '..', '..');
   } catch {
     throw new Error('Cannot determine dist root: import.meta.url unavailable (SEA binary does not support container mode)');
   }
+}
+
+export function resolveSeaDistRoot(options: SeaDistRootOptions = {}): string | null {
+  const isSea = options.isSea ?? (() => sea.isSea());
+  if (!isSea()) return null;
+
+  if (!options.isSea && cachedSeaDistRoot) {
+    return cachedSeaDistRoot;
+  }
+
+  const root = (options.mkdtemp ?? mkdtempSync)(join(options.tmpDir?.() ?? tmpdir(), 'hydraz-sea-dist-'));
+  const runnerDir = join(root, 'core', 'codex');
+  const runnerPath = join(runnerDir, 'runner.js');
+  const getAsset = options.getAsset ?? ((key: string, encoding: 'utf8') => sea.getAsset(key, encoding));
+  const runnerAsset = getAsset(SEA_RUNNER_ASSET, 'utf8');
+  const runnerSource = typeof runnerAsset === 'string'
+    ? runnerAsset
+    : Buffer.from(runnerAsset instanceof ArrayBuffer ? new Uint8Array(runnerAsset) : runnerAsset).toString('utf8');
+
+  (options.mkdir ?? mkdirSync)(runnerDir, { recursive: true });
+  (options.writeFile ?? writeFileSync)(runnerPath, runnerSource, { mode: 0o600 });
+
+  if (!options.isSea) {
+    cachedSeaDistRoot = root;
+  }
+
+  return root;
 }
 
 export async function scpToContainer(

@@ -34,13 +34,23 @@ describe('createProgram', () => {
 
   it('registers the v3 command surface only', () => {
     const program = createProgram();
-    const commandNames = program.commands.map((cmd) => cmd.name()).sort();
+    const commandNames = program.commands
+      .map((cmd) => cmd.name())
+      .filter((name) => !name.startsWith('__'))
+      .sort();
     expect(commandNames).toEqual([...EXPECTED_COMMANDS].sort());
+  });
+
+  it('registers the internal SEA runner payload smoke command', () => {
+    const program = createProgram();
+    const internal = program.commands.find((cmd) => cmd.name() === '__sea-runner-payload');
+    expect(internal).toBeDefined();
+    expect(internal!.description()).toBeTruthy();
   });
 
   it('every command has a description', () => {
     const program = createProgram();
-    for (const cmd of program.commands) {
+    for (const cmd of program.commands.filter((command) => !command.name().startsWith('__'))) {
       expect(cmd.description(), `${cmd.name()} missing description`).toBeTruthy();
     }
   });

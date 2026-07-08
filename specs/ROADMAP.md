@@ -8,6 +8,7 @@
 - Expand secret redaction coverage as new token formats or third-party auth mechanisms are added.
 - Add a `diff` command that shells out to the preserved workspace and shows the session branch diff.
 - Add a `doctor` command for Codex CLI capabilities, DevPod, git remote, and hydrazincludes diagnostics.
+- Add cross-platform SEA release artifacts beyond the current host-built binary.
 
 ## Follow Ups
 
