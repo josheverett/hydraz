@@ -12,15 +12,15 @@ CLI -> Session metadata -> Workspace provider -> Detached Codex runner -> Delive
 2. The provider creates a local worktree, local DevPod container, or cloud DevPod workspace.
 3. For container/cloud runs, Hydraz copies its built `dist/` directory into `/tmp/hydraz-dist` and processes repo `.hydraz/config.json` `hydrazincludes`.
 4. Hydraz starts a detached runner with `nohup node /tmp/hydraz-dist/core/codex/runner.js`.
-5. The runner executes `codex exec --json --sandbox <mode> -o final.md "<goal prompt>"`.
+5. The runner executes `codex exec --json --sandbox <mode> -o final.md "<goal prompt>"`. For container/cloud targets, Hydraz uses `--sandbox danger-full-access --skip-git-repo-check -c 'web_search_mode="live"'` because DevPod is the external isolation boundary and Codex's `workspace-write` Linux sandbox can fail under DevPod.
 6. The runner writes `events.jsonl`, `stderr.log`, `final.md`, and `result.json`.
-7. On Codex success, the runner commits dirty changes, pushes the branch, and creates a draft PR when GitHub auth is configured.
-8. `hydraz status` refreshes local session metadata from remote `result.json` and records completion/failure.
+7. On Codex success, the runner commits dirty changes, pushes the branch, verifies the branch is ahead of the base branch, and creates a draft PR when GitHub auth is configured.
+8. `hydraz status` refreshes local session metadata from remote `result.json`, records completion/failure, and cleans up delivered remote workspaces.
 
 ## Core Modules
 
 - `src/core/orchestration/controller.ts` provisions workspaces and starts/stops/resumes detached Codex runners.
-- `src/core/codex/args.ts` builds `codex exec` and `codex exec resume` command lines.
+- `src/core/codex/args.ts` builds supported `codex exec` and `codex exec resume` command lines. Shared exec flags are placed before `resume`; live search is enabled with config overrides, not `--search`.
 - `src/core/codex/events.ts` parses Codex JSONL events needed by Hydraz.
 - `src/core/codex/runner.ts` is the remote/local detached runner entrypoint.
 - `src/core/codex/delivery.ts` handles commit, push, and draft PR delivery.
@@ -47,6 +47,8 @@ Global config keeps:
 - `codex.model`
 - `codex.sandbox`
 - `codex.search`
+
+For container-backed runs, runtime options override the configured Codex sandbox to `danger-full-access` unless the CLI explicitly supplies `--sandbox`, and set `skipGitRepoCheck` for Codex exec. `codex.search` is normalized into a `web_search_mode="live"` config override by default.
 
 Repo config keeps `.hydraz/config.json` with `hydrazincludes`, plus optional `.hydraz/HYDRAZ.md` prompt content.
 

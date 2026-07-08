@@ -6,7 +6,7 @@
 
 <h1 align="center">Hydraz</h1>
 
-Hydraz provisions a local, container, or cloud workspace, injects repo-owned auth/config files, starts a detached `codex exec --json` run, and records enough metadata to check status, tail logs, resume, stop, and deliver the result.
+Hydraz provisions a local, container, or cloud workspace, injects repo-owned auth/config files, starts a detached `codex exec --json` run, and records enough metadata to check status, stream logs while the workspace exists, resume, stop, and deliver the result.
 
 Codex owns the agent behavior. Hydraz owns the harness:
 
@@ -51,8 +51,8 @@ hydraz config              # configure Codex/GitHub defaults
 | `--session <name>` | Session name |
 | `--branch <name>` | Branch name |
 | `--model <model>` | Pass a model override to Codex |
-| `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access` |
-| `--search` | Enable live Codex web search |
+| `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`; container/cloud runs default Codex to `danger-full-access` inside the DevPod boundary |
+| `--search` | Enable live Codex web search; currently enabled by default via Codex config overrides |
 | `--no-push` | Do not push after Codex completes |
 | `--no-pr` | Do not create a draft PR |
 | `--keep-workspace` | Preserve workspace after successful delivery |
@@ -77,6 +77,22 @@ Target repos may include `.hydraz/config.json` with `hydrazincludes` entries. Hy
 
 Optional `.hydraz/HYDRAZ.md` content is appended to the goal-shaped prompt passed to Codex. `AGENTS.md` remains Codex-native and is read by Codex itself.
 
+## Codex Invocation
+
+Hydraz runs Codex non-interactively through `codex exec`. For container and cloud targets, DevPod is the outer sandbox, so Hydraz gives Codex full access inside that workspace and avoids Codex's inner Linux sandbox:
+
+```bash
+codex exec \
+  --json \
+  --sandbox danger-full-access \
+  --skip-git-repo-check \
+  -c 'web_search_mode="live"' \
+  -o final.md \
+  "<goal prompt>"
+```
+
+Hydraz intentionally does not pass `codex exec --search`; in Codex CLI 0.143.x that flag belongs to the interactive entrypoint, not `exec`. Live web search is enabled for `exec` with the `web_search_mode` config override instead.
+
 ## Session Data
 
 Hydraz stores local session metadata under:
@@ -92,7 +108,9 @@ Hydraz stores local session metadata under:
     result.json
 ```
 
-For container/cloud sessions, Codex artifacts live in the remote workspace under `/tmp/hydraz-codex/<session-id>/` and the local `session.json` records their paths plus the detached runner PID and Codex thread id.
+For container/cloud sessions, Codex artifacts live in the remote workspace under `/tmp/hydraz-codex/<session-id>/` and the local `session.json` records their paths plus the detached runner PID, Codex thread id, delivery result, and PR URL when delivery succeeds.
+
+Successful delivery may clean up the remote DevPod workspace. After cleanup, commands that need remote artifacts, such as `hydraz logs`, can no longer SSH to those paths. Use `hydraz attach`/`hydraz logs` while a session is active, and use `hydraz status <session>` after completion to refresh local delivery metadata.
 
 Use `hydraz sessions clear --force` to remove local Hydraz session metadata and local workspace directories for the current repo. This does not delete Git branches. Use `hydraz clean --force` separately to remove orphaned DevPod workspaces and backing VMs.
 

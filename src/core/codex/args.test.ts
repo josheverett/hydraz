@@ -24,11 +24,21 @@ describe('buildCodexExecCommand', () => {
 
     expect(command).toEqual({
       cmd: 'codex',
-      args: ['exec', '--json', '--sandbox', 'workspace-write', '--search', '-o', '/tmp/final.md', 'Do the work'],
+      args: [
+        'exec',
+        '--json',
+        '--sandbox',
+        'workspace-write',
+        '-c',
+        'web_search_mode="live"',
+        '-o',
+        '/tmp/final.md',
+        'Do the work',
+      ],
     });
   });
 
-  it('includes model and live search when requested', () => {
+  it('includes model and live search config when requested', () => {
     const command = buildCodexExecCommand({
       prompt: 'Research and fix',
       outputLastMessagePath: '/tmp/final.md',
@@ -38,17 +48,31 @@ describe('buildCodexExecCommand', () => {
 
     expect(command.args).toContain('--model');
     expect(command.args).toContain('gpt-5.5');
-    expect(command.args).toContain('--search');
+    expect(command.args).not.toContain('--search');
+    expect(command.args).toContain('-c');
+    expect(command.args).toContain('web_search_mode="live"');
   });
 
-  it('keeps live search enabled even when search is false', () => {
+  it('omits live search config when search is false', () => {
     const command = buildCodexExecCommand({
       prompt: 'Research and fix',
       outputLastMessagePath: '/tmp/final.md',
       search: false,
     });
 
-    expect(command.args).toContain('--search');
+    expect(command.args).not.toContain('--search');
+    expect(command.args).not.toContain('-c');
+    expect(command.args).not.toContain('web_search_mode="live"');
+  });
+
+  it('includes skip git repo check when requested', () => {
+    const command = buildCodexExecCommand({
+      prompt: 'Do the work',
+      outputLastMessagePath: '/tmp/final.md',
+      skipGitRepoCheck: true,
+    });
+
+    expect(command.args).toContain('--skip-git-repo-check');
   });
 
   it('respects a custom codex command path and sandbox', () => {
@@ -76,14 +100,15 @@ describe('buildCodexResumeCommand', () => {
       cmd: 'codex',
       args: [
         'exec',
-        'resume',
-        '0199a213-81c0-7800-8aa1-bbab2a035a53',
         '--json',
         '--sandbox',
         'workspace-write',
-        '--search',
+        '-c',
+        'web_search_mode="live"',
         '-o',
         '/tmp/final.md',
+        'resume',
+        '0199a213-81c0-7800-8aa1-bbab2a035a53',
         'Continue from there',
       ],
     });

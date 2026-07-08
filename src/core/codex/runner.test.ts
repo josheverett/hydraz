@@ -109,13 +109,13 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
 
     expect(JSON.parse(readFileSync(argvFile, 'utf-8'))).toEqual([
       'exec',
-      'resume',
-      'thread-1',
       '--json',
       '--sandbox',
       'workspace-write',
       '-o',
       join(root, 'codex', CODEX_FINAL_FILE),
+      'resume',
+      'thread-1',
       'Keep going',
     ]);
   });

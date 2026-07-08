@@ -274,6 +274,7 @@ function buildRunnerOptions(
     model: options.model,
     sandbox,
     search: options.search ?? true,
+    skipGitRepoCheck: isContainerExecutionTarget(session.executionTarget),
     resumeThreadId: options.resumeThreadId,
     resumePrompt: options.resumePrompt,
     delivery: {

@@ -27,6 +27,7 @@ export interface CodexRunnerOptions {
   model?: string;
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
+  skipGitRepoCheck?: boolean;
   resumeThreadId?: string;
   resumePrompt?: string;
   delivery?: {
@@ -75,6 +76,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         sandbox: options.sandbox ?? options.config.codex.sandbox,
         model: options.model ?? options.config.codex.model,
         search: options.search ?? options.config.codex.search,
+        skipGitRepoCheck: options.skipGitRepoCheck,
       })
     : buildCodexExecCommand({
         codexCommand: options.config.codex.command,
@@ -83,6 +85,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         sandbox: options.sandbox ?? options.config.codex.sandbox,
         model: options.model ?? options.config.codex.model,
         search: options.search ?? options.config.codex.search,
+        skipGitRepoCheck: options.skipGitRepoCheck,
       });
 
   let threadId: string | undefined = options.resumeThreadId;

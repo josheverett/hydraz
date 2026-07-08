@@ -6,6 +6,8 @@ export interface CodexExecCommandOptions {
   sandbox?: CodexSandbox;
   model?: string;
   search?: boolean;
+  webSearchMode?: 'disabled' | 'cached' | 'live';
+  skipGitRepoCheck?: boolean;
   outputLastMessagePath: string;
 }
 
@@ -45,10 +47,15 @@ export function buildGoalPrompt(goal: string, repoPromptContent?: string | null)
 
 function baseArgs(options: CodexExecCommandOptions): string[] {
   const args = ['--json', '--sandbox', options.sandbox ?? 'workspace-write'];
+  if (options.skipGitRepoCheck) {
+    args.push('--skip-git-repo-check');
+  }
   if (options.model) {
     args.push('--model', options.model);
   }
-  args.push('--search');
+  if (options.search !== false) {
+    args.push('-c', `web_search_mode=${JSON.stringify(options.webSearchMode ?? 'live')}`);
+  }
   args.push('-o', options.outputLastMessagePath);
   return args;
 }
@@ -63,6 +70,6 @@ export function buildCodexExecCommand(options: CodexExecCommandOptions): BuiltCo
 export function buildCodexResumeCommand(options: CodexResumeCommandOptions): BuiltCommand {
   return {
     cmd: options.codexCommand ?? 'codex',
-    args: ['exec', 'resume', options.threadId, ...baseArgs(options), options.prompt],
+    args: ['exec', ...baseArgs(options), 'resume', options.threadId, options.prompt],
   };
 }

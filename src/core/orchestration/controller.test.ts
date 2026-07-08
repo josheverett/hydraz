@@ -168,6 +168,7 @@ describe('Codex controller', () => {
     expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
       sandbox: 'danger-full-access',
       search: true,
+      skipGitRepoCheck: true,
     });
   });
 
@@ -179,6 +180,7 @@ describe('Codex controller', () => {
     expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
       sandbox: 'workspace-write',
       search: true,
+      skipGitRepoCheck: true,
     });
   });
 
