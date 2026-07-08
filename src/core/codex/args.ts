@@ -48,9 +48,7 @@ function baseArgs(options: CodexExecCommandOptions): string[] {
   if (options.model) {
     args.push('--model', options.model);
   }
-  if (options.search) {
-    args.push('--search');
-  }
+  args.push('--search');
   args.push('-o', options.outputLastMessagePath);
   return args;
 }

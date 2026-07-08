@@ -119,6 +119,17 @@ describe('Codex controller', () => {
     });
   }
 
+  function getRunnerOptionsFromLaunchCommand(sessionId: string) {
+    const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes('HYDRAZ_CODEX_RUNNER_OPTIONS=') &&
+      call[1].includes(`/tmp/hydraz-codex/${sessionId}`),
+    )?.[1];
+    expect(launchCommand).toBeDefined();
+    const match = launchCommand?.match(/HYDRAZ_CODEX_RUNNER_OPTIONS='([^']+)'/);
+    expect(match).toBeTruthy();
+    return JSON.parse(match![1]);
+  }
+
   it('starts a detached Codex runner and records pid/artifact paths', async () => {
     const session = makeSession('start-detached');
 
@@ -147,6 +158,28 @@ describe('Codex controller', () => {
     expect(launchCommand).toBeDefined();
     expect(launchCommand).toContain(' && (');
     expect(launchCommand).toMatch(/nohup node .* < \/dev\/null & echo \$!\)/);
+  });
+
+  it('defaults cloud Codex runs to dangerous access and web search', async () => {
+    const session = makeSession('cloud-capabilities');
+
+    await startSession(session.id, repoRoot);
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      sandbox: 'danger-full-access',
+      search: true,
+    });
+  });
+
+  it('preserves explicit sandbox overrides for cloud Codex runs', async () => {
+    const session = makeSession('cloud-sandbox-override');
+
+    await startSession(session.id, repoRoot, {}, { sandbox: 'workspace-write' });
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      sandbox: 'workspace-write',
+      search: true,
+    });
   });
 
   it('refreshes a finished runner result into completed state', () => {

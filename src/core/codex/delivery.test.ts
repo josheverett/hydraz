@@ -55,6 +55,11 @@ describe('finalizeCodexDelivery', () => {
       createPullRequest: true,
       execFile,
       createPullRequestForBranch,
+      compareBranchWithBase: vi.fn(async () => ({
+        base: 'main',
+        aheadBy: 1,
+        totalCommits: 1,
+      })),
     });
 
     expect(execFile).toHaveBeenCalledWith('git', ['add', '-A'], expect.objectContaining({ cwd: '/workspace' }));
@@ -113,6 +118,39 @@ describe('finalizeCodexDelivery', () => {
       action: 'preserved',
       pushed: true,
       error: 'GitHub token is required to create a pull request',
+    });
+  });
+
+  it('preserves the workspace and skips PR creation when the branch has no commits ahead of base', async () => {
+    const execFile = vi.fn((cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'status') return '';
+      return '';
+    }) as any;
+    const provider = makeProvider();
+    const createPullRequestForBranch = vi.fn(async () => 'https://github.com/acme/repo/pull/1');
+
+    const result = await finalizeCodexDelivery({
+      session: makeSession(),
+      repoRoot: '/repo',
+      workspace: makeWorkspace(),
+      provider,
+      githubToken: 'ghp-test',
+      createPullRequest: true,
+      execFile,
+      createPullRequestForBranch,
+      compareBranchWithBase: vi.fn(async () => ({
+        base: 'main',
+        aheadBy: 0,
+        totalCommits: 0,
+      })),
+    });
+
+    expect(createPullRequestForBranch).not.toHaveBeenCalled();
+    expect(provider.destroyWorkspace).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      action: 'preserved',
+      pushed: true,
+      error: 'No changes to deliver: branch hydraz/codex-v3 has no commits ahead of main',
     });
   });
 });

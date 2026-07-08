@@ -255,6 +255,13 @@ function buildRunnerOptions(
   codexDir: string,
   options: SwarmOptions & { resumeThreadId?: string; resumePrompt?: string },
 ): CodexRunnerOptions {
+  const config = loadConfig();
+  const sandbox = options.sandbox ?? (
+    isContainerExecutionTarget(session.executionTarget)
+      ? 'danger-full-access'
+      : undefined
+  );
+
   return {
     repoRoot: workingDirectory,
     sessionId: session.id,
@@ -263,10 +270,10 @@ function buildRunnerOptions(
     goal: session.task,
     workingDirectory,
     codexDir,
-    config: loadConfig(),
+    config,
     model: options.model,
-    sandbox: options.sandbox,
-    search: options.search,
+    sandbox,
+    search: options.search ?? true,
     resumeThreadId: options.resumeThreadId,
     resumePrompt: options.resumePrompt,
     delivery: {

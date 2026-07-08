@@ -24,7 +24,7 @@ describe('buildCodexExecCommand', () => {
 
     expect(command).toEqual({
       cmd: 'codex',
-      args: ['exec', '--json', '--sandbox', 'workspace-write', '-o', '/tmp/final.md', 'Do the work'],
+      args: ['exec', '--json', '--sandbox', 'workspace-write', '--search', '-o', '/tmp/final.md', 'Do the work'],
     });
   });
 
@@ -38,6 +38,16 @@ describe('buildCodexExecCommand', () => {
 
     expect(command.args).toContain('--model');
     expect(command.args).toContain('gpt-5.5');
+    expect(command.args).toContain('--search');
+  });
+
+  it('keeps live search enabled even when search is false', () => {
+    const command = buildCodexExecCommand({
+      prompt: 'Research and fix',
+      outputLastMessagePath: '/tmp/final.md',
+      search: false,
+    });
+
     expect(command.args).toContain('--search');
   });
 
@@ -71,6 +81,7 @@ describe('buildCodexResumeCommand', () => {
         '--json',
         '--sandbox',
         'workspace-write',
+        '--search',
         '-o',
         '/tmp/final.md',
         'Continue from there',

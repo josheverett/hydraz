@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  compareGitHubBranches,
   ensureGitHubPullRequest,
   getGitHubDefaultBranch,
   githubBranchExists,
@@ -42,6 +43,18 @@ describe('github api helpers', () => {
     await expect(githubBranchExists(repo, 'hydraz/test', 'token')).resolves.toBe(false);
   });
 
+  it('compares base and head branches on GitHub', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      ahead_by: 2,
+      total_commits: 2,
+    }), { status: 200 }));
+
+    await expect(compareGitHubBranches(repo, 'main', 'hydraz/test', 'token')).resolves.toEqual({
+      aheadBy: 2,
+      totalCommits: 2,
+    });
+  });
+
   it('creates a pull request and returns its URL', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
       number: 12,
@@ -78,5 +91,23 @@ describe('github api helpers', () => {
       url: 'https://github.com/octocat/hello-world/pull/12',
       existing: true,
     });
+  });
+
+  it('includes GitHub validation details when PR creation fails with no existing PR', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: 'Validation Failed',
+        errors: [
+          { message: 'No commits between main and hydraz/test' },
+        ],
+      }), { status: 422 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    await expect(ensureGitHubPullRequest(repo, 'token', {
+      title: 'Title',
+      body: 'Body',
+      head: 'hydraz/test',
+      base: 'main',
+    })).rejects.toThrow('Failed to create GitHub pull request (422): Validation Failed: No commits between main and hydraz/test');
   });
 });

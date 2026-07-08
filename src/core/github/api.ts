@@ -9,6 +9,16 @@ interface GitHubPullRequestResponse {
   html_url?: string;
 }
 
+interface GitHubCompareResponse {
+  ahead_by?: number;
+  total_commits?: number;
+}
+
+interface GitHubErrorResponse {
+  message?: string;
+  errors?: Array<{ message?: string } | string>;
+}
+
 export class GitHubApiError extends Error {
   constructor(message: string) {
     super(message);
@@ -67,6 +77,28 @@ export async function githubBranchExists(
   return true;
 }
 
+export async function compareGitHubBranches(
+  repo: GitHubRepoInfo,
+  base: string,
+  head: string,
+  token: string,
+): Promise<{ aheadBy: number; totalCommits: number }> {
+  const response = await githubRequest(
+    `/repos/${repo.owner}/${repo.repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+    token,
+  );
+
+  if (!response.ok) {
+    throw new GitHubApiError(`Failed to compare GitHub branches (${response.status})`);
+  }
+
+  const data = await response.json() as GitHubCompareResponse;
+  return {
+    aheadBy: typeof data.ahead_by === 'number' ? data.ahead_by : 0,
+    totalCommits: typeof data.total_commits === 'number' ? data.total_commits : 0,
+  };
+}
+
 export async function ensureGitHubPullRequest(
   repo: GitHubRepoInfo,
   token: string,
@@ -88,6 +120,8 @@ export async function ensureGitHubPullRequest(
     return { number: data.number, url: data.html_url, existing: false };
   }
 
+  const errorDetail = await githubErrorDetail(response);
+
   if (response.status === 422) {
     const params = new URLSearchParams({
       state: 'open',
@@ -108,5 +142,28 @@ export async function ensureGitHubPullRequest(
     }
   }
 
-  throw new GitHubApiError(`Failed to create GitHub pull request (${response.status})`);
+  const detail = errorDetail ? `: ${errorDetail}` : '';
+  throw new GitHubApiError(`Failed to create GitHub pull request (${response.status})${detail}`);
+}
+
+async function githubErrorDetail(response: Response): Promise<string | null> {
+  let data: GitHubErrorResponse;
+  try {
+    data = await response.json() as GitHubErrorResponse;
+  } catch {
+    return null;
+  }
+
+  const parts = [
+    typeof data.message === 'string' ? data.message : undefined,
+    ...(Array.isArray(data.errors)
+      ? data.errors.map((error) => {
+          if (typeof error === 'string') return error;
+          return typeof error.message === 'string' ? error.message : undefined;
+        })
+      : []),
+  ].filter((part): part is string => !!part?.trim());
+
+  if (parts.length === 0) return null;
+  return parts.join(': ');
 }

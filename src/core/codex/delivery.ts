@@ -4,6 +4,7 @@ import type { WorkspaceInfo, WorkspaceProvider } from '../providers/provider.js'
 import { getGitHubRepo } from '../repo/detect.js';
 import { buildPullRequestContent } from '../github/pull-request.js';
 import {
+  compareGitHubBranches,
   ensureGitHubPullRequest,
   getGitHubDefaultBranch,
 } from '../github/api.js';
@@ -31,6 +32,11 @@ export interface CodexDeliveryOptions {
     session: SessionMetadata;
     token: string;
   }) => Promise<string>;
+  compareBranchWithBase?: (input: {
+    repoRoot: string;
+    session: SessionMetadata;
+    token: string;
+  }) => Promise<{ base: string; aheadBy: number; totalCommits: number }>;
 }
 
 export async function finalizeCodexDelivery(options: CodexDeliveryOptions): Promise<CodexDeliveryResult> {
@@ -73,6 +79,21 @@ export async function finalizeCodexDelivery(options: CodexDeliveryOptions): Prom
     }
 
     try {
+      const comparison = options.compareBranchWithBase
+        ? await options.compareBranchWithBase({
+            repoRoot: options.repoRoot,
+            session: options.session,
+            token: options.githubToken,
+          })
+        : await compareDefaultBranch(options.repoRoot, options.session, options.githubToken);
+      if (comparison.aheadBy === 0 || comparison.totalCommits === 0) {
+        return preserve(
+          committed,
+          pushed,
+          `No changes to deliver: branch ${options.session.branchName} has no commits ahead of ${comparison.base}`,
+        );
+      }
+
       prUrl = options.createPullRequestForBranch
         ? await options.createPullRequestForBranch({
             repoRoot: options.repoRoot,
@@ -128,6 +149,21 @@ async function createDefaultPullRequest(
     base,
   });
   return created.url;
+}
+
+async function compareDefaultBranch(
+  repoRoot: string,
+  session: SessionMetadata,
+  token: string,
+): Promise<{ base: string; aheadBy: number; totalCommits: number }> {
+  const repo = getGitHubRepo(repoRoot);
+  if (!repo) {
+    throw new Error('GitHub remote is required to create a pull request');
+  }
+
+  const base = await getGitHubDefaultBranch(repo, token);
+  const comparison = await compareGitHubBranches(repo, base, session.branchName, token);
+  return { base, ...comparison };
 }
 
 function preserve(committed: boolean, pushed: boolean, error: string): CodexDeliveryResult {
