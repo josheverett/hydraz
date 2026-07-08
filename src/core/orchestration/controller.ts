@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import type { ExecutionTarget } from '../config/schema.js';
@@ -226,7 +225,7 @@ async function startCodexRunner(
 
   const codexDir = join(getSessionDir(repoRoot, session.id), 'codex');
   const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
-  const runnerScript = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'codex', 'runner.js');
+  const runnerScript = join(getDistRoot(), 'core', 'codex', 'runner.js');
   const child = spawn(process.execPath, [runnerScript], {
     cwd: workspace.directory,
     detached: true,

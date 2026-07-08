@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { registerCommands } from './commands/index.js';
 import { runInteractive } from './interactive.js';
+import { getDistRoot } from '../core/providers/devpod.js';
 
 declare const __HYDRAZ_VERSION__: string | undefined;
 
@@ -31,6 +32,17 @@ export function createProgram(): Command {
     });
 
   registerCommands(program);
+
+  const seaRunnerPayloadCommand = new Command('__sea-runner-payload')
+    .description('Internal smoke check for SEA runner payload availability')
+    .action(() => {
+      const runnerPath = join(getDistRoot(), 'core', 'codex', 'runner.js');
+      if (!existsSync(runnerPath)) {
+        throw new Error(`Runner payload missing: ${runnerPath}`);
+      }
+      console.log(runnerPath);
+    });
+  program.addCommand(seaRunnerPayloadCommand, { hidden: true });
 
   return program;
 }

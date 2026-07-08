@@ -1,5 +1,8 @@
 {
   "main": "dist/hydraz-sea.cjs",
   "output": "dist/sea-prep.blob",
-  "disableExperimentalSEAWarning": true
+  "disableExperimentalSEAWarning": true,
+  "assets": {
+    "core/codex/runner.js": "dist/sea-assets/core/codex/runner.js"
+  }
 }

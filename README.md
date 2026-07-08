@@ -93,6 +93,12 @@ codex exec \
 
 Hydraz intentionally does not pass `codex exec --search`; in Codex CLI 0.143.x that flag belongs to the interactive entrypoint, not `exec`. Live web search is enabled for `exec` with the `web_search_mode` config override instead.
 
+## Single Executable
+
+`pnpm run build:sea` builds the GitHub release binary. The SEA binary embeds the container runner payload that Hydraz copies into DevPod workspaces, so container/cloud mode does not depend on an adjacent repository `dist/` directory.
+
+The SEA build smoke checks both `hydraz --version` and the embedded runner payload path before packaging the tarball.
+
 ## Secret Redaction
 
 Hydraz redacts known secret formats before writing verbose debug output or session events. This includes GitHub token prefixes such as `github_pat_` and `ghp_`, OpenAI-style `sk-...` keys, authorization header values, and token-like JSON/env fields.
