@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
@@ -9,6 +9,7 @@ import {
   saveSession,
   transitionState,
   listSessions,
+  clearRepoSessions,
   findSessionByName,
   getActiveSessions,
   getSessionDir,
@@ -275,6 +276,40 @@ describe('listSessions', () => {
     const sessions = listSessions(repoRoot);
     expect(sessions.map((s) => s.name)).toContain('valid-session');
     expect(sessions.map((s) => s.name)).not.toContain('wrong-repo-session');
+  });
+});
+
+describe('clearRepoSessions', () => {
+  it('removes all session records for the repo', () => {
+    makeSession('session-a');
+    makeSession('session-b');
+
+    const result = clearRepoSessions(repoRoot);
+
+    expect(result.sessions).toBe(2);
+    expect(listSessions(repoRoot)).toEqual([]);
+  });
+
+  it('removes local workspace directories and recreates Hydraz state directories', () => {
+    makeSession('session-a');
+    const paths = resolveRepoDataPaths(repoRoot);
+    const workspaceDir = join(paths.workspacesDir, 'workspace-a');
+    mkdirSync(workspaceDir);
+    writeFileSync(join(workspaceDir, 'marker.txt'), 'workspace data', { flag: 'wx' });
+
+    const result = clearRepoSessions(repoRoot);
+
+    expect(result.workspaces).toBe(1);
+    expect(existsSync(paths.sessionsDir)).toBe(true);
+    expect(existsSync(paths.workspacesDir)).toBe(true);
+    expect(existsSync(workspaceDir)).toBe(false);
+  });
+
+  it('returns zero counts for an already-empty repo', () => {
+    const result = clearRepoSessions(repoRoot);
+
+    expect(result).toEqual({ sessions: 0, workspaces: 0 });
+    expect(listSessions(repoRoot)).toEqual([]);
   });
 });
 

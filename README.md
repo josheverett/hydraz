@@ -38,6 +38,7 @@ hydraz logs <session>      # print Codex JSONL events
 hydraz resume <session> "<prompt>"
 hydraz stop [session]      # stop the detached runner
 hydraz sessions            # list sessions
+hydraz sessions clear      # clear local Hydraz sessions for this repo
 hydraz shell <session>     # open devpod ssh for container/cloud sessions
 hydraz clean               # remove orphaned DevPod workspaces
 hydraz config              # configure Codex/GitHub defaults
@@ -92,6 +93,8 @@ Hydraz stores local session metadata under:
 ```
 
 For container/cloud sessions, Codex artifacts live in the remote workspace under `/tmp/hydraz-codex/<session-id>/` and the local `session.json` records their paths plus the detached runner PID and Codex thread id.
+
+Use `hydraz sessions clear --force` to remove local Hydraz session metadata and local workspace directories for the current repo. This does not delete Git branches. Use `hydraz clean --force` separately to remove orphaned DevPod workspaces and backing VMs.
 
 ## Development
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   resolveRepoDataPaths,
@@ -175,4 +175,28 @@ export function getActiveSessions(repoRoot: string): SessionMetadata[] {
 
 export function getArtifactPath(repoRoot: string, sessionId: string, artifact: string): string {
   return join(getSessionDir(repoRoot, sessionId), 'artifacts', artifact);
+}
+
+export interface ClearRepoSessionsResult {
+  sessions: number;
+  workspaces: number;
+}
+
+function countChildDirectories(path: string): number {
+  if (!existsSync(path)) return 0;
+  return readdirSync(path, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .length;
+}
+
+export function clearRepoSessions(repoRoot: string): ClearRepoSessionsResult {
+  const paths = resolveRepoDataPaths(repoRoot);
+  const sessions = listSessions(repoRoot).length;
+  const workspaces = countChildDirectories(paths.workspacesDir);
+
+  rmSync(paths.sessionsDir, { recursive: true, force: true });
+  rmSync(paths.workspacesDir, { recursive: true, force: true });
+  initRepoState(repoRoot);
+
+  return { sessions, workspaces };
 }

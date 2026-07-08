@@ -45,6 +45,18 @@ describe('createProgram', () => {
     }
   });
 
+  it('sessions command exposes clear subcommand with safety options', () => {
+    const program = createProgram();
+    const sessionsCmd = program.commands.find((cmd) => cmd.name() === 'sessions')!;
+    const clearCmd = sessionsCmd.commands.find((cmd) => cmd.name() === 'clear');
+
+    expect(clearCmd).toBeDefined();
+    expect(clearCmd!.description()).toBeTruthy();
+    expect(clearCmd!.options.map((opt) => opt.long)).toEqual(
+      expect.arrayContaining(['--force', '--dry-run']),
+    );
+  });
+
   it('run command accepts a required goal argument', () => {
     const program = createProgram();
     const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
