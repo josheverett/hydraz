@@ -166,6 +166,23 @@ describe('LocalContainerProvider', () => {
       );
     });
 
+    it('launches devpod with an explicit branch override when provided', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config, branchOverride: 'staging' });
+
+      expect(mockDevpodUp).toHaveBeenCalledWith(
+        'git@github.com:octocat/hello-world.git',
+        expect.stringContaining('hydraz-'),
+        'docker',
+        'staging',
+        undefined,
+        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+      );
+    });
+
     it('creates worktree inside the container via SSH', async () => {
       const provider = new LocalContainerProvider();
       const session = makeSession();

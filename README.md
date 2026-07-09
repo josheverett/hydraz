@@ -50,6 +50,7 @@ hydraz config              # configure Codex/GitHub defaults
 |------|-------------|
 | `--session <name>` | Session name |
 | `--branch <name>` | Branch name |
+| `--base <branch>` | Base branch for workspace creation and PR delivery |
 | `--model <model>` | Pass a model override to Codex |
 | `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`; container/cloud runs default Codex to `danger-full-access` inside the DevPod boundary |
 | `--search` | Enable live Codex web search; currently enabled by default via Codex config overrides |
@@ -61,6 +62,8 @@ hydraz config              # configure Codex/GitHub defaults
 | `--cloud` | Run in a cloud DevPod workspace (default) |
 | `--no-clone` | Use local repo path instead of cloning from remote |
 | `--verbose` | Enable diagnostic output with known token/API-key values redacted |
+
+Use `--base <branch>` when the session should branch from and open its PR against a branch other than the repository default, for example `hydraz run --base staging "Update the demo"`.
 
 ## Repo Configuration
 

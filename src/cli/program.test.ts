@@ -83,6 +83,7 @@ describe('createProgram', () => {
     expect(optionNames).toContain('--model');
     expect(optionNames).toContain('--sandbox');
     expect(optionNames).toContain('--search');
+    expect(optionNames).toContain('--base');
     expect(optionNames).toContain('--no-push');
     expect(optionNames).toContain('--no-pr');
     expect(optionNames).toContain('--keep-workspace');

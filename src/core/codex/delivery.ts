@@ -139,7 +139,7 @@ async function createDefaultPullRequest(
     throw new Error('GitHub remote is required to create a pull request');
   }
 
-  const base = await getGitHubDefaultBranch(repo, token);
+  const base = session.baseBranch ?? await getGitHubDefaultBranch(repo, token);
   const pr = buildPullRequestContent(session, null);
   const created = await ensureGitHubPullRequest(repo, token, {
     title: pr.title,
@@ -160,7 +160,7 @@ async function compareDefaultBranch(
     throw new Error('GitHub remote is required to create a pull request');
   }
 
-  const base = await getGitHubDefaultBranch(repo, token);
+  const base = session.baseBranch ?? await getGitHubDefaultBranch(repo, token);
   const comparison = await compareGitHubBranches(repo, base, session.branchName, token);
   return { base, ...comparison };
 }

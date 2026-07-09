@@ -41,7 +41,7 @@ export async function finalizeGitHubContainerDelivery(params: {
 
   let prUrl: string | undefined;
   if (params.createPullRequest) {
-    const base = await getGitHubDefaultBranch(repo, params.token);
+    const base = params.session.baseBranch ?? await getGitHubDefaultBranch(repo, params.token);
     const prDraft = loadArtifact(params.repoRoot, params.session.id, 'pr-draft.md');
     const pr = buildPullRequestContent(params.session, prDraft);
     const created = await ensureGitHubPullRequest(repo, params.token, {

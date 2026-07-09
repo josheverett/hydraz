@@ -1,7 +1,18 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./delivery.js', () => ({
+  finalizeCodexDelivery: vi.fn(async () => ({
+    action: 'preserved',
+    committed: false,
+    pushed: true,
+    message: 'Workspace preserved after push',
+  })),
+}));
+
+import { finalizeCodexDelivery } from './delivery.js';
 import { createDefaultConfig } from '../config/schema.js';
 import {
   CODEX_EVENTS_FILE,
@@ -118,5 +129,34 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       'thread-1',
       'Keep going',
     ]);
+  });
+
+  it('passes the configured base branch into delivery', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+const outputIndex = process.argv.indexOf('-o');
+if (outputIndex >= 0) fs.writeFileSync(process.argv[outputIndex + 1], 'final message');
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
+`);
+    const options = makeOptions(root, codex);
+
+    await executeCodexRunner({
+      ...options,
+      branchName: 'hydraz/v3',
+      baseBranch: 'staging',
+      delivery: {
+        enabled: true,
+        createPullRequest: true,
+        keepWorkspace: true,
+      },
+    });
+
+    expect(finalizeCodexDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      session: expect.objectContaining({
+        branchName: 'hydraz/v3',
+        baseBranch: 'staging',
+      }),
+    }));
   });
 });

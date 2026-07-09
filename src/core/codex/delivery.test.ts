@@ -3,6 +3,35 @@ import { finalizeCodexDelivery } from './delivery.js';
 import type { SessionMetadata } from '../sessions/schema.js';
 import type { WorkspaceInfo, WorkspaceProvider } from '../providers/provider.js';
 
+vi.mock('../repo/detect.js', () => ({
+  getGitHubRepo: vi.fn(() => ({
+    remoteName: 'origin',
+    remoteUrl: 'git@github.com:octocat/hello-world.git',
+    owner: 'octocat',
+    repo: 'hello-world',
+    httpsUrl: 'https://github.com/octocat/hello-world.git',
+  })),
+}));
+
+vi.mock('../github/api.js', () => ({
+  compareGitHubBranches: vi.fn(async () => ({
+    aheadBy: 1,
+    totalCommits: 1,
+  })),
+  ensureGitHubPullRequest: vi.fn(async () => ({
+    number: 12,
+    url: 'https://github.com/octocat/hello-world/pull/12',
+    existing: false,
+  })),
+  getGitHubDefaultBranch: vi.fn(async () => 'main'),
+}));
+
+import {
+  compareGitHubBranches,
+  ensureGitHubPullRequest,
+  getGitHubDefaultBranch,
+} from '../github/api.js';
+
 function makeSession(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   return {
     id: 'session-1',
@@ -164,5 +193,40 @@ describe('finalizeCodexDelivery', () => {
       pushed: true,
       error: 'No changes to deliver: branch hydraz/codex-v3 has no commits ahead of main',
     });
+  });
+
+  it('uses the configured base branch for compare and pull request creation', async () => {
+    const execFile = vi.fn((cmd: string, args: string[]) => {
+      if (cmd === 'git' && args[0] === 'status') return '';
+      return '';
+    }) as any;
+    const provider = makeProvider();
+
+    const result = await finalizeCodexDelivery({
+      session: makeSession({ baseBranch: 'staging' }),
+      repoRoot: '/repo',
+      workspace: makeWorkspace(),
+      provider,
+      githubToken: 'ghp-test',
+      createPullRequest: true,
+      execFile,
+    });
+
+    expect(getGitHubDefaultBranch).not.toHaveBeenCalled();
+    expect(compareGitHubBranches).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'octocat', repo: 'hello-world' }),
+      'staging',
+      'hydraz/codex-v3',
+      'ghp-test',
+    );
+    expect(ensureGitHubPullRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'octocat', repo: 'hello-world' }),
+      'ghp-test',
+      expect.objectContaining({
+        head: 'hydraz/codex-v3',
+        base: 'staging',
+      }),
+    );
+    expect(result.prUrl).toBe('https://github.com/octocat/hello-world/pull/12');
   });
 });

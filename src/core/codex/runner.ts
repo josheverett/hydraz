@@ -21,6 +21,7 @@ export interface CodexRunnerOptions {
   sessionId: string;
   sessionName: string;
   branchName?: string;
+  baseBranch?: string;
   goal: string;
   workingDirectory: string;
   codexDir: string;
@@ -149,6 +150,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         name: options.sessionName,
         repoRoot: options.repoRoot,
         branchName,
+        baseBranch: options.baseBranch,
         executionTarget: options.config.executionTarget,
         task: options.goal,
         state: 'delivering',

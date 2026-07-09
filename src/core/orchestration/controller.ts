@@ -49,6 +49,7 @@ export interface SwarmOptions {
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   verbose?: boolean;
+  baseBranch?: string;
   skipClone?: boolean;
   noPush?: boolean;
   noPr?: boolean;
@@ -119,6 +120,7 @@ export async function startSession(
     workspace = await provider.createWorkspace({
       session,
       config,
+      branchOverride: options.baseBranch ?? session.baseBranch,
       skipClone: options.skipClone,
       onHeartbeat: (label, elapsedMs) => {
         emit(repoRoot, sessionId, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
@@ -266,6 +268,7 @@ function buildRunnerOptions(
     sessionId: session.id,
     sessionName: session.name,
     branchName: session.branchName,
+    baseBranch: options.baseBranch ?? session.baseBranch,
     goal: session.task,
     workingDirectory: workspace.directory,
     codexDir,

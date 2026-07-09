@@ -208,6 +208,22 @@ describe('Codex controller', () => {
     });
   });
 
+  it('passes the configured base branch to workspace creation and the detached runner', async () => {
+    const createWorkspace = vi.spyOn(CloudProvider.prototype, 'createWorkspace');
+    const session = makeSession('cloud-base-branch');
+    session.baseBranch = 'staging';
+    saveSession(repoRoot, session);
+
+    await startSession(session.id, repoRoot, {}, { baseBranch: 'staging' });
+
+    expect(createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      branchOverride: 'staging',
+    }));
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      baseBranch: 'staging',
+    });
+  });
+
   it('refreshes a finished runner result into completed state', () => {
     const session = makeSession('refresh-finished');
     transitionState(repoRoot, session.id, 'starting');

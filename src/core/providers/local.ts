@@ -12,7 +12,7 @@ export class LocalProvider implements WorkspaceProvider {
 
   async createWorkspace(params: CreateWorkspaceParams): Promise<WorkspaceInfo> {
     const { session } = params;
-    const worktree = createWorktree(session.repoRoot, session.id, session.branchName);
+    const worktree = createWorktree(session.repoRoot, session.id, session.branchName, params.branchOverride);
 
     return {
       id: session.id,

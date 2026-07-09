@@ -60,6 +60,19 @@ describe('createSession', () => {
 
     expect(session.task).toBe('Fix it');
   });
+
+  it('stores the optional base branch', () => {
+    const session = createSession({
+      name: 'test',
+      repoRoot: '/tmp/repo',
+      branchName: 'hydraz/test',
+      baseBranch: 'staging',
+      executionTarget: 'local',
+      task: 'Fix it',
+    });
+
+    expect(session.baseBranch).toBe('staging');
+  });
 });
 
 describe('isValidTransition', () => {
