@@ -104,6 +104,24 @@ describe('finalizeGitHubContainerDelivery', () => {
     expect(provider.destroyWorkspace).toHaveBeenCalledWith('/repo', workspace);
   });
 
+  it('uses the configured base branch when creating a PR', async () => {
+    await finalizeGitHubContainerDelivery({
+      session: { ...session, baseBranch: 'staging' },
+      workspace,
+      repoRoot: '/repo',
+      provider,
+      token: 'token',
+      createPullRequest: true,
+    });
+
+    expect(mockGetGitHubDefaultBranch).not.toHaveBeenCalled();
+    expect(mockEnsureGitHubPullRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'octocat', repo: 'hello-world' }),
+      'token',
+      expect.objectContaining({ base: 'staging' }),
+    );
+  });
+
   it('skips PR creation when only branch verification is needed', async () => {
     const result = await finalizeGitHubContainerDelivery({
       session,

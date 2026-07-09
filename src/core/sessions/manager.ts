@@ -67,6 +67,7 @@ export function createNewSession(params: {
   name: string;
   repoRoot: string;
   branchName: string;
+  baseBranch?: string;
   executionTarget: ExecutionTarget;
   task: string;
 }): SessionMetadata {

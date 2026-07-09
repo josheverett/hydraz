@@ -29,6 +29,7 @@ export interface SessionMetadata {
   name: string;
   repoRoot: string;
   branchName: string;
+  baseBranch?: string;
   executionTarget: ExecutionTarget;
   task: string;
   state: SessionState;
@@ -62,6 +63,7 @@ export function createSession(params: {
   name: string;
   repoRoot: string;
   branchName: string;
+  baseBranch?: string;
   executionTarget: ExecutionTarget;
   task: string;
 }): SessionMetadata {
@@ -71,6 +73,7 @@ export function createSession(params: {
     name: params.name,
     repoRoot: params.repoRoot,
     branchName: params.branchName,
+    baseBranch: params.baseBranch,
     executionTarget: params.executionTarget,
     task: params.task,
     state: 'created',

@@ -20,6 +20,7 @@ export function registerRunCommand(program: Command): void {
     .argument('<goal>', 'Goal description')
     .option('--session <name>', 'Session name')
     .option('--branch <name>', 'Branch name')
+    .option('--base <branch>', 'Base branch for workspace creation and PR delivery')
     .option('--local', 'Run locally (bare metal)')
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud (default)')
@@ -34,6 +35,7 @@ export function registerRunCommand(program: Command): void {
     .action(async (goal: string, options: {
       session?: string;
       branch?: string;
+      base?: string;
       local?: boolean;
       container?: boolean;
       cloud?: boolean;
@@ -73,6 +75,11 @@ export function registerRunCommand(program: Command): void {
         return;
       }
 
+      if (options.base && !isValidBranchName(options.base)) {
+        console.error(`Invalid base branch: "${options.base}". Branch names must not contain shell metacharacters.`);
+        return;
+      }
+
       if (options.sandbox && !['read-only', 'workspace-write', 'danger-full-access'].includes(options.sandbox)) {
         console.error(`Invalid sandbox mode: "${options.sandbox}".`);
         return;
@@ -90,6 +97,7 @@ export function registerRunCommand(program: Command): void {
           name: sessionName,
           repoRoot: repo.root,
           branchName,
+          baseBranch: options.base,
           executionTarget,
           task: goal,
         });
@@ -108,6 +116,9 @@ export function registerRunCommand(program: Command): void {
       );
 
       console.log(`\nSession "${sessionName}" started on branch ${branchName}`);
+      if (options.base) {
+        console.log(`Base: ${options.base}`);
+      }
       console.log(`Goal: ${goal}`);
       console.log(`Target: ${executionTarget}`);
       console.log('');
@@ -119,6 +130,7 @@ export function registerRunCommand(program: Command): void {
         model: options.model,
         sandbox: options.sandbox,
         search: options.search,
+        baseBranch: options.base,
         skipClone: options.clone === false,
         noPush: options.push === false,
         noPr: options.pr === false,

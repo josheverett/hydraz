@@ -76,6 +76,19 @@ describe('LocalProvider', () => {
 
       expect(existsSync(join(workspace.directory, 'README.md'))).toBe(true);
     });
+
+    it('creates the worktree from the configured base branch', async () => {
+      execSync('git checkout -b staging', { cwd: testRepo, stdio: 'pipe' });
+      writeFileSync(join(testRepo, 'staging-only.txt'), 'from staging');
+      execSync('git add . && git commit -m "staging base"', { cwd: testRepo, stdio: 'pipe' });
+      execSync('git checkout -', { cwd: testRepo, stdio: 'pipe' });
+      const session = makeSession('from-staging');
+      const config = createDefaultConfig();
+
+      const workspace = await provider.createWorkspace({ session, config, branchOverride: 'staging' });
+
+      expect(existsSync(join(workspace.directory, 'staging-only.txt'))).toBe(true);
+    });
   });
 
   describe('destroyWorkspace', () => {
