@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
+import type { CodexContainerImportPlan } from '../codex/container-import.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -392,6 +393,82 @@ export async function scpToContainer(
     onHeartbeat: onHeartbeat ?? (() => {}),
   });
   debugTiming('scpToContainer', Date.now() - start);
+}
+
+export async function stageCodexContainerImport(
+  workspaceName: string,
+  codexHome: string,
+  plan: CodexContainerImportPlan,
+  onHeartbeat?: (label: string, elapsedMs: number) => void,
+): Promise<void> {
+  sshExec(workspaceName, `mkdir -p ${shellEscape(codexHome)}`);
+
+  let generatedConfigDir: string | undefined;
+  try {
+    if (plan.configToml !== undefined) {
+      generatedConfigDir = mkdtempSync(join(tmpdir(), 'hydraz-codex-config-'));
+      const generatedConfigPath = join(generatedConfigDir, 'config.toml');
+      writeFileSync(generatedConfigPath, plan.configToml, { mode: 0o600 });
+      await scpToContainer(
+        workspaceName,
+        generatedConfigPath,
+        posix.join(codexHome, 'config.toml'),
+        onHeartbeat,
+      );
+    }
+
+    for (const file of plan.files) {
+      await scpToContainer(
+        workspaceName,
+        file.sourcePath,
+        posix.join(codexHome, file.targetRelativePath),
+        onHeartbeat,
+      );
+    }
+
+    for (const directory of plan.directories) {
+      await scpCodexDirectoryToContainer(
+        workspaceName,
+        directory.sourcePath,
+        posix.join(codexHome, directory.targetRelativePath),
+        directory.excludedDirectoryNames,
+        onHeartbeat,
+      );
+    }
+  } finally {
+    if (generatedConfigDir !== undefined) {
+      rmSync(generatedConfigDir, { recursive: true, force: true });
+    }
+  }
+}
+
+async function scpCodexDirectoryToContainer(
+  workspaceName: string,
+  localPath: string,
+  remotePath: string,
+  excludedDirectoryNames: readonly string[],
+  onHeartbeat?: (label: string, elapsedMs: number) => void,
+): Promise<void> {
+  const sshTarget = `${workspaceName}.devpod`;
+  const excludeArgs = excludedDirectoryNames.flatMap((name) => [
+    `--exclude=${shellEscape(name)}`,
+    `--exclude=${shellEscape(`*/${name}`)}`,
+  ]).join(' ');
+  const remoteCmd = `mkdir -p ${shellEscape(remotePath)} && tar -C ${shellEscape(remotePath)} -xf -`;
+  const shCmd = [
+    `tar -C ${shellEscape(localPath)} --no-xattrs`,
+    excludeArgs,
+    '-cf - .',
+    `| ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`,
+  ].filter(Boolean).join(' ');
+  debugExec('sh', ['-c', shCmd]);
+  const start = Date.now();
+  await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {
+    label: 'Copying to container',
+    intervalMs: 10_000,
+    onHeartbeat: onHeartbeat ?? (() => {}),
+  });
+  debugTiming('stageCodexContainerImport', Date.now() - start);
 }
 
 export function scpFilesToContainer(

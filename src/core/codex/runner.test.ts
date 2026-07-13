@@ -100,6 +100,22 @@ process.exit(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
   });
 
+  it('sets the explicit container CODEX_HOME for the Codex child', async () => {
+    const root = makeTempRoot();
+    const envFile = join(root, 'codex-home.txt');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(envFile)}, process.env.CODEX_HOME ?? '');
+`);
+
+    await executeCodexRunner({
+      ...makeOptions(root, codex),
+      codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+    });
+
+    expect(readFileSync(envFile, 'utf8')).toBe('/home/codex/.hydraz/codex-homes/session-1');
+  });
+
   it('uses codex exec resume when a resume thread id is supplied', async () => {
     const root = makeTempRoot();
     const argvFile = join(root, 'argv.json');

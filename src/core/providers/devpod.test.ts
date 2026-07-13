@@ -18,6 +18,7 @@ import {
   copyWorktreeIncludesInContainer,
   configureGitIdentityInContainer,
   scpToContainer,
+  stageCodexContainerImport,
   scpFilesToContainer,
   getDistRoot,
   resolveSeaDistRoot,
@@ -561,6 +562,68 @@ describe('scpToContainer', () => {
   });
 });
 
+describe('stageCodexContainerImport', () => {
+  it('stages only exact managed inputs without generic package injection', async () => {
+    const sourceHome = join(testDir, '.codex');
+    mkdirSync(join(sourceHome, 'rules'), { recursive: true });
+    mkdirSync(join(sourceHome, 'skills'), { recursive: true });
+    writeFileSync(join(sourceHome, 'auth.json'), '{}\n');
+    writeFileSync(join(sourceHome, 'AGENTS.md'), '# Instructions\n');
+
+    await stageCodexContainerImport('my-ws', '/root/.hydraz/codex-homes/session-1', {
+      sourceCodexHome: sourceHome,
+      configToml: 'model = "gpt-5.6"\n',
+      files: [
+        { sourcePath: join(sourceHome, 'auth.json'), targetRelativePath: 'auth.json' },
+        { sourcePath: join(sourceHome, 'AGENTS.md'), targetRelativePath: 'AGENTS.md' },
+      ],
+      directories: [
+        {
+          sourcePath: join(sourceHome, 'rules'),
+          targetRelativePath: 'rules',
+          excludedDirectoryNames: [],
+        },
+        {
+          sourcePath: join(sourceHome, 'skills'),
+          targetRelativePath: 'skills',
+          excludedDirectoryNames: ['.system', 'node_modules', '.venv', 'venv'],
+        },
+      ],
+    });
+
+    const commands = mockSpawnWithHeartbeat.mock.calls.map((call) => String(call[1]?.[1]));
+    expect(commands).toHaveLength(5);
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/config.toml');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/auth.json');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/AGENTS.md');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/rules');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/skills');
+    expect(commands.join('\n')).toContain("--exclude='.system'");
+    expect(commands.join('\n')).toContain("--exclude='node_modules'");
+    expect(commands.join('\n')).not.toContain('package.json');
+  });
+
+  it('propagates a transfer failure and stops staging', async () => {
+    const sourceHome = join(testDir, '.codex');
+    mkdirSync(sourceHome, { recursive: true });
+    writeFileSync(join(sourceHome, 'auth.json'), '{}\n');
+    mockSpawnWithHeartbeat.mockRejectedValueOnce(new Error('transfer failed'));
+
+    try {
+      await expect(stageCodexContainerImport('my-ws', '/root/.codex-hydraz', {
+        sourceCodexHome: sourceHome,
+        files: [{ sourcePath: join(sourceHome, 'auth.json'), targetRelativePath: 'auth.json' }],
+        directories: [],
+      })).rejects.toThrow('transfer failed');
+    } finally {
+      mockSpawnWithHeartbeat.mockReset();
+      mockSpawnWithHeartbeat.mockImplementation(() =>
+        fakeSpawnPromise({ stdout: '', exitCode: 0 }),
+      );
+    }
+  });
+});
+
 describe('scpFilesToContainer', () => {
   it('uses tar|ssh pipe via sh -c to transfer specific files', () => {
     mockExecFileSync.mockReturnValue('' as never);
@@ -733,6 +796,29 @@ describe('devpodUp', () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
     expect(capturedContents).toContain('GH_TOKEN=github_pat_test');
     expect(capturedContents).toContain('OPENAI_API_KEY=sk-test');
+  });
+
+  it('writes GIT_CONFIG_COUNT as an unquoted integer string', async () => {
+    let capturedContents = '';
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
+      const flagIdx = (args as string[]).indexOf('--workspace-env-file');
+      if (flagIdx >= 0) {
+        capturedContents = readFileSync((args as string[])[flagIdx + 1]!, 'utf-8');
+      }
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
+    });
+
+    await devpodUp(
+      'git@github.com:org/repo.git',
+      'hydraz-abc',
+      undefined,
+      undefined,
+      undefined,
+      { GIT_CONFIG_COUNT: '3' },
+    );
+
+    expect(capturedContents).toContain('GIT_CONFIG_COUNT=3');
+    expect(capturedContents).not.toContain('GIT_CONFIG_COUNT="3"');
   });
 
   it('creates workspace-env-file with restricted 0o600 permissions', async () => {

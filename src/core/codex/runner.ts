@@ -25,6 +25,7 @@ export interface CodexRunnerOptions {
   goal: string;
   workingDirectory: string;
   codexDir: string;
+  codexHome?: string;
   config: HydrazConfig;
   model?: string;
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
@@ -96,6 +97,9 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
+      ...(options.codexHome === undefined
+        ? {}
+        : { env: { ...process.env, CODEX_HOME: options.codexHome } }),
     });
 
     child.on('error', reject);
