@@ -1,4 +1,4 @@
-> **EXPERIMENTAL: USE WITH CAUTION** - Hydraz v3 is a deliberately small harness around the Codex CLI.
+> **EXPERIMENTAL: USE WITH CAUTION** - Hydraz v4 is a deliberately small harness around the Codex CLI.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/josheverett/hydraz/main/hydraz-logo.png" alt="Hydraz logo" width="300">
@@ -67,16 +67,29 @@ Use `--base <branch>` when the session should branch from and open its PR agains
 
 ## Repo Configuration
 
-Target repos may include `.hydraz/config.json` with `hydrazincludes` entries. Hydraz copies these host paths into the container/cloud workspace before starting Codex, which is the intended auth/bootstrap path for v3.
+Target repos may include `.hydraz/config.json` with `hydrazincludes` entries.
+Hydraz retains the v3 behavior of copying those arbitrary host paths into the
+container/cloud workspace before starting Codex.
 
 ```json
 {
   "hydrazincludes": [
-    { "host": "~/.codex/auth.json", "container": "~/.codex/auth.json" },
-    { "host": "~/.codex/config.toml", "container": "~/.codex/config.toml" }
+    { "host": "~/.config/example", "container": "~/.config/example" }
   ]
 }
 ```
+
+Local container runs do not require include entries for Codex. Hydraz imports
+host `auth.json`, global `AGENTS.md`, rules, and user-authored skills from
+`$CODEX_HOME` (or `~/.codex`) into an isolated container home. It builds a
+Linux-safe `config.toml` from portable host preferences and then applies the
+optional repository overlay `.hydraz/codex.container.toml`.
+
+Host MCP servers, plugins, marketplaces, hooks, notifications, trust state,
+feature flags, commands, desktop/TUI settings, and path-bearing sections are
+not imported. Plugins, browser caches, sessions, and other runtime state are
+never copied. Install Linux capability replacements in the Dev Container and
+declare them in the container overlay instead.
 
 Optional `.hydraz/HYDRAZ.md` content is appended to the goal-shaped prompt passed to Codex. `AGENTS.md` remains Codex-native and is read by Codex itself.
 
@@ -140,7 +153,7 @@ pnpm typecheck
 pnpm build
 ```
 
-The repo uses pnpm with a 7-day minimum package age cooldown (`minimum-release-age=10080`) to reduce supply-chain risk.
+The repo uses pnpm with a 7-day minimum package age cooldown (`minimumReleaseAge: 10080`).
 
 ## License
 
