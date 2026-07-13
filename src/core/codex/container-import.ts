@@ -1,3 +1,8 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { parse, stringify, type TomlTableWithoutBigInt } from 'smol-toml';
+
 export interface CodexContainerImportFile {
   sourcePath: string;
   targetRelativePath: 'auth.json' | 'AGENTS.md';
@@ -182,22 +187,24 @@ export function buildCodexContainerImportPlan(
   const files: CodexContainerImportFile[] = [];
   const authPath = join(sourceCodexHome, 'auth.json');
   const instructionsPath = join(sourceCodexHome, 'AGENTS.md');
-  if (existsSync(authPath)) files.push({ sourcePath: authPath, targetRelativePath: 'auth.json' });
-  if (existsSync(instructionsPath)) {
+  if (existsSync(authPath) && statSync(authPath).isFile()) {
+    files.push({ sourcePath: authPath, targetRelativePath: 'auth.json' });
+  }
+  if (existsSync(instructionsPath) && statSync(instructionsPath).isFile()) {
     files.push({ sourcePath: instructionsPath, targetRelativePath: 'AGENTS.md' });
   }
 
   const directories: CodexContainerImportDirectory[] = [];
   const rulesPath = join(sourceCodexHome, 'rules');
   const skillsPath = join(sourceCodexHome, 'skills');
-  if (existsSync(rulesPath)) {
+  if (existsSync(rulesPath) && statSync(rulesPath).isDirectory()) {
     directories.push({
       sourcePath: rulesPath,
       targetRelativePath: 'rules',
       excludedDirectoryNames: [],
     });
   }
-  if (existsSync(skillsPath)) {
+  if (existsSync(skillsPath) && statSync(skillsPath).isDirectory()) {
     directories.push({
       sourcePath: skillsPath,
       targetRelativePath: 'skills',
@@ -212,7 +219,3 @@ export function buildCodexContainerImportPlan(
     directories,
   };
 }
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { parse, stringify, type TomlTableWithoutBigInt } from 'smol-toml';

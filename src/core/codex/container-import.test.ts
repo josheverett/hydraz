@@ -63,6 +63,20 @@ describe('buildCodexContainerImportPlan', () => {
     ]);
   });
 
+  it('does not misclassify files and directories with critical input names', () => {
+    mkdirSync(join(codexHome, 'auth.json'), { recursive: true });
+    mkdirSync(join(codexHome, 'AGENTS.md'), { recursive: true });
+    writeFile(join(codexHome, 'rules'), 'not a directory\n');
+    writeFile(join(codexHome, 'skills'), 'not a directory\n');
+
+    const plan = buildCodexContainerImportPlan(repoRoot, {
+      env: { CODEX_HOME: codexHome },
+    });
+
+    expect(plan.files).toEqual([]);
+    expect(plan.directories).toEqual([]);
+  });
+
   it('selects only portable host configuration', () => {
     writeFile(join(codexHome, 'config.toml'), `
 model = "gpt-5.6"
