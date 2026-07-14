@@ -39,6 +39,9 @@ describe('Playwright runtime asset', () => {
     expect(() => resolvePlaywrightRuntimeArchive(distRoot)).toThrow(
       `Missing packaged Playwright ${PLAYWRIGHT_VERSION} runtime`,
     );
+    expect(() => resolvePlaywrightRuntimeArchive(distRoot)).toThrow(
+      /before using container or cloud mode/,
+    );
   });
 
   it('builds an archive containing the pinned CLI and smoke script', () => {

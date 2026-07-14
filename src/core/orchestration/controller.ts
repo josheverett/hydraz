@@ -180,9 +180,7 @@ async function startCodexRunner(
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const distRoot = getDistRoot();
-    if (session.executionTarget === 'local-container') {
-      resolvePlaywrightRuntimeArchive(distRoot);
-    }
+    resolvePlaywrightRuntimeArchive(distRoot);
     emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Copying Hydraz into container');
     await scpToContainer(workspaceName, distRoot, CONTAINER_DIST_PATH, (label, elapsedMs) => {
       emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
@@ -205,17 +203,14 @@ async function startCodexRunner(
 
     containerHome ??= getContainerHome(workspaceName);
     const codexHome = posix.join(containerHome, '.hydraz', 'codex-homes', session.id);
-    let playwrightRuntime: Awaited<ReturnType<typeof ensurePlaywrightContainerRuntime>> | undefined;
-    if (session.executionTarget === 'local-container') {
-      emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Provisioning direct Playwright runtime');
-      playwrightRuntime = await ensurePlaywrightContainerRuntime(
-        workspaceName,
-        containerHome,
-        (label, elapsedMs) => {
-          emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
-        },
-      );
-    }
+    emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Provisioning direct Playwright runtime');
+    const playwrightRuntime = await ensurePlaywrightContainerRuntime(
+      workspaceName,
+      containerHome,
+      (label, elapsedMs) => {
+        emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      },
+    );
     const importPlan = buildCodexContainerImportPlan(repoRoot);
     emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Importing portable Codex configuration');
     await stageCodexContainerImport(
