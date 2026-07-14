@@ -179,6 +179,65 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
     });
   });
 
+  it('redacts secrets from Codex JSONL events while preserving thread tracking', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-redacted' }));
+console.log(JSON.stringify({
+  type: 'item.completed',
+  item: {
+    type: 'command_execution',
+    aggregated_output: 'ordinary before HYDRAZ_CODEX_RUNNER_OPTIONS={"config":{"github":{"token":"github_pat_stdout_test"}}} ordinary after',
+  },
+}));
+`);
+
+    const result = await executeCodexRunner(makeOptions(root, codex));
+    const lines = readFileSync(join(root, 'codex', CODEX_EVENTS_FILE), 'utf-8').trim().split('\n');
+    const events = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    const serialized = JSON.stringify(events);
+
+    expect(result.threadId).toBe('thread-redacted');
+    expect(events).toHaveLength(2);
+    expect(serialized).toContain('ordinary before');
+    expect(serialized).toContain('ordinary after');
+    expect(serialized).toContain('[REDACTED]');
+    expect(serialized).not.toContain('github_pat_stdout_test');
+  });
+
+  it('redacts a stderr secret split across process chunks', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+process.stderr.write('ordinary before github_pat_stderr_');
+setTimeout(() => {
+  process.stderr.write('split_test ordinary after');
+}, 25);
+`);
+
+    await executeCodexRunner(makeOptions(root, codex));
+
+    expect(readFileSync(join(root, 'codex', CODEX_STDERR_FILE), 'utf-8')).toBe(
+      'ordinary before [REDACTED] ordinary after',
+    );
+  });
+
+  it('redacts secrets from the retained final response', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+const outputIndex = process.argv.indexOf('-o');
+if (outputIndex >= 0) {
+  fs.writeFileSync(process.argv[outputIndex + 1], 'ordinary before github_pat_final_test ordinary after');
+}
+`);
+
+    await executeCodexRunner(makeOptions(root, codex));
+
+    expect(readFileSync(join(root, 'codex', CODEX_FINAL_FILE), 'utf-8')).toBe(
+      'ordinary before [REDACTED] ordinary after',
+    );
+  });
+
   it('uses codex exec resume when a resume thread id is supplied', async () => {
     const root = makeTempRoot();
     const argvFile = join(root, 'argv.json');

@@ -10,6 +10,7 @@ import type { CodexDeliveryResult } from './delivery.js';
 import { finalizeCodexDelivery } from './delivery.js';
 import type { WorkspaceProvider } from '../providers/provider.js';
 import type { GitHubGitIdentity } from '../github/api.js';
+import { redactSecrets } from '../display/sanitize.js';
 
 export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
@@ -109,35 +110,54 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     child.on('error', reject);
 
     let stdoutBuffer = '';
-    child.stdout?.on('data', (data: Buffer) => {
-      stdoutBuffer += data.toString();
+    let stderrBuffer = '';
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+    child.stdout?.on('data', (data: string) => {
+      stdoutBuffer += data;
       const lines = stdoutBuffer.split('\n');
       stdoutBuffer = lines.pop() ?? '';
       for (const line of lines) {
         if (!line.trim()) continue;
-        writeFileSync(eventsPath, line + '\n', { flag: 'a', mode: 0o600 });
         const parsed = parseCodexJsonLine(line);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
         }
+        writeFileSync(eventsPath, redactSecrets(line) + '\n', { flag: 'a', mode: 0o600 });
       }
     });
 
-    child.stderr?.on('data', (data: Buffer) => {
-      writeFileSync(stderrPath, data.toString(), { flag: 'a', mode: 0o600 });
+    child.stderr?.on('data', (data: string) => {
+      stderrBuffer += data;
+      const lines = stderrBuffer.split('\n');
+      stderrBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        writeFileSync(stderrPath, redactSecrets(line) + '\n', { flag: 'a', mode: 0o600 });
+      }
     });
 
     child.on('close', (code) => {
       if (stdoutBuffer.trim()) {
-        writeFileSync(eventsPath, stdoutBuffer.trimEnd() + '\n', { flag: 'a', mode: 0o600 });
         const parsed = parseCodexJsonLine(stdoutBuffer);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
         }
+        writeFileSync(eventsPath, redactSecrets(stdoutBuffer.trimEnd()) + '\n', { flag: 'a', mode: 0o600 });
+      }
+      if (stderrBuffer.length > 0) {
+        writeFileSync(stderrPath, redactSecrets(stderrBuffer), { flag: 'a', mode: 0o600 });
       }
       resolve(code);
     });
   });
+
+  if (existsSync(finalPath)) {
+    const finalMessage = readFileSync(finalPath, 'utf8');
+    const redactedFinalMessage = redactSecrets(finalMessage);
+    if (redactedFinalMessage !== finalMessage) {
+      writeFileSync(finalPath, redactedFinalMessage, { mode: 0o600 });
+    }
+  }
 
   const result: CodexRunnerResult = {
     success: exitCode === 0,

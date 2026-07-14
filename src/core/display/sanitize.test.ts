@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  redactSecrets,
   sanitizeInlineTerminalText,
   sanitizeMultilineTerminalText,
 } from './sanitize.js';
@@ -38,6 +39,18 @@ describe('redactSecrets', () => {
     expect(sanitizeInlineTerminalText('{"token":"github_pat_abc123"}')).toBe('{"token":"[REDACTED]"}');
     expect(sanitizeInlineTerminalText('{"apiKey":"sk-test123"}')).toBe('{"apiKey":"[REDACTED]"}');
     expect(sanitizeInlineTerminalText('{"extraheader":"AUTHORIZATION: basic abc123"}')).toBe('{"extraheader":"[REDACTED]"}');
+  });
+
+  it('keeps JSON valid when a redacted value contains escaped quotes', () => {
+    const redacted = redactSecrets(JSON.stringify({
+      token: 'secret with "quoted" text',
+      message: 'ordinary with "quoted" text',
+    }));
+
+    expect(JSON.parse(redacted)).toEqual({
+      token: '[REDACTED]',
+      message: 'ordinary with "quoted" text',
+    });
   });
 
   it('redacts quoted env assignments', () => {
