@@ -7,7 +7,7 @@ const GITHUB_TOKEN_PATTERN = /\b(?:github_pat|ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]+
 const OPENAI_KEY_PATTERN = /\bsk-(?:proj-)?[A-Za-z0-9_-]+\b/g;
 const AUTH_HEADER_PATTERN = /\b(Authorization|AUTHORIZATION)(\s*:\s*(?:Bearer|basic)\s+)([^\s'",}]+)/g;
 const ENV_SECRET_PATTERN = /\b([A-Z0-9_]*(?:TOKEN|API_KEY|SECRET|PASSWORD|AUTHORIZATION)[A-Z0-9_]*)(=)(["']?)([^"'\s]+)(\3)/g;
-const JSON_SECRET_PATTERN = /(["'])(token|apiKey|api_key|secret|password|authorization|extraheader)\1(\s*:\s*)(["'])(.*?)\4/gi;
+const JSON_SECRET_PATTERN = /(["'])(token|apiKey|api_key|secret|password|authorization|extraheader)\1(\s*:\s*)(["'])((?:\\.|(?!\4)[\s\S])*)\4/gi;
 
 export function redactSecrets(text: string): string {
   return text
