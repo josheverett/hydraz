@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -55,6 +55,7 @@ describe('Playwright runtime asset', () => {
     expect(existsSync(archive)).toBe(true);
     const listing = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' });
     expect(listing).toContain('node_modules/playwright/cli.js');
+    expect(listing).toContain('node_modules/.bin/playwright');
     expect(listing).toContain('smoke.mjs');
 
     const manifest = execFileSync('tar', ['-xOzf', archive, './package.json'], { encoding: 'utf8' });
@@ -65,11 +66,20 @@ describe('Playwright runtime asset', () => {
     const extractedDir = join(outputDir, 'extracted');
     mkdirSync(extractedDir);
     execFileSync('tar', ['-xzf', archive, '-C', extractedDir]);
+    expect(
+      readdirSync(join(extractedDir, 'node_modules'))
+        .filter((entry) => !entry.startsWith('.'))
+        .sort(),
+    ).toEqual(['playwright', 'playwright-core']);
     const importProbe = spawnSync(
       process.execPath,
       ['-e', 'require(process.argv[1])', join(extractedDir, 'node_modules', 'playwright')],
       { encoding: 'utf8' },
     );
     expect(importProbe.status, importProbe.stderr).toBe(0);
-  });
+    expect(() => accessSync(
+      join(extractedDir, 'node_modules', '.bin', 'playwright'),
+      constants.X_OK,
+    )).not.toThrow();
+  }, 20_000);
 });

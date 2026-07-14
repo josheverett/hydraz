@@ -88,8 +88,12 @@ optional repository overlay `.hydraz/codex.container.toml`.
 Host MCP servers, plugins, marketplaces, hooks, notifications, trust state,
 feature flags, commands, desktop/TUI settings, and path-bearing sections are
 not imported. Plugins, browser caches, sessions, and other runtime state are
-never copied. Install Linux capability replacements in the Dev Container and
-declare them in the container overlay instead.
+never copied. For local-container runs, Hydraz provisions its pinned Playwright
+CLI and matching Linux Chromium under the container user's home and exposes the
+ordinary `playwright` command directly on `PATH`. The target repository does not
+need Playwright dependencies, an MCP server, or browser-specific configuration.
+Other Linux-specific replacements can still be installed by the Dev Container
+and configured through the optional container overlay.
 
 Optional `.hydraz/HYDRAZ.md` content is appended to the goal-shaped prompt passed to Codex. `AGENTS.md` remains Codex-native and is read by Codex itself.
 
@@ -111,9 +115,9 @@ Hydraz intentionally does not pass `codex exec --search`; in Codex CLI 0.143.x t
 
 ## Single Executable
 
-`pnpm run build:sea` builds the GitHub release binary. The SEA binary embeds the container runner payload that Hydraz copies into DevPod workspaces, so container/cloud mode does not depend on an adjacent repository `dist/` directory.
+`pnpm run build:sea` builds the GitHub release binary. The SEA binary embeds the container runner and the platform-neutral Playwright runtime that Hydraz copies into DevPod workspaces, so container/cloud mode does not depend on an adjacent repository `dist/` directory. Chromium itself and its Ubuntu dependencies are installed inside local containers on first use and reused after a successful smoke check.
 
-The SEA build smoke checks both `hydraz --version` and the embedded runner payload path before packaging the tarball.
+The SEA build smoke checks `hydraz --version` plus both embedded container payloads before packaging the tarball.
 
 ## Secret Redaction
 

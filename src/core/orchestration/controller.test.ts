@@ -28,6 +28,18 @@ vi.mock('../providers/devpod.js', () => ({
   checkDockerAvailability: vi.fn(() => true),
 }));
 
+vi.mock('../providers/playwright-container.js', () => ({
+  ensurePlaywrightContainerRuntime: vi.fn(async () => ({
+    runtimeRoot: '/home/codex/.hydraz/runtimes/playwright/1.61.1',
+    browsersPath: '/home/codex/.hydraz/browsers/playwright-1.61.1',
+    binDir: '/home/codex/.hydraz/bin',
+  })),
+}));
+
+vi.mock('../providers/playwright-runtime.js', () => ({
+  resolvePlaywrightRuntimeArchive: vi.fn(() => '/fake/dist/runtime/playwright-runtime.tar.gz'),
+}));
+
 vi.mock('../codex/container-import.js', () => ({
   buildCodexContainerImportPlan: vi.fn(() => ({
     sourceCodexHome: '/host/.codex',
@@ -80,6 +92,7 @@ import {
 } from '../sessions/index.js';
 import { resolveRepoDataPaths } from '../repo/paths.js';
 import { scpToContainer, sshExec, stageCodexContainerImport } from '../providers/devpod.js';
+import { ensurePlaywrightContainerRuntime } from '../providers/playwright-container.js';
 import { processHydrazIncludes } from '../codex/repo-config.js';
 
 describe('getProvider', () => {
@@ -242,6 +255,68 @@ describe('Codex controller', () => {
 
     expect(stageCodexContainerImport).not.toHaveBeenCalled();
     expect(getRunnerOptionsFromLaunchCommand(session.id)).not.toHaveProperty('codexHome');
+  });
+
+  it('provisions Playwright after the dist transfer and before Codex staging for local containers only', async () => {
+    const localSession = makeLocalContainerSession('local-playwright-order');
+
+    await startSession(localSession.id, repoRoot);
+
+    expect(ensurePlaywrightContainerRuntime).toHaveBeenCalledWith(
+      `hydraz-${localSession.id}`,
+      '/home/codex',
+      expect.any(Function),
+    );
+    expect(vi.mocked(scpToContainer).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(ensurePlaywrightContainerRuntime).mock.invocationCallOrder[0]!,
+    );
+    expect(vi.mocked(ensurePlaywrightContainerRuntime).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(stageCodexContainerImport).mock.invocationCallOrder[0]!,
+    );
+
+    const cloudSession = makeSession('cloud-no-playwright-provision');
+    await startSession(cloudSession.id, repoRoot);
+    expect(ensurePlaywrightContainerRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails the session before Codex staging or launch when Playwright provisioning fails', async () => {
+    vi.mocked(ensurePlaywrightContainerRuntime).mockRejectedValueOnce(new Error('browser setup failed'));
+    const session = makeLocalContainerSession('local-playwright-failure');
+
+    await startSession(session.id, repoRoot);
+
+    expect(loadSession(repoRoot, session.id).state).toBe('failed');
+    expect(stageCodexContainerImport).not.toHaveBeenCalled();
+    expect(vi.mocked(sshExec).mock.calls.some((call) => call[1].includes('nohup node'))).toBe(false);
+  });
+
+  it('propagates direct Playwright paths across local launch and resume without changing cloud', async () => {
+    const localSession = makeLocalContainerSession('local-playwright-env');
+    await startSession(localSession.id, repoRoot);
+
+    const localLaunch = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes(`/tmp/hydraz-codex/${localSession.id}`),
+    )?.[1] ?? '';
+    expect(localLaunch).toContain("PATH='/home/codex/.hydraz/bin':$PATH");
+    expect(localLaunch).toContain(
+      "PLAYWRIGHT_BROWSERS_PATH='/home/codex/.hydraz/browsers/playwright-1.61.1'",
+    );
+
+    const stored = loadSession(repoRoot, localSession.id);
+    stored.codex = { ...stored.codex, threadId: 'thread-playwright' };
+    saveSession(repoRoot, stored);
+    transitionState(repoRoot, localSession.id, 'failed', 'retry');
+    await resumeSession(localSession.id, repoRoot, {}, { prompt: 'Continue' });
+    expect(ensurePlaywrightContainerRuntime).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(ensurePlaywrightContainerRuntime).mock.calls[1]?.[1]).toBe('/home/codex');
+
+    const cloudSession = makeSession('cloud-playwright-env');
+    await startSession(cloudSession.id, repoRoot);
+    const cloudLaunch = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes(`/tmp/hydraz-codex/${cloudSession.id}`),
+    )?.[1] ?? '';
+    expect(cloudLaunch).not.toContain('PLAYWRIGHT_BROWSERS_PATH=');
+    expect(cloudLaunch).not.toContain("PATH='/home/codex/.hydraz/bin'");
   });
 
   it('does not background the runner setup command when launching the detached runner', async () => {

@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { registerCommands } from './commands/index.js';
 import { runInteractive } from './interactive.js';
 import { getDistRoot } from '../core/providers/devpod.js';
+import { resolvePlaywrightRuntimeArchive } from '../core/providers/playwright-runtime.js';
 
 declare const __HYDRAZ_VERSION__: string | undefined;
 
@@ -34,13 +35,15 @@ export function createProgram(): Command {
   registerCommands(program);
 
   const seaRunnerPayloadCommand = new Command('__sea-runner-payload')
-    .description('Internal smoke check for SEA runner payload availability')
+    .description('Internal smoke check for SEA container payload availability')
     .action(() => {
-      const runnerPath = join(getDistRoot(), 'core', 'codex', 'runner.js');
+      const distRoot = getDistRoot();
+      const runnerPath = join(distRoot, 'core', 'codex', 'runner.js');
       if (!existsSync(runnerPath)) {
         throw new Error(`Runner payload missing: ${runnerPath}`);
       }
-      console.log(runnerPath);
+      const playwrightRuntimePath = resolvePlaywrightRuntimeArchive(distRoot);
+      console.log(`${runnerPath}\n${playwrightRuntimePath}`);
     });
   program.addCommand(seaRunnerPayloadCommand, { hidden: true });
 
