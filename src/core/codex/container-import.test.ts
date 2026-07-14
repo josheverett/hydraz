@@ -99,7 +99,7 @@ web_search = { context_size = "high" }
 [features]
 multi_agent = true
 
-[projects."/Users/josh/repo"]
+[projects."/Users/test-user/repo"]
 trust_level = "trusted"
 
 [mcp_servers.host_only]
@@ -178,7 +178,7 @@ args = ["--dir", "codex-browser-runtime", "run", "mcp"]
   });
 
   it('rejects macOS path signatures anywhere in the generated config', () => {
-    for (const signature of ['/Users/josh/tool', '/Applications/Tool.app', '~/Library/Caches/tool']) {
+    for (const signature of ['/Users/test-user/tool', '/Applications/Tool.app', '~/Library/Caches/tool']) {
       writeFile(
         join(repoRoot, '.hydraz', 'codex.container.toml'),
         `[mcp_servers.example]\ncommand = ${JSON.stringify(signature)}\n`,
@@ -190,11 +190,11 @@ args = ["--dir", "codex-browser-runtime", "run", "mcp"]
 
     writeFile(
       join(repoRoot, '.hydraz', 'codex.container.toml'),
-      '[projects."/Users/josh/repo"]\ntrust_level = "trusted"\n',
+      '[projects."/Users/test-user/repo"]\ntrust_level = "trusted"\n',
     );
     expect(() => buildCodexContainerImportPlan(repoRoot, {
       env: { CODEX_HOME: codexHome },
-    })).toThrow(/macOS path.*projects.*\/Users\/josh\/repo/i);
+    })).toThrow(/macOS path.*projects.*\/Users\/test-user\/repo/i);
   });
 
   it('fails on malformed host TOML instead of silently dropping it', () => {
