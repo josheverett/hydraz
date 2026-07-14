@@ -100,40 +100,82 @@ process.exit(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
   });
 
-  it('sets the explicit container CODEX_HOME for the Codex child', async () => {
+  it.each([
+    {
+      name: 'inherits the ambient CODEX_HOME',
+      codexHome: undefined,
+      expectedCodexHome: '/home/codex/.codex',
+    },
+    {
+      name: 'sets the explicit container CODEX_HOME',
+      codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+      expectedCodexHome: '/home/codex/.hydraz/codex-homes/session-1',
+    },
+  ])('$name without forwarding runner bootstrap options', async ({ codexHome, expectedCodexHome }) => {
     const root = makeTempRoot();
     const envFile = join(root, 'codex-home.txt');
     const codex = makeFakeCodex(root, `
 const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
+  runnerOptions: process.env.HYDRAZ_CODEX_RUNNER_OPTIONS ?? null,
   codexHome: process.env.CODEX_HOME ?? '',
+  ghToken: process.env.GH_TOKEN ?? '',
+  githubToken: process.env.GITHUB_TOKEN ?? '',
   path: process.env.PATH ?? '',
   browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH ?? '',
+  passthrough: process.env.HYDRAZ_TEST_PASSTHROUGH ?? '',
 }));
 `);
 
+    const previousRunnerOptions = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
+    const previousCodexHome = process.env.CODEX_HOME;
+    const previousGhToken = process.env.GH_TOKEN;
+    const previousGithubToken = process.env.GITHUB_TOKEN;
     const previousPath = process.env.PATH;
     const previousBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+    const previousPassthrough = process.env.HYDRAZ_TEST_PASSTHROUGH;
+    const runnerOptions = JSON.stringify({ config: { github: { token: 'github_pat_runner_test' } } });
     const inheritedPath = `/home/codex/.hydraz/bin:${dirname(process.execPath)}:/usr/bin`;
+    process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = runnerOptions;
+    process.env.CODEX_HOME = '/home/codex/.codex';
+    process.env.GH_TOKEN = 'github_pat_gh_test';
+    process.env.GITHUB_TOKEN = 'github_pat_github_test';
     process.env.PATH = inheritedPath;
     process.env.PLAYWRIGHT_BROWSERS_PATH = '/home/codex/.hydraz/browsers/playwright-1.61.1';
+    process.env.HYDRAZ_TEST_PASSTHROUGH = 'preserved';
 
     try {
       await executeCodexRunner({
         ...makeOptions(root, codex),
-        codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+        ...(codexHome === undefined ? {} : { codexHome }),
       });
+
+      expect(process.env.HYDRAZ_CODEX_RUNNER_OPTIONS).toBe(runnerOptions);
     } finally {
+      if (previousRunnerOptions === undefined) delete process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
+      else process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = previousRunnerOptions;
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      if (previousGhToken === undefined) delete process.env.GH_TOKEN;
+      else process.env.GH_TOKEN = previousGhToken;
+      if (previousGithubToken === undefined) delete process.env.GITHUB_TOKEN;
+      else process.env.GITHUB_TOKEN = previousGithubToken;
       if (previousPath === undefined) delete process.env.PATH;
       else process.env.PATH = previousPath;
       if (previousBrowsersPath === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
       else process.env.PLAYWRIGHT_BROWSERS_PATH = previousBrowsersPath;
+      if (previousPassthrough === undefined) delete process.env.HYDRAZ_TEST_PASSTHROUGH;
+      else process.env.HYDRAZ_TEST_PASSTHROUGH = previousPassthrough;
     }
 
     expect(JSON.parse(readFileSync(envFile, 'utf8'))).toEqual({
-      codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+      runnerOptions: null,
+      codexHome: expectedCodexHome,
+      ghToken: 'github_pat_gh_test',
+      githubToken: 'github_pat_github_test',
       path: inheritedPath,
       browsersPath: '/home/codex/.hydraz/browsers/playwright-1.61.1',
+      passthrough: 'preserved',
     });
   });
 
@@ -177,6 +219,7 @@ if (outputIndex >= 0) fs.writeFileSync(process.argv[outputIndex + 1], 'final mes
 console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
 `);
     const options = makeOptions(root, codex);
+    options.config.github.token = 'github_pat_delivery_test';
 
     await executeCodexRunner({
       ...options,
@@ -190,6 +233,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
     });
 
     expect(finalizeCodexDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      githubToken: 'github_pat_delivery_test',
       session: expect.objectContaining({
         branchName: 'hydraz/v3',
         baseBranch: 'staging',

@@ -93,13 +93,17 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       });
 
   let threadId: string | undefined = options.resumeThreadId;
+  const codexEnv = { ...process.env };
+  delete codexEnv.HYDRAZ_CODEX_RUNNER_OPTIONS;
+  if (options.codexHome !== undefined) {
+    codexEnv.CODEX_HOME = options.codexHome;
+  }
+
   const exitCode = await new Promise<number | null>((resolve, reject) => {
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
-      ...(options.codexHome === undefined
-        ? {}
-        : { env: { ...process.env, CODEX_HOME: options.codexHome } }),
+      env: codexEnv,
     });
 
     child.on('error', reject);
