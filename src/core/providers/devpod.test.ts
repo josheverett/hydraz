@@ -48,6 +48,9 @@ vi.mock('./tar-ssh-transfer.js', async (importOriginal) => {
 
 import { execFileSync } from 'node:child_process';
 const mockExecFileSync = vi.mocked(execFileSync);
+const { execFileSync: realExecFileSync } = await vi.importActual<typeof import('node:child_process')>(
+  'node:child_process',
+);
 
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 const mockSpawnWithHeartbeat = vi.mocked(spawnWithHeartbeat);
@@ -57,6 +60,42 @@ const mockStreamTarToSsh = vi.mocked(streamTarToSsh);
 
 function fakeSpawnPromise(result: { stdout: string; exitCode: number }): SpawnHeartbeatPromise {
   return Object.assign(Promise.resolve(result), { _child: {} as ChildProcess }) as SpawnHeartbeatPromise;
+}
+
+function lastRemoteCommand(): string {
+  return mockExecFileSync.mock.calls.at(-1)?.[1]?.[1] as string;
+}
+
+function parseAsPosixShell(command: string): void {
+  realExecFileSync('/bin/sh', ['-n'], { input: command, stdio: 'pipe' });
+}
+
+function writeFakeCommand(binDir: string, name: string, source: string): void {
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(join(binDir, name), source, { mode: 0o755 });
+}
+
+function runPosixShell(
+  command: string,
+  cwd: string,
+  env: Record<string, string>,
+): boolean {
+  try {
+    realExecFileSync('/bin/sh', ['-c', command], {
+      cwd,
+      env: { ...process.env, ...env },
+      stdio: 'pipe',
+    });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function readTrace(path: string): string[] {
+  return existsSync(path)
+    ? readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean)
+    : [];
 }
 
 let testDir: string;
@@ -434,7 +473,7 @@ describe('copyWorktreeIncludesInContainer', () => {
     );
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining("cp 'agent/.env'")],
+      ['my-ws.devpod', expect.stringContaining("cp -- 'agent/.env'")],
       expect.any(Object),
     );
   });
@@ -443,6 +482,69 @@ describe('copyWorktreeIncludesInContainer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
     expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it('[shell regression] emits a valid quoted copy program with option-safe cp operands', () => {
+    copyWorktreeIncludesInContainer(
+      'my-ws',
+      "/workspaces/team's repo",
+      "/tmp/work tree/O'Brien",
+      ["agent/it's.env"],
+    );
+
+    const command = lastRemoteCommand();
+    expect(() => parseAsPosixShell(command)).not.toThrow();
+    expect(command).toContain(
+      "cp -- 'agent/it'\\''s.env' '/tmp/work tree/O'\\''Brien/agent/it'\\''s.env'",
+    );
+  });
+
+  it('[shell regression] stops when worktree setup or an early copy fails', () => {
+    const binDir = join(testDir, 'bin');
+    writeFakeCommand(binDir, 'cp', `#!/bin/sh
+if [ "$1" = "--" ]; then shift; fi
+printf '%s\\n' "$1" >> "$TRACE_FILE"
+if [ -n "$FAIL_SOURCE" ] && [ "$1" = "$FAIL_SOURCE" ]; then exit 23; fi
+`);
+
+    const scenarios = [
+      {
+        name: 'failed cd',
+        repoPath: join(testDir, 'missing-repo'),
+        files: ['only.env'],
+        failSource: '',
+        expectedTrace: [] as string[],
+      },
+      {
+        name: 'failed first copy',
+        repoPath: testDir,
+        files: ['first.env', 'second.env'],
+        failSource: 'first.env',
+        expectedTrace: ['first.env'],
+      },
+    ];
+
+    const results = scenarios.map((scenario, index) => {
+      copyWorktreeIncludesInContainer(
+        'my-ws',
+        scenario.repoPath,
+        join(testDir, `worktree-${index}`),
+        scenario.files,
+      );
+      const tracePath = join(testDir, `cp-trace-${index}`);
+      const failed = runPosixShell(lastRemoteCommand(), testDir, {
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        TRACE_FILE: tracePath,
+        FAIL_SOURCE: scenario.failSource,
+      });
+      return { name: scenario.name, failed, trace: readTrace(tracePath) };
+    });
+
+    expect(results).toEqual(scenarios.map((scenario) => ({
+      name: scenario.name,
+      failed: true,
+      trace: scenario.expectedTrace,
+    })));
   });
 });
 
@@ -459,6 +561,61 @@ describe('configureGitIdentityInContainer', () => {
     expect(command).toContain("cd '/tmp/hydraz-worktrees/session-id'");
     expect(command).toContain("git config user.name 'josheverett'");
     expect(command).toContain("git config user.email '151150+josheverett@users.noreply.github.com'");
+  });
+
+  it('[shell regression] emits a valid quoted Git identity program', () => {
+    configureGitIdentityInContainer('my-ws', "/tmp/work tree/O'Brien", {
+      name: "O'Brien; $(not-run)",
+      email: 'dev+`not-run`@example.com',
+    });
+
+    const command = lastRemoteCommand();
+    expect(command).toContain("git config user.name 'O'\\''Brien; $(not-run)'");
+    expect(command).toContain("git config user.email 'dev+`not-run`@example.com'");
+    expect(() => parseAsPosixShell(command)).not.toThrow();
+  });
+
+  it('[shell regression] stops before configuring elsewhere or after user.name fails', () => {
+    const binDir = join(testDir, 'bin');
+    writeFakeCommand(binDir, 'git', `#!/bin/sh
+printf '%s\\n' "$2" >> "$TRACE_FILE"
+if [ -n "$FAIL_GIT_KEY" ] && [ "$2" = "$FAIL_GIT_KEY" ]; then exit 29; fi
+`);
+
+    const scenarios = [
+      {
+        name: 'failed cd',
+        worktreePath: join(testDir, 'missing-worktree'),
+        failGitKey: '',
+        expectedTrace: [] as string[],
+      },
+      {
+        name: 'failed user.name',
+        worktreePath: testDir,
+        failGitKey: 'user.name',
+        expectedTrace: ['user.name'],
+      },
+    ];
+
+    const results = scenarios.map((scenario, index) => {
+      configureGitIdentityInContainer('my-ws', scenario.worktreePath, {
+        name: 'Test User',
+        email: 'test@example.com',
+      });
+      const tracePath = join(testDir, `git-trace-${index}`);
+      const failed = runPosixShell(lastRemoteCommand(), testDir, {
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        TRACE_FILE: tracePath,
+        FAIL_GIT_KEY: scenario.failGitKey,
+      });
+      return { name: scenario.name, failed, trace: readTrace(tracePath) };
+    });
+
+    expect(results).toEqual(scenarios.map((scenario) => ({
+      name: scenario.name,
+      failed: true,
+      trace: scenario.expectedTrace,
+    })));
   });
 });
 

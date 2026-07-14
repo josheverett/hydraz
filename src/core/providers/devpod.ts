@@ -287,12 +287,15 @@ export function copyWorktreeIncludesInContainer(
     return;
   }
 
-  const command = [`cd ${shellEscape(containerRepoPath)}`];
+  const command = [
+    'set -eu',
+    `cd ${shellEscape(containerRepoPath)}`,
+  ];
   for (const file of files) {
     const destDir = `${containerWorktreePath}/${posix.dirname(file)}`;
     const destFile = `${containerWorktreePath}/${file}`;
     command.push(`mkdir -p ${shellEscape(destDir)}`);
-    command.push(`cp ${shellEscape(file)} ${shellEscape(destFile)}`);
+    command.push(`cp -- ${shellEscape(file)} ${shellEscape(destFile)}`);
   }
   const joined = command.join('\n');
   debugExec('ssh', [`${workspaceName}.devpod`, joined]);
@@ -307,6 +310,7 @@ export function configureGitIdentityInContainer(
   identity: GitHubGitIdentity,
 ): void {
   const command = [
+    'set -eu',
     `cd ${shellEscape(containerWorktreePath)}`,
     `git config user.name ${shellEscape(identity.name)}`,
     `git config user.email ${shellEscape(identity.email)}`,
