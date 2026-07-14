@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -172,6 +173,10 @@ describe('Codex controller', () => {
     return JSON.parse(match![1]);
   }
 
+  function parseAsPosixShell(command: string): void {
+    execFileSync('/bin/sh', ['-n'], { input: command, stdio: 'pipe' });
+  }
+
   it('starts a detached Codex runner and records pid/artifact paths', async () => {
     const session = makeSession('start-detached');
 
@@ -330,6 +335,25 @@ describe('Codex controller', () => {
     expect(launchCommand).toBeDefined();
     expect(launchCommand).toContain(' && (');
     expect(launchCommand).toMatch(/nohup node .* < \/dev\/null & echo \$!\)/);
+  });
+
+  it('[shell regression] emits a valid detached-runner POSIX shell program for special characters', async () => {
+    const session = createNewSession({
+      name: 'runner-shell-special-characters',
+      repoRoot,
+      branchName: 'hydraz/runner-shell-special-characters',
+      executionTarget: 'cloud',
+      task: "Handle O'Brien; $(not-run) and `also-not-run`",
+    });
+
+    await startSession(session.id, repoRoot);
+
+    const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes(`/tmp/hydraz-codex/${session.id}`),
+    )?.[1];
+    expect(launchCommand).toBeDefined();
+    expect(launchCommand).toContain("O'\\''Brien; $(not-run) and `also-not-run`");
+    expect(() => parseAsPosixShell(launchCommand!)).not.toThrow();
   });
 
   it('defaults cloud Codex runs to dangerous access and web search', async () => {
