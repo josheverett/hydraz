@@ -9,7 +9,7 @@ export function resolvePlaywrightRuntimeArchive(distRoot: string): string {
   if (!existsSync(archive)) {
     throw new Error(
       `Missing packaged Playwright ${PLAYWRIGHT_VERSION} runtime at ${archive}. ` +
-      'Rebuild or reinstall Hydraz before using local-container mode.',
+      'Rebuild or reinstall Hydraz before using container or cloud mode.',
     );
   }
   return archive;
