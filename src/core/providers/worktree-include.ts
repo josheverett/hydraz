@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, copyFileSync, mkdirSync, lstatSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, copyFileSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
+import { join, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 export class WorktreeIncludeError extends Error {
   constructor(message: string) {
@@ -22,9 +22,11 @@ export function parseWorktreeInclude(repoRoot: string): string[] {
 }
 
 function isWithin(parent: string, child: string): boolean {
-  const resolvedParent = resolve(parent) + '/';
-  const resolvedChild = resolve(child);
-  return resolvedChild.startsWith(resolvedParent);
+  const relativePath = relative(resolve(parent), resolve(child));
+  return relativePath.length > 0
+    && relativePath !== '..'
+    && !relativePath.startsWith(`..${sep}`)
+    && !isAbsolute(relativePath);
 }
 
 export function listCopyableWorktreeIncludes(repoRoot: string, worktreeDir: string): string[] {
@@ -32,11 +34,15 @@ export function listCopyableWorktreeIncludes(repoRoot: string, worktreeDir: stri
   const copyable: string[] = [];
 
   for (const file of files) {
+    if (isAbsolute(file)) {
+      throw new WorktreeIncludeError(`Refusing absolute path in .worktreeinclude: ${file}`);
+    }
+
     const source = join(repoRoot, file);
     const destination = join(worktreeDir, file);
 
     if (!isWithin(repoRoot, source) || !isWithin(worktreeDir, destination)) {
-      continue;
+      throw new WorktreeIncludeError(`Refusing .worktreeinclude entry outside the repository: ${file}`);
     }
 
     if (!existsSync(source)) {
@@ -46,6 +52,14 @@ export function listCopyableWorktreeIncludes(repoRoot: string, worktreeDir: stri
     try {
       if (lstatSync(source).isSymbolicLink()) {
         throw new WorktreeIncludeError(`Refusing to copy symlink entry from .worktreeinclude: ${file}`);
+      }
+
+      const realRepoRoot = realpathSync(repoRoot);
+      const realSource = realpathSync(source);
+      if (!isWithin(realRepoRoot, realSource)) {
+        throw new WorktreeIncludeError(
+          `Refusing .worktreeinclude entry whose symlinked ancestor resolves outside the repository: ${file}`,
+        );
       }
     } catch (err) {
       if (err instanceof WorktreeIncludeError) {

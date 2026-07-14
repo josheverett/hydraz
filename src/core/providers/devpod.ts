@@ -10,6 +10,12 @@ import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import type { CodexContainerImportPlan } from '../codex/container-import.js';
 import { PLAYWRIGHT_RUNTIME_ASSET } from './playwright-runtime.js';
+import {
+  buildExactDestinationExtractionCommand,
+  buildFilesExtractionCommand,
+  buildTarArguments,
+  streamTarToSsh,
+} from './tar-ssh-transfer.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -390,20 +396,23 @@ export async function scpToContainer(
   remotePath: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
 ): Promise<void> {
-  const sshTarget = `${workspaceName}.devpod`;
   const isFile = existsSync(localPath) && !statSync(localPath).isDirectory();
-  const remoteCmd = isFile
-    ? `rm -rf ${remotePath} && mkdir -p ${posix.dirname(remotePath)} && tar -C ${posix.dirname(remotePath)} -xf -`
-    : `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
-  const shCmd = isFile
-    ? `tar -C ${shellEscape(dirname(localPath))} --no-xattrs -cf - ${shellEscape(basename(localPath))} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`
-    : `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
-  debugExec('sh', ['-c', shCmd]);
+  const archivedEntry = isFile ? basename(localPath) : undefined;
+  const tarArgs = buildTarArguments(
+    isFile ? dirname(localPath) : localPath,
+    [archivedEntry ?? '.'],
+  );
+  const remoteCommand = buildExactDestinationExtractionCommand(
+    remotePath,
+    archivedEntry,
+    !isFile,
+  );
   const start = Date.now();
-  await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {
-    label: 'Copying to container',
-    intervalMs: 10_000,
-    onHeartbeat: onHeartbeat ?? (() => {}),
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    onHeartbeat,
   });
   debugTiming('scpToContainer', Date.now() - start);
 }
@@ -462,45 +471,37 @@ async function scpCodexDirectoryToContainer(
   excludedDirectoryNames: readonly string[],
   onHeartbeat?: (label: string, elapsedMs: number) => void,
 ): Promise<void> {
-  const sshTarget = `${workspaceName}.devpod`;
-  const excludeArgs = excludedDirectoryNames.flatMap((name) => [
-    `--exclude=${shellEscape(name)}`,
-    `--exclude=${shellEscape(`*/${name}`)}`,
-  ]).join(' ');
-  const remoteCmd = `mkdir -p ${shellEscape(remotePath)} && tar -C ${shellEscape(remotePath)} -xf -`;
-  const shCmd = [
-    `tar -C ${shellEscape(localPath)} --no-xattrs`,
-    excludeArgs,
-    '-cf - .',
-    `| ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`,
-  ].filter(Boolean).join(' ');
-  debugExec('sh', ['-c', shCmd]);
+  const tarArgs = buildTarArguments(localPath, ['.'], excludedDirectoryNames);
+  const remoteCommand = buildExactDestinationExtractionCommand(remotePath, undefined);
   const start = Date.now();
-  await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {
-    label: 'Copying to container',
-    intervalMs: 10_000,
-    onHeartbeat: onHeartbeat ?? (() => {}),
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    onHeartbeat,
   });
   debugTiming('stageCodexContainerImport', Date.now() - start);
 }
 
-export function scpFilesToContainer(
+export async function scpFilesToContainer(
   workspaceName: string,
   hostRepoRoot: string,
   containerRepoPath: string,
   files: string[],
-): void {
+): Promise<void> {
   if (files.length === 0) {
     return;
   }
 
-  const sshTarget = `${workspaceName}.devpod`;
-  const escapedFiles = files.map((f) => shellEscape(f)).join(' ');
-  const remoteCmd = `tar -C ${shellEscape(containerRepoPath)} -xf -`;
-  const shCmd = `tar -C ${shellEscape(hostRepoRoot)} --no-xattrs -cf - ${escapedFiles} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
-  debugExec('sh', ['-c', shCmd]);
+  const tarArgs = buildTarArguments(hostRepoRoot, files);
+  const remoteCommand = buildFilesExtractionCommand(containerRepoPath, files);
   const start = Date.now();
-  execFileSync('sh', ['-c', shCmd], EXEC_OPTIONS);
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    timeoutMs: 120_000,
+  });
   debugTiming('scpFilesToContainer', Date.now() - start);
 }
 
