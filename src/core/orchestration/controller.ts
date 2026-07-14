@@ -203,11 +203,10 @@ async function startCodexRunner(
       emit(repoRoot, session.id, callbacks, 'session.warning', `hydrazincludes failed: ${msg}`);
     }
 
-    let codexHome: string | undefined;
+    containerHome ??= getContainerHome(workspaceName);
+    const codexHome = posix.join(containerHome, '.hydraz', 'codex-homes', session.id);
     let playwrightRuntime: Awaited<ReturnType<typeof ensurePlaywrightContainerRuntime>> | undefined;
     if (session.executionTarget === 'local-container') {
-      containerHome ??= getContainerHome(workspaceName);
-      codexHome = posix.join(containerHome, '.hydraz', 'codex-homes', session.id);
       emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Provisioning direct Playwright runtime');
       playwrightRuntime = await ensurePlaywrightContainerRuntime(
         workspaceName,
@@ -216,17 +215,17 @@ async function startCodexRunner(
           emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
         },
       );
-      const importPlan = buildCodexContainerImportPlan(repoRoot);
-      emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Importing portable Codex configuration');
-      await stageCodexContainerImport(
-        workspaceName,
-        codexHome,
-        importPlan,
-        (label, elapsedMs) => {
-          emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
-        },
-      );
     }
+    const importPlan = buildCodexContainerImportPlan(repoRoot);
+    emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Importing portable Codex configuration');
+    await stageCodexContainerImport(
+      workspaceName,
+      codexHome,
+      importPlan,
+      (label, elapsedMs) => {
+        emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+      },
+    );
 
     const codexDir = `/tmp/hydraz-codex/${session.id}`;
     const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options, codexHome);
@@ -304,15 +303,18 @@ function buildRunnerOptions(
   codexHome?: string,
 ): CodexRunnerOptions {
   const loadedConfig = loadConfig();
-  const config = session.executionTarget === 'local-container'
-    ? {
-        ...loadedConfig,
-        codex: {
-          ...loadedConfig.codex,
-          command: 'codex',
-        },
-      }
-    : loadedConfig;
+  const config = {
+    ...loadedConfig,
+    executionTarget: session.executionTarget,
+    ...(isContainerExecutionTarget(session.executionTarget)
+      ? {
+          codex: {
+            ...loadedConfig.codex,
+            command: 'codex',
+          },
+        }
+      : {}),
+  };
   const sandbox = options.sandbox ?? (
     isContainerExecutionTarget(session.executionTarget)
       ? 'danger-full-access'
