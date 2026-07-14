@@ -3,6 +3,7 @@
   "output": "dist/sea-prep.blob",
   "disableExperimentalSEAWarning": true,
   "assets": {
-    "core/codex/runner.js": "dist/sea-assets/core/codex/runner.js"
+    "core/codex/runner.js": "dist/sea-assets/core/codex/runner.js",
+    "runtime/playwright-runtime.tar.gz": "dist/runtime/playwright-runtime.tar.gz"
   }
 }

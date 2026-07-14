@@ -9,6 +9,7 @@ import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import type { CodexContainerImportPlan } from '../codex/container-import.js';
+import { PLAYWRIGHT_RUNTIME_ASSET } from './playwright-runtime.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -28,7 +29,7 @@ let cachedSeaDistRoot: string | null = null;
 
 export interface SeaDistRootOptions {
   isSea?: () => boolean;
-  getAsset?: (key: string, encoding: 'utf8') => string | ArrayBuffer | Uint8Array;
+  getAsset?: (key: string, encoding?: 'utf8') => string | ArrayBuffer | Uint8Array;
   tmpDir?: () => string;
   mkdtemp?: (prefix: string) => string;
   mkdir?: typeof mkdirSync;
@@ -355,7 +356,11 @@ export function resolveSeaDistRoot(options: SeaDistRootOptions = {}): string | n
   const root = (options.mkdtemp ?? mkdtempSync)(join(options.tmpDir?.() ?? tmpdir(), 'hydraz-sea-dist-'));
   const runnerDir = join(root, 'core', 'codex');
   const runnerPath = join(runnerDir, 'runner.js');
-  const getAsset = options.getAsset ?? ((key: string, encoding: 'utf8') => sea.getAsset(key, encoding));
+  const runtimeDir = join(root, 'runtime');
+  const runtimePath = join(root, PLAYWRIGHT_RUNTIME_ASSET);
+  const getAsset = options.getAsset ?? ((key: string, encoding?: 'utf8') => (
+    encoding === undefined ? sea.getAsset(key) : sea.getAsset(key, encoding)
+  ));
   const runnerAsset = getAsset(SEA_RUNNER_ASSET, 'utf8');
   const runnerSource = typeof runnerAsset === 'string'
     ? runnerAsset
@@ -363,6 +368,14 @@ export function resolveSeaDistRoot(options: SeaDistRootOptions = {}): string | n
 
   (options.mkdir ?? mkdirSync)(runnerDir, { recursive: true });
   (options.writeFile ?? writeFileSync)(runnerPath, runnerSource, { mode: 0o600 });
+  const runtimeAsset = getAsset(PLAYWRIGHT_RUNTIME_ASSET);
+  const runtimeBytes = Buffer.from(
+    runtimeAsset instanceof ArrayBuffer
+      ? new Uint8Array(runtimeAsset)
+      : runtimeAsset,
+  );
+  (options.mkdir ?? mkdirSync)(runtimeDir, { recursive: true });
+  (options.writeFile ?? writeFileSync)(runtimePath, runtimeBytes, { mode: 0o600 });
 
   if (!options.isSea) {
     cachedSeaDistRoot = root;

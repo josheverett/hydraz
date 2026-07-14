@@ -1,0 +1,9 @@
+{
+  "name": "@hydraz/playwright-runtime",
+  "version": "1.61.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}

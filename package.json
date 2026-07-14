@@ -13,7 +13,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm build:playwright-runtime && tsc -p tsconfig.build.json",
+    "build:playwright-runtime": "node scripts/build-playwright-runtime.mjs",
     "postbuild": "chmod +x dist/cli/index.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",

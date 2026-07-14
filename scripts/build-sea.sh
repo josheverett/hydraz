@@ -9,6 +9,9 @@ BINARY_NAME="hydraz"
 
 VERSION=$(node -p "require('./package.json').version")
 
+echo "==> Packaging Playwright runtime asset..."
+pnpm build:playwright-runtime
+
 echo "==> Bundling with esbuild..."
 pnpm exec esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/hydraz-sea.cjs \
   --define:__HYDRAZ_VERSION__="\"$VERSION\"" \

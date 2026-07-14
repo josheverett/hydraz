@@ -471,26 +471,76 @@ describe('resolveSeaDistRoot', () => {
   });
 
   it('extracts the embedded runner asset into a dist-shaped temp directory', () => {
-    const writes: Array<{ path: string; content: string }> = [];
+    const writes: Array<{ path: string; content: string | Buffer }> = [];
     const root = resolveSeaDistRoot({
       isSea: () => true,
       tmpDir: () => testDir,
       mkdtemp: (prefix) => join(prefix, 'abc'),
       mkdir: (path) => mkdirSync(path, { recursive: true }),
       writeFile: (path, content) => {
-        writes.push({ path: String(path), content: String(content) });
+        writes.push({ path: String(path), content: content as string | Buffer });
       },
       getAsset: (key) => {
-        expect(key).toBe('core/codex/runner.js');
-        return 'console.log("runner");';
+        return key === 'core/codex/runner.js'
+          ? 'console.log("runner");'
+          : Buffer.from('runtime');
       },
     });
 
     expect(root).toBe(join(testDir, 'hydraz-sea-dist-', 'abc'));
-    expect(writes).toEqual([{
-      path: join(root!, 'core', 'codex', 'runner.js'),
-      content: 'console.log("runner");',
-    }]);
+    expect(writes).toEqual([
+      {
+        path: join(root!, 'core', 'codex', 'runner.js'),
+        content: 'console.log("runner");',
+      },
+      {
+        path: join(root!, 'runtime', 'playwright-runtime.tar.gz'),
+        content: Buffer.from('runtime'),
+      },
+    ]);
+  });
+
+  it('extracts the embedded Playwright runtime beside the runner asset', () => {
+    const writes: Array<{ path: string; content: string | Buffer }> = [];
+    const keys: string[] = [];
+    const runtimeBytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00]);
+    const root = resolveSeaDistRoot({
+      isSea: () => true,
+      tmpDir: () => testDir,
+      mkdtemp: (prefix) => join(prefix, 'runtime'),
+      mkdir: (path) => mkdirSync(path, { recursive: true }),
+      writeFile: (path, content) => {
+        writes.push({ path: String(path), content: content as string | Buffer });
+      },
+      getAsset: (key) => {
+        keys.push(key);
+        return key === 'core/codex/runner.js' ? 'console.log("runner");' : runtimeBytes;
+      },
+    });
+
+    expect(keys).toEqual(['core/codex/runner.js', 'runtime/playwright-runtime.tar.gz']);
+    expect(writes.map((write) => write.path)).toContain(
+      join(root!, 'runtime', 'playwright-runtime.tar.gz'),
+    );
+  });
+
+  it('preserves the embedded runtime archive as binary bytes', () => {
+    const runtimeBytes = Buffer.from([0x00, 0xff, 0x80, 0x41]);
+    let extractedRuntime: Buffer | undefined;
+    resolveSeaDistRoot({
+      isSea: () => true,
+      tmpDir: () => testDir,
+      mkdtemp: (prefix) => join(prefix, 'binary'),
+      mkdir: (path) => mkdirSync(path, { recursive: true }),
+      writeFile: (path, content) => {
+        if (String(path).endsWith('playwright-runtime.tar.gz')) {
+          extractedRuntime = Buffer.from(content as Uint8Array);
+        }
+      },
+      getAsset: (key) => key === 'core/codex/runner.js' ? 'runner' : runtimeBytes,
+    });
+
+    expect(extractedRuntime).toEqual(runtimeBytes);
   });
 });
 
