@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { detectRepo } from '../../core/repo/detect.js';
 import { getActiveSessions, findSessionByName, type SessionMetadata } from '../../core/sessions/index.js';
 import { readEvents, formatEvent } from '../../core/events/index.js';
+import { shellEscape } from '../../core/shell.js';
 
 export function registerAttachCommand(program: Command): void {
   program
@@ -47,6 +48,10 @@ export function registerAttachCommand(program: Command): void {
     });
 }
 
+export function buildTailEventsCommand(eventsPath: string): string {
+  return `tail -f ${shellEscape(eventsPath)}`;
+}
+
 function renderAttachView(session: SessionMetadata, repoRoot: string): void {
   console.log(`\n  Session:    ${session.name}`);
   console.log(`  Branch:     ${session.branchName}`);
@@ -72,7 +77,7 @@ function renderAttachView(session: SessionMetadata, repoRoot: string): void {
 
   if (session.executionTarget !== 'local' && session.codex?.eventsPath) {
     console.log('\n  Streaming Codex events. Press Ctrl+C to detach.\n');
-    const child = spawn('ssh', [`hydraz-${session.id}.devpod`, `tail -f ${session.codex.eventsPath}`], {
+    const child = spawn('ssh', [`hydraz-${session.id}.devpod`, buildTailEventsCommand(session.codex.eventsPath)], {
       stdio: 'inherit',
     });
     child.on('error', (err) => {

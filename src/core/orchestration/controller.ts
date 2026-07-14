@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import { createEvent, appendEvent } from '../events/index.js';
 import type { ExecutionTarget } from '../config/schema.js';
@@ -20,8 +20,17 @@ import {
   type WorkspaceProvider,
   type WorkspaceInfo,
 } from '../providers/provider.js';
-import { scpToContainer, getDistRoot, sshExec, getContainerHome } from '../providers/devpod.js';
+import {
+  scpToContainer,
+  stageCodexContainerImport,
+  getDistRoot,
+  sshExec,
+  getContainerHome,
+} from '../providers/devpod.js';
+import { ensurePlaywrightContainerRuntime } from '../providers/playwright-container.js';
+import { resolvePlaywrightRuntimeArchive } from '../providers/playwright-runtime.js';
 import { processHydrazIncludes } from '../codex/repo-config.js';
+import { buildCodexContainerImportPlan } from '../codex/container-import.js';
 import { findAllOrphanedWorkspaces } from './cleanup.js';
 import {
   CODEX_EVENTS_FILE,
@@ -170,13 +179,18 @@ async function startCodexRunner(
 ): Promise<NonNullable<SessionMetadata['codex']>> {
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
+    const distRoot = getDistRoot();
+    if (session.executionTarget === 'local-container') {
+      resolvePlaywrightRuntimeArchive(distRoot);
+    }
     emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Copying Hydraz into container');
-    await scpToContainer(workspaceName, getDistRoot(), CONTAINER_DIST_PATH, (label, elapsedMs) => {
+    await scpToContainer(workspaceName, distRoot, CONTAINER_DIST_PATH, (label, elapsedMs) => {
       emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
     });
 
+    let containerHome: string | undefined;
     try {
-      const containerHome = getContainerHome(workspaceName);
+      containerHome = getContainerHome(workspaceName);
       await processHydrazIncludes(
         repoRoot,
         workspaceName,
@@ -189,13 +203,45 @@ async function startCodexRunner(
       emit(repoRoot, session.id, callbacks, 'session.warning', `hydrazincludes failed: ${msg}`);
     }
 
+    let codexHome: string | undefined;
+    let playwrightRuntime: Awaited<ReturnType<typeof ensurePlaywrightContainerRuntime>> | undefined;
+    if (session.executionTarget === 'local-container') {
+      containerHome ??= getContainerHome(workspaceName);
+      codexHome = posix.join(containerHome, '.hydraz', 'codex-homes', session.id);
+      emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Provisioning direct Playwright runtime');
+      playwrightRuntime = await ensurePlaywrightContainerRuntime(
+        workspaceName,
+        containerHome,
+        (label, elapsedMs) => {
+          emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+        },
+      );
+      const importPlan = buildCodexContainerImportPlan(repoRoot);
+      emit(repoRoot, session.id, callbacks, 'codex.container_setup', 'Importing portable Codex configuration');
+      await stageCodexContainerImport(
+        workspaceName,
+        codexHome,
+        importPlan,
+        (label, elapsedMs) => {
+          emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+        },
+      );
+    }
+
     const codexDir = `/tmp/hydraz-codex/${session.id}`;
-    const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
+    const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options, codexHome);
     const resultPath = `${codexDir}/${CODEX_RESULT_FILE}`;
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
     const envJson = shellEscape(JSON.stringify(runnerOptions));
     const launchRunnerCommand = [
+      ...(playwrightRuntime === undefined
+        ? []
+        : [
+            `PATH=${shellEscape(playwrightRuntime.binDir)}:$PATH`,
+            `PLAYWRIGHT_BROWSERS_PATH=${shellEscape(playwrightRuntime.browsersPath)}`,
+          ]),
+      ...(codexHome === undefined ? [] : [`CODEX_HOME=${shellEscape(codexHome)}`]),
       `HYDRAZ_CODEX_RUNNER_OPTIONS=${envJson}`,
       `nohup node ${shellEscape(CONTAINER_RUNNER_SCRIPT)}`,
       `> ${shellEscape(runnerOutPath)}`,
@@ -255,8 +301,18 @@ function buildRunnerOptions(
   workspace: WorkspaceInfo,
   codexDir: string,
   options: SwarmOptions & { resumeThreadId?: string; resumePrompt?: string },
+  codexHome?: string,
 ): CodexRunnerOptions {
-  const config = loadConfig();
+  const loadedConfig = loadConfig();
+  const config = session.executionTarget === 'local-container'
+    ? {
+        ...loadedConfig,
+        codex: {
+          ...loadedConfig.codex,
+          command: 'codex',
+        },
+      }
+    : loadedConfig;
   const sandbox = options.sandbox ?? (
     isContainerExecutionTarget(session.executionTarget)
       ? 'danger-full-access'
@@ -272,6 +328,7 @@ function buildRunnerOptions(
     goal: session.task,
     workingDirectory: workspace.directory,
     codexDir,
+    ...(codexHome === undefined ? {} : { codexHome }),
     config,
     model: options.model,
     sandbox,

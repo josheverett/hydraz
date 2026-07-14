@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,14 @@ import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
+import type { CodexContainerImportPlan } from '../codex/container-import.js';
+import { PLAYWRIGHT_RUNTIME_ASSET } from './playwright-runtime.js';
+import {
+  buildExactDestinationExtractionCommand,
+  buildFilesExtractionCommand,
+  buildTarArguments,
+  streamTarToSsh,
+} from './tar-ssh-transfer.js';
 
 export interface DevPodWorkspace {
   name: string;
@@ -27,7 +35,7 @@ let cachedSeaDistRoot: string | null = null;
 
 export interface SeaDistRootOptions {
   isSea?: () => boolean;
-  getAsset?: (key: string, encoding: 'utf8') => string | ArrayBuffer | Uint8Array;
+  getAsset?: (key: string, encoding?: 'utf8') => string | ArrayBuffer | Uint8Array;
   tmpDir?: () => string;
   mkdtemp?: (prefix: string) => string;
   mkdir?: typeof mkdirSync;
@@ -279,12 +287,15 @@ export function copyWorktreeIncludesInContainer(
     return;
   }
 
-  const command = [`cd ${shellEscape(containerRepoPath)}`];
+  const command = [
+    'set -eu',
+    `cd ${shellEscape(containerRepoPath)}`,
+  ];
   for (const file of files) {
     const destDir = `${containerWorktreePath}/${posix.dirname(file)}`;
     const destFile = `${containerWorktreePath}/${file}`;
     command.push(`mkdir -p ${shellEscape(destDir)}`);
-    command.push(`cp ${shellEscape(file)} ${shellEscape(destFile)}`);
+    command.push(`cp -- ${shellEscape(file)} ${shellEscape(destFile)}`);
   }
   const joined = command.join('\n');
   debugExec('ssh', [`${workspaceName}.devpod`, joined]);
@@ -299,6 +310,7 @@ export function configureGitIdentityInContainer(
   identity: GitHubGitIdentity,
 ): void {
   const command = [
+    'set -eu',
     `cd ${shellEscape(containerWorktreePath)}`,
     `git config user.name ${shellEscape(identity.name)}`,
     `git config user.email ${shellEscape(identity.email)}`,
@@ -354,7 +366,11 @@ export function resolveSeaDistRoot(options: SeaDistRootOptions = {}): string | n
   const root = (options.mkdtemp ?? mkdtempSync)(join(options.tmpDir?.() ?? tmpdir(), 'hydraz-sea-dist-'));
   const runnerDir = join(root, 'core', 'codex');
   const runnerPath = join(runnerDir, 'runner.js');
-  const getAsset = options.getAsset ?? ((key: string, encoding: 'utf8') => sea.getAsset(key, encoding));
+  const runtimeDir = join(root, 'runtime');
+  const runtimePath = join(root, PLAYWRIGHT_RUNTIME_ASSET);
+  const getAsset = options.getAsset ?? ((key: string, encoding?: 'utf8') => (
+    encoding === undefined ? sea.getAsset(key) : sea.getAsset(key, encoding)
+  ));
   const runnerAsset = getAsset(SEA_RUNNER_ASSET, 'utf8');
   const runnerSource = typeof runnerAsset === 'string'
     ? runnerAsset
@@ -362,6 +378,14 @@ export function resolveSeaDistRoot(options: SeaDistRootOptions = {}): string | n
 
   (options.mkdir ?? mkdirSync)(runnerDir, { recursive: true });
   (options.writeFile ?? writeFileSync)(runnerPath, runnerSource, { mode: 0o600 });
+  const runtimeAsset = getAsset(PLAYWRIGHT_RUNTIME_ASSET);
+  const runtimeBytes = Buffer.from(
+    runtimeAsset instanceof ArrayBuffer
+      ? new Uint8Array(runtimeAsset)
+      : runtimeAsset,
+  );
+  (options.mkdir ?? mkdirSync)(runtimeDir, { recursive: true });
+  (options.writeFile ?? writeFileSync)(runtimePath, runtimeBytes, { mode: 0o600 });
 
   if (!options.isSea) {
     cachedSeaDistRoot = root;
@@ -376,41 +400,112 @@ export async function scpToContainer(
   remotePath: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
 ): Promise<void> {
-  const sshTarget = `${workspaceName}.devpod`;
   const isFile = existsSync(localPath) && !statSync(localPath).isDirectory();
-  const remoteCmd = isFile
-    ? `rm -rf ${remotePath} && mkdir -p ${posix.dirname(remotePath)} && tar -C ${posix.dirname(remotePath)} -xf -`
-    : `rm -rf ${remotePath} && mkdir -p ${remotePath} && tar -C ${remotePath} -xf - && echo '{"type":"module"}' > ${remotePath}/package.json`;
-  const shCmd = isFile
-    ? `tar -C ${shellEscape(dirname(localPath))} --no-xattrs -cf - ${shellEscape(basename(localPath))} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`
-    : `tar -C ${shellEscape(localPath)} --no-xattrs -cf - . | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
-  debugExec('sh', ['-c', shCmd]);
+  const archivedEntry = isFile ? basename(localPath) : undefined;
+  const tarArgs = buildTarArguments(
+    isFile ? dirname(localPath) : localPath,
+    [archivedEntry ?? '.'],
+  );
+  const remoteCommand = buildExactDestinationExtractionCommand(
+    remotePath,
+    archivedEntry,
+    !isFile,
+  );
   const start = Date.now();
-  await spawnWithHeartbeat('sh', ['-c', shCmd], {}, {
-    label: 'Copying to container',
-    intervalMs: 10_000,
-    onHeartbeat: onHeartbeat ?? (() => {}),
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    onHeartbeat,
   });
   debugTiming('scpToContainer', Date.now() - start);
 }
 
-export function scpFilesToContainer(
+export async function stageCodexContainerImport(
+  workspaceName: string,
+  codexHome: string,
+  plan: CodexContainerImportPlan,
+  onHeartbeat?: (label: string, elapsedMs: number) => void,
+): Promise<void> {
+  sshExec(workspaceName, `mkdir -p ${shellEscape(codexHome)}`);
+
+  let generatedConfigDir: string | undefined;
+  try {
+    if (plan.configToml !== undefined) {
+      generatedConfigDir = mkdtempSync(join(tmpdir(), 'hydraz-codex-config-'));
+      const generatedConfigPath = join(generatedConfigDir, 'config.toml');
+      writeFileSync(generatedConfigPath, plan.configToml, { mode: 0o600 });
+      await scpToContainer(
+        workspaceName,
+        generatedConfigPath,
+        posix.join(codexHome, 'config.toml'),
+        onHeartbeat,
+      );
+    }
+
+    for (const file of plan.files) {
+      await scpToContainer(
+        workspaceName,
+        file.sourcePath,
+        posix.join(codexHome, file.targetRelativePath),
+        onHeartbeat,
+      );
+    }
+
+    for (const directory of plan.directories) {
+      await scpCodexDirectoryToContainer(
+        workspaceName,
+        directory.sourcePath,
+        posix.join(codexHome, directory.targetRelativePath),
+        directory.excludedDirectoryNames,
+        onHeartbeat,
+      );
+    }
+  } finally {
+    if (generatedConfigDir !== undefined) {
+      rmSync(generatedConfigDir, { recursive: true, force: true });
+    }
+  }
+}
+
+async function scpCodexDirectoryToContainer(
+  workspaceName: string,
+  localPath: string,
+  remotePath: string,
+  excludedDirectoryNames: readonly string[],
+  onHeartbeat?: (label: string, elapsedMs: number) => void,
+): Promise<void> {
+  const tarArgs = buildTarArguments(localPath, ['.'], excludedDirectoryNames);
+  const remoteCommand = buildExactDestinationExtractionCommand(remotePath, undefined);
+  const start = Date.now();
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    onHeartbeat,
+  });
+  debugTiming('stageCodexContainerImport', Date.now() - start);
+}
+
+export async function scpFilesToContainer(
   workspaceName: string,
   hostRepoRoot: string,
   containerRepoPath: string,
   files: string[],
-): void {
+): Promise<void> {
   if (files.length === 0) {
     return;
   }
 
-  const sshTarget = `${workspaceName}.devpod`;
-  const escapedFiles = files.map((f) => shellEscape(f)).join(' ');
-  const remoteCmd = `tar -C ${shellEscape(containerRepoPath)} -xf -`;
-  const shCmd = `tar -C ${shellEscape(hostRepoRoot)} --no-xattrs -cf - ${escapedFiles} | ssh ${shellEscape(sshTarget)} ${shellEscape(remoteCmd)}`;
-  debugExec('sh', ['-c', shCmd]);
+  const tarArgs = buildTarArguments(hostRepoRoot, files);
+  const remoteCommand = buildFilesExtractionCommand(containerRepoPath, files);
   const start = Date.now();
-  execFileSync('sh', ['-c', shCmd], EXEC_OPTIONS);
+  await streamTarToSsh({
+    workspaceName,
+    tarArgs,
+    remoteCommand,
+    timeoutMs: 120_000,
+  });
   debugTiming('scpFilesToContainer', Date.now() - start);
 }
 

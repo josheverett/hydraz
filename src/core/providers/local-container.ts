@@ -167,7 +167,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
       const safeIncludes = listCopyableWorktreeIncludes(session.repoRoot, includeDestinationRoot);
       debug(`createWorkspace: copying ${safeIncludes.length} include files into worktree`);
       if (safeIncludes.length > 0) {
-        scpFilesToContainer(workspaceName, session.repoRoot, containerRepoPath, safeIncludes);
+        await scpFilesToContainer(workspaceName, session.repoRoot, containerRepoPath, safeIncludes);
       }
       copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {

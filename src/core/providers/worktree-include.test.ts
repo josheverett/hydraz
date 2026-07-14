@@ -19,6 +19,9 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(repoRoot, { recursive: true, force: true });
   rmSync(worktreeDir, { recursive: true, force: true });
+  for (const dir of outsideDirectories.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe('parseWorktreeInclude', () => {
@@ -49,12 +52,12 @@ describe('parseWorktreeInclude', () => {
 });
 
 describe('copyWorktreeIncludes', () => {
-  it('lists only safe, existing entries for a destination root', () => {
+  it('lists safe, existing entries for a destination root', () => {
     mkdirSync(join(repoRoot, 'agent'), { recursive: true });
     writeFileSync(join(repoRoot, 'agent', '.env'), 'API_KEY=secret123');
     writeFileSync(
       join(repoRoot, '.worktreeinclude'),
-      'agent/.env\n../../etc/passwd\n../escape\nnonexistent/.env\n',
+      'agent/.env\nnonexistent/.env\n',
     );
 
     const files = listCopyableWorktreeIncludes(repoRoot, join(worktreeDir, 'placeholder'));
@@ -103,18 +106,41 @@ describe('copyWorktreeIncludes', () => {
     expect(copied).toContain('ui/.env');
   });
 
-  it('skips entries that traverse outside the repo root', () => {
+  it('rejects entries that traverse outside the repo root', () => {
     writeFileSync(join(repoRoot, '.worktreeinclude'), '../../etc/passwd\n');
-    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
-    expect(copied).toEqual([]);
+    expect(() => copyWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/outside.*repository/i);
   });
 
-  it('skips entries that would write outside the worktree', () => {
+  it('rejects absolute entries', () => {
     mkdirSync(join(repoRoot, 'legit'), { recursive: true });
     writeFileSync(join(repoRoot, 'legit', 'file'), 'ok');
-    writeFileSync(join(repoRoot, '.worktreeinclude'), '../escape\n');
-    const copied = copyWorktreeIncludes(repoRoot, worktreeDir);
-    expect(copied).toEqual([]);
+    writeFileSync(join(repoRoot, '.worktreeinclude'), `${join(repoRoot, 'legit', 'file')}\n`);
+    expect(() => copyWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/absolute/i);
+  });
+
+  it('accepts valid entries with spaces, apostrophes, and a leading dash', () => {
+    const entry = "-agent config/user's.env";
+    mkdirSync(join(repoRoot, '-agent config'), { recursive: true });
+    writeFileSync(join(repoRoot, entry), 'A=1');
+    writeFileSync(join(repoRoot, '.worktreeinclude'), `${entry}\n`);
+
+    expect(listCopyableWorktreeIncludes(repoRoot, worktreeDir)).toEqual([entry]);
+  });
+
+  it('continues skipping missing entries inside the repository', () => {
+    writeFileSync(join(repoRoot, '.worktreeinclude'), 'missing config/.env\n');
+    expect(listCopyableWorktreeIncludes(repoRoot, worktreeDir)).toEqual([]);
+  });
+
+  it('rejects a source that escapes through a symlinked ancestor', () => {
+    if (process.platform === 'win32') return;
+
+    const outside = makeOutsideDirectory();
+    writeFileSync(join(outside, 'secret.env'), 'SECRET=yes');
+    symlinkSync(outside, join(repoRoot, 'linked-directory'));
+    writeFileSync(join(repoRoot, '.worktreeinclude'), 'linked-directory/secret.env\n');
+
+    expect(() => listCopyableWorktreeIncludes(repoRoot, worktreeDir)).toThrow(/symlink.*outside.*repository/i);
   });
 
   it('rejects symlink entries even when they point inside the repo', () => {
@@ -130,3 +156,11 @@ describe('copyWorktreeIncludes', () => {
     expect(existsSync(join(worktreeDir, 'agent', '.env'))).toBe(false);
   });
 });
+
+function makeOutsideDirectory(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'hydraz-wti-outside-'));
+  outsideDirectories.push(dir);
+  return dir;
+}
+
+const outsideDirectories: string[] = [];

@@ -299,7 +299,7 @@ describe('LocalContainerProvider', () => {
     });
 
     it('tears down devpod if SCP of worktree include files fails', async () => {
-      mockScpFiles.mockImplementation(() => { throw new Error('scp failed'); });
+      mockScpFiles.mockRejectedValueOnce(new Error('scp failed'));
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();

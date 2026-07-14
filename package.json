@@ -1,6 +1,6 @@
 {
   "name": "hydraz",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "description": "A Codex cloud harness for detached long-running coding goals",
   "type": "module",
   "packageManager": "pnpm@10.1.0",
@@ -13,7 +13,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm build:playwright-runtime && tsc -p tsconfig.build.json",
+    "build:playwright-runtime": "node scripts/build-playwright-runtime.mjs",
     "postbuild": "chmod +x dist/cli/index.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
@@ -45,7 +46,8 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.2",
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "smol-toml": "1.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

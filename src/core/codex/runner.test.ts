@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./delivery.js', () => ({
@@ -98,6 +98,43 @@ process.exit(9);
     expect(result.exitCode).toBe(9);
     expect(result.threadId).toBe('thread-fail');
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
+  });
+
+  it('sets the explicit container CODEX_HOME for the Codex child', async () => {
+    const root = makeTempRoot();
+    const envFile = join(root, 'codex-home.txt');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
+  codexHome: process.env.CODEX_HOME ?? '',
+  path: process.env.PATH ?? '',
+  browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH ?? '',
+}));
+`);
+
+    const previousPath = process.env.PATH;
+    const previousBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+    const inheritedPath = `/home/codex/.hydraz/bin:${dirname(process.execPath)}:/usr/bin`;
+    process.env.PATH = inheritedPath;
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/home/codex/.hydraz/browsers/playwright-1.61.1';
+
+    try {
+      await executeCodexRunner({
+        ...makeOptions(root, codex),
+        codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+      });
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      if (previousBrowsersPath === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+      else process.env.PLAYWRIGHT_BROWSERS_PATH = previousBrowsersPath;
+    }
+
+    expect(JSON.parse(readFileSync(envFile, 'utf8'))).toEqual({
+      codexHome: '/home/codex/.hydraz/codex-homes/session-1',
+      path: inheritedPath,
+      browsersPath: '/home/codex/.hydraz/browsers/playwright-1.61.1',
+    });
   });
 
   it('uses codex exec resume when a resume thread id is supplied', async () => {

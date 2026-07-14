@@ -18,6 +18,7 @@ import {
   copyWorktreeIncludesInContainer,
   configureGitIdentityInContainer,
   scpToContainer,
+  stageCodexContainerImport,
   scpFilesToContainer,
   getDistRoot,
   resolveSeaDistRoot,
@@ -37,14 +38,64 @@ vi.mock('./spawn-heartbeat.js', () => ({
   spawnWithHeartbeat: vi.fn(() => Promise.resolve({ stdout: '', exitCode: 0 })),
 }));
 
+vi.mock('./tar-ssh-transfer.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tar-ssh-transfer.js')>();
+  return {
+    ...actual,
+    streamTarToSsh: vi.fn(async () => {}),
+  };
+});
+
 import { execFileSync } from 'node:child_process';
 const mockExecFileSync = vi.mocked(execFileSync);
+const { execFileSync: realExecFileSync } = await vi.importActual<typeof import('node:child_process')>(
+  'node:child_process',
+);
 
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 const mockSpawnWithHeartbeat = vi.mocked(spawnWithHeartbeat);
 
+import { streamTarToSsh } from './tar-ssh-transfer.js';
+const mockStreamTarToSsh = vi.mocked(streamTarToSsh);
+
 function fakeSpawnPromise(result: { stdout: string; exitCode: number }): SpawnHeartbeatPromise {
   return Object.assign(Promise.resolve(result), { _child: {} as ChildProcess }) as SpawnHeartbeatPromise;
+}
+
+function lastRemoteCommand(): string {
+  return mockExecFileSync.mock.calls.at(-1)?.[1]?.[1] as string;
+}
+
+function parseAsPosixShell(command: string): void {
+  realExecFileSync('/bin/sh', ['-n'], { input: command, stdio: 'pipe' });
+}
+
+function writeFakeCommand(binDir: string, name: string, source: string): void {
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(join(binDir, name), source, { mode: 0o755 });
+}
+
+function runPosixShell(
+  command: string,
+  cwd: string,
+  env: Record<string, string>,
+): boolean {
+  try {
+    realExecFileSync('/bin/sh', ['-c', command], {
+      cwd,
+      env: { ...process.env, ...env },
+      stdio: 'pipe',
+    });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function readTrace(path: string): string[] {
+  return existsSync(path)
+    ? readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean)
+    : [];
 }
 
 let testDir: string;
@@ -422,7 +473,7 @@ describe('copyWorktreeIncludesInContainer', () => {
     );
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'ssh',
-      ['my-ws.devpod', expect.stringContaining("cp 'agent/.env'")],
+      ['my-ws.devpod', expect.stringContaining("cp -- 'agent/.env'")],
       expect.any(Object),
     );
   });
@@ -431,6 +482,69 @@ describe('copyWorktreeIncludesInContainer', () => {
     mockExecFileSync.mockReturnValue('' as never);
     expect(() => copyWorktreeIncludesInContainer('my-ws', '/ws', '/ws/wt', [])).not.toThrow();
     expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it('[shell regression] emits a valid quoted copy program with option-safe cp operands', () => {
+    copyWorktreeIncludesInContainer(
+      'my-ws',
+      "/workspaces/team's repo",
+      "/tmp/work tree/O'Brien",
+      ["agent/it's.env"],
+    );
+
+    const command = lastRemoteCommand();
+    expect(() => parseAsPosixShell(command)).not.toThrow();
+    expect(command).toContain(
+      "cp -- 'agent/it'\\''s.env' '/tmp/work tree/O'\\''Brien/agent/it'\\''s.env'",
+    );
+  });
+
+  it('[shell regression] stops when worktree setup or an early copy fails', () => {
+    const binDir = join(testDir, 'bin');
+    writeFakeCommand(binDir, 'cp', `#!/bin/sh
+if [ "$1" = "--" ]; then shift; fi
+printf '%s\\n' "$1" >> "$TRACE_FILE"
+if [ -n "$FAIL_SOURCE" ] && [ "$1" = "$FAIL_SOURCE" ]; then exit 23; fi
+`);
+
+    const scenarios = [
+      {
+        name: 'failed cd',
+        repoPath: join(testDir, 'missing-repo'),
+        files: ['only.env'],
+        failSource: '',
+        expectedTrace: [] as string[],
+      },
+      {
+        name: 'failed first copy',
+        repoPath: testDir,
+        files: ['first.env', 'second.env'],
+        failSource: 'first.env',
+        expectedTrace: ['first.env'],
+      },
+    ];
+
+    const results = scenarios.map((scenario, index) => {
+      copyWorktreeIncludesInContainer(
+        'my-ws',
+        scenario.repoPath,
+        join(testDir, `worktree-${index}`),
+        scenario.files,
+      );
+      const tracePath = join(testDir, `cp-trace-${index}`);
+      const failed = runPosixShell(lastRemoteCommand(), testDir, {
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        TRACE_FILE: tracePath,
+        FAIL_SOURCE: scenario.failSource,
+      });
+      return { name: scenario.name, failed, trace: readTrace(tracePath) };
+    });
+
+    expect(results).toEqual(scenarios.map((scenario) => ({
+      name: scenario.name,
+      failed: true,
+      trace: scenario.expectedTrace,
+    })));
   });
 });
 
@@ -447,6 +561,61 @@ describe('configureGitIdentityInContainer', () => {
     expect(command).toContain("cd '/tmp/hydraz-worktrees/session-id'");
     expect(command).toContain("git config user.name 'josheverett'");
     expect(command).toContain("git config user.email '151150+josheverett@users.noreply.github.com'");
+  });
+
+  it('[shell regression] emits a valid quoted Git identity program', () => {
+    configureGitIdentityInContainer('my-ws', "/tmp/work tree/O'Brien", {
+      name: "O'Brien; $(not-run)",
+      email: 'dev+`not-run`@example.com',
+    });
+
+    const command = lastRemoteCommand();
+    expect(command).toContain("git config user.name 'O'\\''Brien; $(not-run)'");
+    expect(command).toContain("git config user.email 'dev+`not-run`@example.com'");
+    expect(() => parseAsPosixShell(command)).not.toThrow();
+  });
+
+  it('[shell regression] stops before configuring elsewhere or after user.name fails', () => {
+    const binDir = join(testDir, 'bin');
+    writeFakeCommand(binDir, 'git', `#!/bin/sh
+printf '%s\\n' "$2" >> "$TRACE_FILE"
+if [ -n "$FAIL_GIT_KEY" ] && [ "$2" = "$FAIL_GIT_KEY" ]; then exit 29; fi
+`);
+
+    const scenarios = [
+      {
+        name: 'failed cd',
+        worktreePath: join(testDir, 'missing-worktree'),
+        failGitKey: '',
+        expectedTrace: [] as string[],
+      },
+      {
+        name: 'failed user.name',
+        worktreePath: testDir,
+        failGitKey: 'user.name',
+        expectedTrace: ['user.name'],
+      },
+    ];
+
+    const results = scenarios.map((scenario, index) => {
+      configureGitIdentityInContainer('my-ws', scenario.worktreePath, {
+        name: 'Test User',
+        email: 'test@example.com',
+      });
+      const tracePath = join(testDir, `git-trace-${index}`);
+      const failed = runPosixShell(lastRemoteCommand(), testDir, {
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        TRACE_FILE: tracePath,
+        FAIL_GIT_KEY: scenario.failGitKey,
+      });
+      return { name: scenario.name, failed, trace: readTrace(tracePath) };
+    });
+
+    expect(results).toEqual(scenarios.map((scenario) => ({
+      name: scenario.name,
+      failed: true,
+      trace: scenario.expectedTrace,
+    })));
   });
 });
 
@@ -470,146 +639,250 @@ describe('resolveSeaDistRoot', () => {
   });
 
   it('extracts the embedded runner asset into a dist-shaped temp directory', () => {
-    const writes: Array<{ path: string; content: string }> = [];
+    const writes: Array<{ path: string; content: string | Buffer }> = [];
     const root = resolveSeaDistRoot({
       isSea: () => true,
       tmpDir: () => testDir,
       mkdtemp: (prefix) => join(prefix, 'abc'),
       mkdir: (path) => mkdirSync(path, { recursive: true }),
       writeFile: (path, content) => {
-        writes.push({ path: String(path), content: String(content) });
+        writes.push({ path: String(path), content: content as string | Buffer });
       },
       getAsset: (key) => {
-        expect(key).toBe('core/codex/runner.js');
-        return 'console.log("runner");';
+        return key === 'core/codex/runner.js'
+          ? 'console.log("runner");'
+          : Buffer.from('runtime');
       },
     });
 
     expect(root).toBe(join(testDir, 'hydraz-sea-dist-', 'abc'));
-    expect(writes).toEqual([{
-      path: join(root!, 'core', 'codex', 'runner.js'),
-      content: 'console.log("runner");',
-    }]);
+    expect(writes).toEqual([
+      {
+        path: join(root!, 'core', 'codex', 'runner.js'),
+        content: 'console.log("runner");',
+      },
+      {
+        path: join(root!, 'runtime', 'playwright-runtime.tar.gz'),
+        content: Buffer.from('runtime'),
+      },
+    ]);
+  });
+
+  it('extracts the embedded Playwright runtime beside the runner asset', () => {
+    const writes: Array<{ path: string; content: string | Buffer }> = [];
+    const keys: string[] = [];
+    const runtimeBytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00]);
+    const root = resolveSeaDistRoot({
+      isSea: () => true,
+      tmpDir: () => testDir,
+      mkdtemp: (prefix) => join(prefix, 'runtime'),
+      mkdir: (path) => mkdirSync(path, { recursive: true }),
+      writeFile: (path, content) => {
+        writes.push({ path: String(path), content: content as string | Buffer });
+      },
+      getAsset: (key) => {
+        keys.push(key);
+        return key === 'core/codex/runner.js' ? 'console.log("runner");' : runtimeBytes;
+      },
+    });
+
+    expect(keys).toEqual(['core/codex/runner.js', 'runtime/playwright-runtime.tar.gz']);
+    expect(writes.map((write) => write.path)).toContain(
+      join(root!, 'runtime', 'playwright-runtime.tar.gz'),
+    );
+  });
+
+  it('preserves the embedded runtime archive as binary bytes', () => {
+    const runtimeBytes = Buffer.from([0x00, 0xff, 0x80, 0x41]);
+    let extractedRuntime: Buffer | undefined;
+    resolveSeaDistRoot({
+      isSea: () => true,
+      tmpDir: () => testDir,
+      mkdtemp: (prefix) => join(prefix, 'binary'),
+      mkdir: (path) => mkdirSync(path, { recursive: true }),
+      writeFile: (path, content) => {
+        if (String(path).endsWith('playwright-runtime.tar.gz')) {
+          extractedRuntime = Buffer.from(content as Uint8Array);
+        }
+      },
+      getAsset: (key) => key === 'core/codex/runner.js' ? 'runner' : runtimeBytes,
+    });
+
+    expect(extractedRuntime).toEqual(runtimeBytes);
   });
 });
 
 describe('scpToContainer', () => {
-  it('uses tar|ssh pipe via sh -c for efficient transfer', async () => {
+  it('delegates an argv-based tar-to-SSH stream', async () => {
     await scpToContainer('my-ws', '/local/dist', '/tmp/hydraz-dist');
-    expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
-      'sh',
-      ['-c', expect.stringContaining('tar')],
-      expect.any(Object),
-      expect.any(Object),
-    );
+    expect(mockStreamTarToSsh).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceName: 'my-ws',
+      tarArgs: expect.arrayContaining(['-C', '/local/dist', '-cf', '-', '--', '.']),
+      remoteCommand: expect.stringContaining("destination='/tmp/hydraz-dist'"),
+    }));
   });
 
-  it('copies a file include from its parent directory into the remote parent directory', async () => {
+  it('copies a file under its requested remote basename', async () => {
     const codexDir = join(testDir, '.codex');
     mkdirSync(codexDir, { recursive: true });
     const configPath = join(codexDir, 'config.toml');
     writeFileSync(configPath, 'model = "gpt-5"\n');
 
-    await scpToContainer('my-ws', configPath, '/home/vscode/.codex/config.toml');
+    await scpToContainer('my-ws', configPath, '/home/vscode/.codex/renamed.toml');
 
-    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain(`tar -C '${codexDir}' --no-xattrs -cf - 'config.toml'`);
-    expect(cmd).toContain('rm -rf /home/vscode/.codex/config.toml');
-    expect(cmd).toContain('mkdir -p /home/vscode/.codex');
-    expect(cmd).toContain('tar -C /home/vscode/.codex -xf -');
-    expect(cmd).not.toContain('/home/vscode/.codex/config.toml/package.json');
+    const transfer = mockStreamTarToSsh.mock.calls[0]?.[0];
+    expect(transfer?.tarArgs).toEqual([
+      '-C', codexDir, '--no-xattrs', '-cf', '-', '--', 'config.toml',
+    ]);
+    expect(transfer?.remoteCommand).toContain("destination='/home/vscode/.codex/renamed.toml'");
+    expect(transfer?.remoteCommand).toContain("extracted=\"$stage\"/'config.toml'");
+    expect(transfer?.remoteCommand).not.toContain('package.json');
   });
 
-  it('pipes tar output to ssh targeting the correct devpod host', async () => {
+  it('targets the correct devpod host', async () => {
     await scpToContainer('hydraz-abc123', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain('ssh');
-    expect(cmd).toContain('hydraz-abc123.devpod');
+    expect(mockStreamTarToSsh).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceName: 'hydraz-abc123',
+    }));
   });
 
-  it('includes rm and mkdir in the remote command for idempotent transfer', async () => {
+  it('stages beside and replaces the exact destination', async () => {
     await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain('rm -rf /tmp/hydraz-dist');
-    expect(cmd).toContain('mkdir -p /tmp/hydraz-dist');
+    const command = mockStreamTarToSsh.mock.calls[0]?.[0].remoteCommand ?? '';
+    expect(command).toContain('mktemp -d "$parent/.hydraz-transfer.XXXXXX"');
+    expect(command).toContain('rm -rf -- "$destination"');
+    expect(command).toContain('mv -- "$stage" "$destination"');
   });
 
   it('writes a package.json with type:module into the remote path for ESM support', async () => {
     await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
-    const cmd = mockSpawnWithHeartbeat.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain('package.json');
-    expect(cmd).toContain('"type":"module"');
+    const command = mockStreamTarToSsh.mock.calls[0]?.[0].remoteCommand ?? '';
+    expect(command).toContain('package.json');
+    expect(command).toContain('"type":"module"');
   });
 
   it('rejects when the transfer fails', async () => {
-    mockSpawnWithHeartbeat.mockRejectedValueOnce(new Error('ssh: connection refused'));
+    mockStreamTarToSsh.mockRejectedValueOnce(new Error('ssh: connection refused'));
     await expect(scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist')).rejects.toThrow('ssh: connection refused');
   });
 
-  it('uses 10s heartbeat interval', async () => {
+  it('omits a heartbeat callback when none is provided', async () => {
     await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist');
-    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
-    expect(heartbeatConfig?.intervalMs).toBe(10_000);
+    expect(mockStreamTarToSsh.mock.calls[0]?.[0].onHeartbeat).toBeUndefined();
   });
 
   it('threads onHeartbeat callback when provided', async () => {
     const heartbeatCb = vi.fn();
     await scpToContainer('my-ws', '/dist', '/tmp/hydraz-dist', heartbeatCb);
-    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
-    heartbeatConfig?.onHeartbeat('test', 1000);
-    expect(heartbeatCb).toHaveBeenCalledWith('test', 1000);
+    expect(mockStreamTarToSsh.mock.calls[0]?.[0].onHeartbeat).toBe(heartbeatCb);
+  });
+});
+
+describe('stageCodexContainerImport', () => {
+  it('stages only exact managed inputs without generic package injection', async () => {
+    const sourceHome = join(testDir, '.codex');
+    mkdirSync(join(sourceHome, 'rules'), { recursive: true });
+    mkdirSync(join(sourceHome, 'skills'), { recursive: true });
+    writeFileSync(join(sourceHome, 'auth.json'), '{}\n');
+    writeFileSync(join(sourceHome, 'AGENTS.md'), '# Instructions\n');
+
+    await stageCodexContainerImport('my-ws', '/root/.hydraz/codex-homes/session-1', {
+      sourceCodexHome: sourceHome,
+      configToml: 'model = "gpt-5.6"\n',
+      files: [
+        { sourcePath: join(sourceHome, 'auth.json'), targetRelativePath: 'auth.json' },
+        { sourcePath: join(sourceHome, 'AGENTS.md'), targetRelativePath: 'AGENTS.md' },
+      ],
+      directories: [
+        {
+          sourcePath: join(sourceHome, 'rules'),
+          targetRelativePath: 'rules',
+          excludedDirectoryNames: [],
+        },
+        {
+          sourcePath: join(sourceHome, 'skills'),
+          targetRelativePath: 'skills',
+          excludedDirectoryNames: ['.system', 'node_modules', '.venv', 'venv'],
+        },
+      ],
+    });
+
+    const transfers = mockStreamTarToSsh.mock.calls.map((call) => call[0]);
+    const commands = transfers.map((transfer) => transfer.remoteCommand);
+    expect(commands).toHaveLength(5);
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/config.toml');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/auth.json');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/AGENTS.md');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/rules');
+    expect(commands.join('\n')).toContain('/root/.hydraz/codex-homes/session-1/skills');
+    const tarArgs = transfers.flatMap((transfer) => transfer.tarArgs);
+    expect(tarArgs).toContain('--exclude=.system');
+    expect(tarArgs).toContain('--exclude=node_modules');
+    expect(commands.join('\n')).not.toContain('package.json');
+  });
+
+  it('propagates a transfer failure and stops staging', async () => {
+    const sourceHome = join(testDir, '.codex');
+    mkdirSync(sourceHome, { recursive: true });
+    writeFileSync(join(sourceHome, 'auth.json'), '{}\n');
+    mockStreamTarToSsh.mockRejectedValueOnce(new Error('transfer failed'));
+
+    try {
+      await expect(stageCodexContainerImport('my-ws', '/root/.codex-hydraz', {
+        sourceCodexHome: sourceHome,
+        files: [{ sourcePath: join(sourceHome, 'auth.json'), targetRelativePath: 'auth.json' }],
+        directories: [],
+      })).rejects.toThrow('transfer failed');
+    } finally {
+      mockStreamTarToSsh.mockReset();
+      mockStreamTarToSsh.mockImplementation(async () => {});
+    }
   });
 });
 
 describe('scpFilesToContainer', () => {
-  it('uses tar|ssh pipe via sh -c to transfer specific files', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['agent/.env']);
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      'sh',
-      ['-c', expect.stringContaining('tar')],
-      expect.any(Object),
-    );
+  it('uses the failure-aware tar-to-SSH stream with its existing timeout', async () => {
+    await scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['agent/.env']);
+    expect(mockStreamTarToSsh).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceName: 'my-ws',
+      timeoutMs: 120_000,
+    }));
   });
 
-  it('includes all specified files in the tar command', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['agent/.env', 'deep/nested/.env']);
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain("'agent/.env'");
-    expect(cmd).toContain("'deep/nested/.env'");
+  it('includes all specified files after the tar option terminator', async () => {
+    await scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['-private.env', 'deep/nested/.env']);
+    const args = mockStreamTarToSsh.mock.calls[0]?.[0].tarArgs ?? [];
+    expect(args.slice(args.indexOf('--'))).toEqual(['--', '-private.env', 'deep/nested/.env']);
   });
 
-  it('extracts into the container repo path', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain("'/workspaces/my-ws'");
+  it('installs only the requested files into the container repo path', async () => {
+    await scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
+    const command = mockStreamTarToSsh.mock.calls[0]?.[0].remoteCommand ?? '';
+    expect(command).toContain("remote_root='/workspaces/my-ws'");
+    expect(command).toContain("source_path=\"$stage\"/'.env'");
   });
 
-  it('tars from the host repo root directory', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain("'/host/repo'");
+  it('tars from the host repo root directory', async () => {
+    await scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']);
+    const args = mockStreamTarToSsh.mock.calls[0]?.[0].tarArgs ?? [];
+    expect(args.slice(0, 2)).toEqual(['-C', '/host/repo']);
   });
 
-  it('targets the correct devpod host', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('hydraz-abc123', '/host/repo', '/workspaces/hydraz-abc123', ['.env']);
-    const cmd = mockExecFileSync.mock.calls[0]?.[1]?.[1] as string;
-    expect(cmd).toContain('hydraz-abc123.devpod');
+  it('targets the correct devpod host', async () => {
+    await scpFilesToContainer('hydraz-abc123', '/host/repo', '/workspaces/hydraz-abc123', ['.env']);
+    expect(mockStreamTarToSsh.mock.calls[0]?.[0].workspaceName).toBe('hydraz-abc123');
   });
 
-  it('does not invoke any command when there are no files', () => {
-    mockExecFileSync.mockReturnValue('' as never);
-    scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', []);
-    expect(mockExecFileSync).not.toHaveBeenCalled();
+  it('does not invoke any command when there are no files', async () => {
+    await scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', []);
+    expect(mockStreamTarToSsh).not.toHaveBeenCalled();
   });
 
-  it('throws when the transfer fails', () => {
-    mockExecFileSync.mockImplementation(() => { throw new Error('ssh: connection refused'); });
-    expect(() => scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env'])).toThrow('ssh: connection refused');
+  it('rejects when the transfer fails', async () => {
+    mockStreamTarToSsh.mockRejectedValueOnce(new Error('ssh: connection refused'));
+    await expect(
+      scpFilesToContainer('my-ws', '/host/repo', '/workspaces/my-ws', ['.env']),
+    ).rejects.toThrow('ssh: connection refused');
   });
 });
 
@@ -733,6 +1006,29 @@ describe('devpodUp', () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
     expect(capturedContents).toContain('GH_TOKEN=github_pat_test');
     expect(capturedContents).toContain('OPENAI_API_KEY=sk-test');
+  });
+
+  it('writes GIT_CONFIG_COUNT as an unquoted integer string', async () => {
+    let capturedContents = '';
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
+      const flagIdx = (args as string[]).indexOf('--workspace-env-file');
+      if (flagIdx >= 0) {
+        capturedContents = readFileSync((args as string[])[flagIdx + 1]!, 'utf-8');
+      }
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
+    });
+
+    await devpodUp(
+      'git@github.com:org/repo.git',
+      'hydraz-abc',
+      undefined,
+      undefined,
+      undefined,
+      { GIT_CONFIG_COUNT: '3' },
+    );
+
+    expect(capturedContents).toContain('GIT_CONFIG_COUNT=3');
+    expect(capturedContents).not.toContain('GIT_CONFIG_COUNT="3"');
   });
 
   it('creates workspace-env-file with restricted 0o600 permissions', async () => {
