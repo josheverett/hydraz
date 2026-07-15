@@ -1,6 +1,7 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -49,6 +50,21 @@ function makeFakeCodex(root: string, body: string): string {
   writeFileSync(file, `#!/usr/bin/env node\n${body}\n`);
   chmodSync(file, 0o755);
   return file;
+}
+
+function writeRollout(
+  codexHome: string,
+  threadId: string,
+  items: Array<Record<string, unknown>>,
+): string {
+  const sessionsDir = join(codexHome, 'sessions', '2026', '07', '15');
+  mkdirSync(sessionsDir, { recursive: true });
+  const rolloutPath = join(sessionsDir, `rollout-${threadId}.jsonl`);
+  writeFileSync(
+    rolloutPath,
+    items.map((item) => JSON.stringify(item)).join('\n') + '\n',
+  );
+  return rolloutPath;
 }
 
 function makeOptions(root: string, codexCommand: string) {
@@ -166,6 +182,111 @@ fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(
     if (process.platform !== 'win32') {
       expect(statSync(invocationPath).mode & 0o777).toBe(0o600);
     }
+  });
+
+  it('cross-checks the latest Codex rollout turn context', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-match';
+    const codexHome = join(root, 'codex-home');
+    const rolloutPath = writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.5', effort: 'medium' },
+      },
+      {
+        timestamp: '2026-07-15T00:00:01.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.6-sol', effort: 'ultra' },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = codexHome;
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'matched',
+      sourcePath: rolloutPath,
+      observed: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'ultra',
+      },
+      checks: {
+        model: 'matched',
+        reasoningEffort: 'matched',
+        serviceTier: 'unavailable',
+      },
+    }));
+  });
+
+  it('reports rollout mismatches without failing the run', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-mismatch';
+    const codexHome = join(root, 'codex-home');
+    writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: {
+          model: 'gpt-5.5',
+          effort: 'medium',
+          service_tier: 'default',
+        },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = codexHome;
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.success).toBe(true);
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'mismatched',
+      observed: {
+        model: 'gpt-5.5',
+        reasoningEffort: 'medium',
+        serviceTier: 'default',
+      },
+      checks: {
+        model: 'mismatched',
+        reasoningEffort: 'mismatched',
+        serviceTier: 'mismatched',
+      },
+    }));
+  });
+
+  it('reports rollout verification as unavailable when no rollout exists', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({
+        type: 'thread.started',
+        thread_id: 'thread-rollout-missing',
+      }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = join(root, 'codex-home');
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.success).toBe(true);
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'unavailable',
+      checks: {
+        model: 'unavailable',
+        reasoningEffort: 'unavailable',
+        serviceTier: 'unavailable',
+      },
+    }));
   });
 
   it.each([
