@@ -1,3 +1,5 @@
+import type { CodexReasoningEffort, CodexSpeed } from '../config/schema.js';
+
 export type CodexSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
 
 export interface CodexExecCommandOptions {
@@ -5,6 +7,8 @@ export interface CodexExecCommandOptions {
   prompt: string;
   sandbox?: CodexSandbox;
   model?: string;
+  reasoningEffort?: CodexReasoningEffort;
+  speed?: CodexSpeed;
   search?: boolean;
   webSearchMode?: 'disabled' | 'cached' | 'live';
   skipGitRepoCheck?: boolean;
@@ -52,6 +56,14 @@ function baseArgs(options: CodexExecCommandOptions): string[] {
   }
   if (options.model) {
     args.push('--model', options.model);
+  }
+  if (options.reasoningEffort) {
+    args.push('-c', `model_reasoning_effort=${JSON.stringify(options.reasoningEffort)}`);
+  }
+  if (options.speed) {
+    const fast = options.speed === 'fast';
+    args.push('-c', `features.fast_mode=${fast}`);
+    args.push('-c', `service_tier=${JSON.stringify(fast ? 'priority' : 'default')}`);
   }
   if (options.search !== false) {
     args.push('-c', `web_search_mode=${JSON.stringify(options.webSearchMode ?? 'live')}`);
