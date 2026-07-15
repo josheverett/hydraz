@@ -43,6 +43,10 @@ export function registerResumeCommand(program: Command): void {
         console.error('A resume prompt is required.');
         return;
       }
+      if (options.model !== undefined && !options.model.trim()) {
+        console.error('Invalid Codex model: expected a non-empty value.');
+        return;
+      }
       if (options.reasoningEffort && !CODEX_REASONING_EFFORTS.includes(options.reasoningEffort)) {
         console.error(`Invalid reasoning effort: "${options.reasoningEffort}".`);
         return;
@@ -65,7 +69,7 @@ export function registerResumeCommand(program: Command): void {
         }, {
           verbose: options.verbose,
           prompt,
-          model: options.model,
+          model: options.model?.trim(),
           reasoningEffort: options.reasoningEffort,
           speed: options.speed,
         });
@@ -92,7 +96,7 @@ export function registerResumeCommand(program: Command): void {
       }, {
         verbose: options.verbose,
         prompt,
-        model: options.model,
+        model: options.model?.trim(),
         reasoningEffort: options.reasoningEffort,
         speed: options.speed,
       });

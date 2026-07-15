@@ -100,7 +100,11 @@ export function validateConfig(data: unknown): HydrazConfig {
 
   const codex = expectObject(obj, 'codex', defaults.codex, (val) => ({
     command: expectString(val as Record<string, unknown>, 'command', defaults.codex.command),
-    model: expectString(val as Record<string, unknown>, 'model', DEFAULT_CODEX_MODEL),
+    model: expectNonEmptyString(
+      val as Record<string, unknown>,
+      'model',
+      DEFAULT_CODEX_MODEL,
+    ),
     reasoningEffort: expectEnum(
       val as Record<string, unknown>,
       'reasoningEffort',
@@ -173,6 +177,18 @@ function expectString(
     throw new ConfigValidationError(`"${key}" must be a string`);
   }
   return obj[key] as string;
+}
+
+function expectNonEmptyString(
+  obj: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string {
+  const value = expectString(obj, key, fallback).trim();
+  if (!value) {
+    throw new ConfigValidationError(`"${key}" must be a non-empty string`);
+  }
+  return value;
 }
 
 function expectOptionalString(

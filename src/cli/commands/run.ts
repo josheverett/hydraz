@@ -96,6 +96,10 @@ export function registerRunCommand(program: Command): void {
         console.error(`Invalid sandbox mode: "${options.sandbox}".`);
         return;
       }
+      if (options.model !== undefined && !options.model.trim()) {
+        console.error('Invalid Codex model: expected a non-empty value.');
+        return;
+      }
       if (options.reasoningEffort && !CODEX_REASONING_EFFORTS.includes(options.reasoningEffort)) {
         console.error(`Invalid reasoning effort: "${options.reasoningEffort}".`);
         return;
@@ -147,7 +151,7 @@ export function registerRunCommand(program: Command): void {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
       }, {
-        model: options.model,
+        model: options.model?.trim(),
         reasoningEffort: options.reasoningEffort,
         speed: options.speed,
         sandbox: options.sandbox,
