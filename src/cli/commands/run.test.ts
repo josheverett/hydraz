@@ -47,7 +47,14 @@ const testConfig = {
   executionTarget: 'cloud' as const,
   branchNaming: { prefix: 'hydraz/' },
   github: {},
-  codex: { command: 'codex', sandbox: 'workspace-write' as const, search: false },
+  codex: {
+    command: 'codex',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'ultra' as const,
+    speed: 'fast' as const,
+    sandbox: 'workspace-write' as const,
+    search: false,
+  },
   retention: { keepTranscripts: false, keepTestLogs: false },
   displayVerbosity: 'compact' as const,
 };

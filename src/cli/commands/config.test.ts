@@ -11,16 +11,22 @@ vi.mock('@inquirer/prompts', () => ({
   input: vi.fn(),
 }));
 
-vi.mock('../../core/config/index.js', () => ({
-  loadConfig: vi.fn(),
-  saveConfig: vi.fn(),
-  configExists: vi.fn(),
-  initializeConfigDir: vi.fn(),
-}));
+vi.mock('../../core/config/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/config/index.js')>();
+  return {
+    ...actual,
+    loadConfig: vi.fn(),
+    saveConfig: vi.fn(),
+    configExists: vi.fn(),
+    initializeConfigDir: vi.fn(),
+  };
+});
 
 describe('configMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(select).mockReset();
+    vi.mocked(input).mockReset();
     vi.mocked(loadConfig).mockReturnValue(createDefaultConfig());
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });

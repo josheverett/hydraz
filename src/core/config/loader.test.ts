@@ -84,7 +84,11 @@ describe('saveConfig', () => {
       legacyAuth: { mode: 'api-key', apiKey: 'sk-test' },
       branchNaming: { prefix: 'hydraz/' },
       github: {},
-      codex: { command: 'codex', sandbox: 'workspace-write', search: false },
+      codex: {
+        command: 'codex',
+        sandbox: 'workspace-write',
+        search: false,
+      },
       retention: { keepTranscripts: false, keepTestLogs: false },
       displayVerbosity: 'compact',
     }));
@@ -93,7 +97,14 @@ describe('saveConfig', () => {
 
     expect(loaded['legacyAuth']).toBeUndefined();
     expect(loaded['legacyAgents']).toBeUndefined();
-    expect(loaded['codex']).toEqual({ command: 'codex', sandbox: 'workspace-write', search: false });
+    expect(loaded['codex']).toEqual({
+      command: 'codex',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra',
+      speed: 'fast',
+      sandbox: 'workspace-write',
+      search: false,
+    });
   });
 
   it('sets config file permissions to 0600 (owner-only)', () => {
