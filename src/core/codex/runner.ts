@@ -11,6 +11,10 @@ import { finalizeCodexDelivery } from './delivery.js';
 import type { WorkspaceProvider } from '../providers/provider.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import { redactSecrets } from '../display/sanitize.js';
+import {
+  verifyCodexRollout,
+  type CodexRolloutVerification,
+} from './rollout.js';
 
 export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
@@ -53,6 +57,7 @@ export interface CodexRunnerResult {
   stderrPath: string;
   finalPath: string;
   resultPath: string;
+  rolloutVerification: CodexRolloutVerification;
   delivery?: CodexDeliveryResult;
   error?: string;
 }
@@ -176,6 +181,15 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       writeFileSync(finalPath, redactedFinalMessage, { mode: 0o600 });
     }
   }
+  const rolloutVerification = verifyCodexRollout({
+    codexHome: options.codexHome,
+    threadId,
+    expected: {
+      model,
+      reasoningEffort,
+      serviceTier: speed === 'fast' ? 'priority' : 'default',
+    },
+  });
 
   const result: CodexRunnerResult = {
     success: exitCode === 0,
@@ -185,6 +199,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     stderrPath,
     finalPath,
     resultPath,
+    rolloutVerification,
     error: exitCode === 0 ? undefined : `Codex exited with code ${exitCode}`,
   };
 

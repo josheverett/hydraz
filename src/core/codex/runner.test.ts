@@ -29,6 +29,7 @@ import {
   CODEX_RESULT_FILE,
   CODEX_STDERR_FILE,
   executeCodexRunner,
+  type CodexRunnerOptions,
 } from './runner.js';
 
 const tempRoots: string[] = [];
@@ -67,7 +68,7 @@ function writeRollout(
   return rolloutPath;
 }
 
-function makeOptions(root: string, codexCommand: string) {
+function makeOptions(root: string, codexCommand: string): CodexRunnerOptions {
   const config = createDefaultConfig();
   config.codex.command = codexCommand;
   return {
