@@ -579,6 +579,47 @@ describe('Codex controller', () => {
     });
   });
 
+  it.each(['local', 'cloud'] as const)(
+    'uses an attempt-specific artifact directory for %s resumes',
+    async (executionTarget) => {
+      const session = executionTarget === 'local'
+        ? makeLocalSession('attempt-dir-local')
+        : makeSession('attempt-dir-cloud');
+      transitionState(repoRoot, session.id, 'starting');
+      transitionState(repoRoot, session.id, 'failed', 'retry');
+      const oldCodexDir = executionTarget === 'local'
+        ? `${repoRoot}/.hydraz-test/sessions/${session.id}/codex`
+        : `/tmp/hydraz-codex/${session.id}`;
+      const stored = loadSession(repoRoot, session.id);
+      stored.workspaceDir = executionTarget === 'local'
+        ? '/tmp/hydraz-worktrees/local'
+        : '/workspaces/hydraz-test';
+      stored.codex = {
+        attemptId: 'attempt-old',
+        threadId: 'thread-attempt-dir',
+        requestedConfig: {
+          model: 'gpt-5.6-sol',
+          reasoningEffort: 'ultra',
+          speed: 'fast',
+        },
+        codexDir: oldCodexDir,
+        resultPath: `${oldCodexDir}/result.json`,
+      };
+      saveSession(repoRoot, stored);
+
+      await resumeSession(session.id, repoRoot, {}, { prompt: 'Continue' });
+
+      const resumed = loadSession(repoRoot, session.id);
+      expect(resumed.codex?.attemptId).toEqual(expect.any(String));
+      expect(resumed.codex?.attemptId).not.toBe('attempt-old');
+      expect(resumed.codex?.codexDir).toContain(resumed.codex?.attemptId);
+      expect(resumed.codex?.resultPath).toBe(
+        `${resumed.codex?.codexDir}/result.json`,
+      );
+      expect(resumed.codex?.resultPath).not.toBe(`${oldCodexDir}/result.json`);
+    },
+  );
+
   it('preserves explicit sandbox overrides for cloud Codex runs', async () => {
     const session = makeSession('cloud-sandbox-override');
 
