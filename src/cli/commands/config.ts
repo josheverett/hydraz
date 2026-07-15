@@ -6,6 +6,11 @@ import {
   configExists,
   initializeConfigDir,
   type ExecutionTarget,
+  type CodexReasoningEffort,
+  type CodexSpeed,
+  CODEX_REASONING_EFFORTS,
+  CODEX_SPEEDS,
+  DEFAULT_CODEX_MODEL,
 } from '../../core/config/index.js';
 
 type CodexSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
@@ -40,6 +45,8 @@ export async function configMenu(): Promise<void> {
       { name: 'Set default execution target', value: 'execution-target' as const },
       { name: 'Set Codex command', value: 'codex-command' as const },
       { name: 'Set Codex model', value: 'codex-model' as const },
+      { name: 'Set Codex reasoning effort', value: 'codex-reasoning-effort' as const },
+      { name: 'Set Codex speed', value: 'codex-speed' as const },
       { name: 'Set Codex sandbox', value: 'codex-sandbox' as const },
       { name: 'Set GitHub push/PR auth', value: 'github-auth' as const },
       { name: 'Exit', value: 'exit' as const },
@@ -58,6 +65,12 @@ export async function configMenu(): Promise<void> {
       break;
     case 'codex-model':
       await setCodexModel();
+      break;
+    case 'codex-reasoning-effort':
+      await setCodexReasoningEffort();
+      break;
+    case 'codex-speed':
+      await setCodexSpeed();
       break;
     case 'codex-sandbox':
       await setCodexSandbox();
@@ -79,6 +92,8 @@ function viewConfig(): void {
   console.log(`  Branch prefix:     ${config.branchNaming.prefix}`);
   console.log(`  Codex command:     ${config.codex.command}`);
   console.log(`  Codex model:       ${config.codex.model ?? 'default'}`);
+  console.log(`  Codex reasoning:   ${config.codex.reasoningEffort}`);
+  console.log(`  Codex speed:       ${config.codex.speed}`);
   console.log(`  Codex sandbox:     ${config.codex.sandbox}`);
   console.log(`  Codex search:      ${config.codex.search}`);
   console.log(`  GitHub token:      ${config.github.token ? 'configured' : 'not set'}`);
@@ -124,8 +139,36 @@ async function setCodexModel(): Promise<void> {
   if (model.trim()) {
     config.codex.model = model.trim();
   } else {
-    delete config.codex.model;
+    config.codex.model = DEFAULT_CODEX_MODEL;
   }
+  saveConfig(config);
+}
+
+async function setCodexReasoningEffort(): Promise<void> {
+  const config = loadConfig();
+  const reasoningEffort = await select({
+    message: 'Codex reasoning effort',
+    choices: CODEX_REASONING_EFFORTS.map((effort) => ({
+      name: effort,
+      value: effort as CodexReasoningEffort,
+    })),
+    default: config.codex.reasoningEffort,
+  });
+  config.codex.reasoningEffort = reasoningEffort;
+  saveConfig(config);
+}
+
+async function setCodexSpeed(): Promise<void> {
+  const config = loadConfig();
+  const speed = await select({
+    message: 'Codex speed',
+    choices: CODEX_SPEEDS.map((value) => ({
+      name: value,
+      value: value as CodexSpeed,
+    })),
+    default: config.codex.speed,
+  });
+  config.codex.speed = speed;
   saveConfig(config);
 }
 

@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +29,7 @@ import {
   CODEX_RESULT_FILE,
   CODEX_STDERR_FILE,
   executeCodexRunner,
+  type CodexRunnerOptions,
 } from './runner.js';
 
 const tempRoots: string[] = [];
@@ -43,7 +53,22 @@ function makeFakeCodex(root: string, body: string): string {
   return file;
 }
 
-function makeOptions(root: string, codexCommand: string) {
+function writeRollout(
+  codexHome: string,
+  threadId: string,
+  items: Array<Record<string, unknown>>,
+): string {
+  const sessionsDir = join(codexHome, 'sessions', '2026', '07', '15');
+  mkdirSync(sessionsDir, { recursive: true });
+  const rolloutPath = join(sessionsDir, `rollout-${threadId}.jsonl`);
+  writeFileSync(
+    rolloutPath,
+    items.map((item) => JSON.stringify(item)).join('\n') + '\n',
+  );
+  return rolloutPath;
+}
+
+function makeOptions(root: string, codexCommand: string): CodexRunnerOptions {
   const config = createDefaultConfig();
   config.codex.command = codexCommand;
   return {
@@ -93,11 +118,269 @@ process.exit(9);
 `);
 
     const result = await executeCodexRunner(makeOptions(root, codex));
+    const evidence = JSON.parse(
+      readFileSync(join(root, 'codex', 'invocation.json'), 'utf-8'),
+    ) as { spawnState: string; exitCode: number };
 
     expect(result.success).toBe(false);
     expect(result.exitCode).toBe(9);
     expect(result.threadId).toBe('thread-fail');
+    expect(evidence.spawnState).toBe('exited');
+    expect(evidence.exitCode).toBe(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
+  });
+
+  it('persists an attempt-bound failed result when Codex cannot spawn', async () => {
+    const root = makeTempRoot();
+    const options = makeOptions(root, join(root, 'missing-codex'));
+    options.attemptId = 'attempt-spawn-failed';
+
+    await expect(executeCodexRunner(options)).resolves.toMatchObject({
+      attemptId: 'attempt-spawn-failed',
+      success: false,
+      exitCode: null,
+      invocationEvidence: {
+        attemptId: 'attempt-spawn-failed',
+        spawnState: 'spawn-failed',
+      },
+    });
+
+    const result = JSON.parse(
+      readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8'),
+    ) as Record<string, unknown>;
+    expect(result).toMatchObject({
+      attemptId: 'attempt-spawn-failed',
+      success: false,
+      exitCode: null,
+      invocationEvidence: {
+        attemptId: 'attempt-spawn-failed',
+        spawnState: 'spawn-failed',
+      },
+    });
+    expect(result['error']).toEqual(expect.stringContaining('missing-codex'));
+    expect(result['invocationEvidence']).not.toHaveProperty('spawnedAt');
+  });
+
+  it('passes every managed model setting to codex exec', async () => {
+    const root = makeTempRoot();
+    const argvFile = join(root, 'argv.json');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+`);
+
+    await executeCodexRunner(makeOptions(root, codex));
+
+    const args = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+    expect(args).toContain('gpt-5.6-sol');
+    expect(args).toContain('model_reasoning_effort="ultra"');
+    expect(args).toContain('features.fast_mode=true');
+    expect(args).toContain('service_tier="priority"');
+  });
+
+  it('records the exact spawned argv without persisting the prompt', async () => {
+    const root = makeTempRoot();
+    const argvFile = join(root, 'argv.json');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence' }));
+`);
+    const options = makeOptions(root, codex);
+    options.goal = 'PROMPT_SECRET_7c493f';
+    options.config.github.token = 'github_pat_evidence_secret';
+
+    const result = await executeCodexRunner(options);
+
+    const invocationPath = join(root, 'codex', 'invocation.json');
+    const serialized = readFileSync(invocationPath, 'utf-8');
+    const evidence = JSON.parse(serialized) as {
+      version: number;
+      mode: string;
+      command: string;
+      args: string[];
+      promptOmitted: boolean;
+      requested: {
+        model: string;
+        reasoningEffort: string;
+        speed: string;
+      };
+      normalized: {
+        fastMode: boolean;
+        serviceTier: string;
+      };
+      preparedAt: string;
+      spawnedAt: string;
+      exitedAt: string;
+      spawnState: string;
+      threadId: string;
+      exitCode: number;
+    };
+    const spawnedArgs = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+
+    expect(evidence.version).toBe(1);
+    expect(evidence.mode).toBe('exec');
+    expect(evidence.command).toBe(codex);
+    expect(evidence.args).toEqual(spawnedArgs.slice(0, -1));
+    expect(evidence.promptOmitted).toBe(true);
+    expect(evidence.requested).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra',
+      speed: 'fast',
+    });
+    expect(evidence.normalized).toEqual({
+      fastMode: true,
+      serviceTier: 'priority',
+    });
+    expect(evidence.preparedAt).toEqual(expect.any(String));
+    expect(evidence.spawnedAt).toEqual(expect.any(String));
+    expect(evidence.exitedAt).toEqual(expect.any(String));
+    expect(evidence.spawnState).toBe('exited');
+    expect(evidence.threadId).toBe('thread-evidence');
+    expect(evidence.exitCode).toBe(0);
+    expect(result.invocationEvidence).toEqual(evidence);
+    expect(spawnedArgs.at(-1)).toContain('PROMPT_SECRET_7c493f');
+    expect(serialized).not.toContain('PROMPT_SECRET_7c493f');
+    expect(serialized).not.toContain('github_pat_evidence_secret');
+    expect(serialized).not.toContain('HYDRAZ_CODEX_RUNNER_OPTIONS');
+    if (process.platform !== 'win32') {
+      expect(statSync(invocationPath).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it('cross-checks the latest Codex rollout turn context', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-match';
+    const codexHome = join(root, 'codex-home');
+    const rolloutPath = writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.5', effort: 'medium' },
+      },
+      {
+        timestamp: '2026-07-15T00:00:01.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.6-sol', effort: 'ultra' },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = codexHome;
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'matched',
+      sourcePath: rolloutPath,
+      observed: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'ultra',
+      },
+      checks: {
+        model: 'matched',
+        reasoningEffort: 'matched',
+        serviceTier: 'unavailable',
+      },
+    }));
+  });
+
+  it('does not reuse pre-resume rollout context when no new context is appended', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-resume-stale';
+    const codexHome = join(root, 'codex-home');
+    writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.6-sol', effort: 'ultra' },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.attemptId = 'attempt-resume';
+    options.codexHome = codexHome;
+    options.resumeThreadId = threadId;
+    options.resumePrompt = 'Continue';
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.rolloutVerification).toMatchObject({
+      attemptId: 'attempt-resume',
+      status: 'unavailable',
+      reason: expect.stringContaining('No new turn_context'),
+    });
+  });
+
+  it('reports rollout mismatches without failing the run', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-mismatch';
+    const codexHome = join(root, 'codex-home');
+    writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: {
+          model: 'gpt-5.5',
+          effort: 'medium',
+          service_tier: 'default',
+        },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = codexHome;
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.success).toBe(true);
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'mismatched',
+      observed: {
+        model: 'gpt-5.5',
+        reasoningEffort: 'medium',
+        serviceTier: 'default',
+      },
+      checks: {
+        model: 'mismatched',
+        reasoningEffort: 'mismatched',
+        serviceTier: 'mismatched',
+      },
+    }));
+  });
+
+  it('reports rollout verification as unavailable when no rollout exists', async () => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({
+        type: 'thread.started',
+        thread_id: 'thread-rollout-missing',
+      }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.codexHome = join(root, 'codex-home');
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.success).toBe(true);
+    expect(result.rolloutVerification).toEqual(expect.objectContaining({
+      status: 'unavailable',
+      checks: {
+        model: 'unavailable',
+        reasoningEffort: 'unavailable',
+        serviceTier: 'unavailable',
+      },
+    }));
   });
 
   it.each([
@@ -250,7 +533,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
 `);
     const options = makeOptions(root, codex);
 
-    await executeCodexRunner({
+    const result = await executeCodexRunner({
       ...options,
       resumeThreadId: 'thread-1',
       resumePrompt: 'Keep going',
@@ -261,12 +544,33 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       '--json',
       '--sandbox',
       'workspace-write',
+      '--model',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort="ultra"',
+      '-c',
+      'features.fast_mode=true',
+      '-c',
+      'service_tier="priority"',
       '-o',
       join(root, 'codex', CODEX_FINAL_FILE),
       'resume',
       'thread-1',
       'Keep going',
     ]);
+    const serialized = readFileSync(join(root, 'codex', 'invocation.json'), 'utf-8');
+    const evidence = JSON.parse(serialized) as {
+      mode: string;
+      args: string[];
+      threadId: string;
+    };
+    expect(evidence.mode).toBe('resume');
+    expect(evidence.args).toEqual(
+      (JSON.parse(readFileSync(argvFile, 'utf-8')) as string[]).slice(0, -1),
+    );
+    expect(evidence.threadId).toBe('thread-1');
+    expect(result.invocationEvidence).toEqual(evidence);
+    expect(serialized).not.toContain('Keep going');
   });
 
   it('passes the configured base branch into delivery', async () => {

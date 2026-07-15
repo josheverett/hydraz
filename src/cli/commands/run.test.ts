@@ -18,11 +18,15 @@ vi.mock('../../core/repo/detect.js', () => ({
   detectRepo: vi.fn(),
 }));
 
-vi.mock('../../core/config/index.js', () => ({
-  configExists: vi.fn(),
-  initializeConfigDir: vi.fn(),
-  loadConfig: vi.fn(),
-}));
+vi.mock('../../core/config/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/config/index.js')>();
+  return {
+    ...actual,
+    configExists: vi.fn(),
+    initializeConfigDir: vi.fn(),
+    loadConfig: vi.fn(),
+  };
+});
 
 vi.mock('../../core/sessions/index.js', () => ({
   createNewSession: vi.fn(),
@@ -47,7 +51,14 @@ const testConfig = {
   executionTarget: 'cloud' as const,
   branchNaming: { prefix: 'hydraz/' },
   github: {},
-  codex: { command: 'codex', sandbox: 'workspace-write' as const, search: false },
+  codex: {
+    command: 'codex',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'ultra' as const,
+    speed: 'fast' as const,
+    sandbox: 'workspace-write' as const,
+    search: false,
+  },
   retention: { keepTranscripts: false, keepTestLogs: false },
   displayVerbosity: 'compact' as const,
 };
@@ -119,5 +130,65 @@ describe('run command', () => {
     expect(createNewSession).not.toHaveBeenCalled();
     expect(startSession).not.toHaveBeenCalled();
     expect(initializeConfigDir).not.toHaveBeenCalled();
+  });
+
+  it('passes managed Codex overrides to the controller', async () => {
+    const program = makeProgram();
+
+    await expect(program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--session',
+      'demo',
+      '--model',
+      'gpt-5.5',
+      '--reasoning-effort',
+      'high',
+      '--speed',
+      'standard',
+      'Do it',
+    ])).resolves.toBeDefined();
+
+    expect(startSession).toHaveBeenCalledWith(
+      'session-1',
+      '/repo',
+      expect.any(Object),
+      expect.objectContaining({
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        speed: 'standard',
+      }),
+    );
+  });
+
+  it.each([
+    ['--reasoning-effort', 'impossible', 'Invalid reasoning effort: "impossible".'],
+    ['--speed', 'ludicrous', 'Invalid Codex speed: "ludicrous". Use standard or fast.'],
+  ])('rejects an invalid %s value', async (flag, value, message) => {
+    const program = makeProgram();
+
+    await program.parseAsync(['node', 'hydraz', 'run', flag, value, 'Do it']);
+
+    expect(console.error).toHaveBeenCalledWith(message);
+    expect(startSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a whitespace-only model override', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--model',
+      '   ',
+      'Do it',
+    ]);
+
+    expect(console.error).toHaveBeenCalledWith(
+      'Invalid Codex model: expected a non-empty value.',
+    );
+    expect(startSession).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { ExecutionTarget } from '../config/schema.js';
+import type { CodexRuntimeConfig, ExecutionTarget } from '../config/schema.js';
+import type { CodexInvocationEvidence } from '../codex/invocation.js';
+import type { CodexRolloutVerification } from '../codex/rollout.js';
 import {
   type SessionState,
   ACTIVE_STATES,
@@ -39,8 +41,13 @@ export interface SessionMetadata {
   blockerMessage?: string;
   failureMessage?: string;
   codex?: {
+    attemptId?: string;
     remotePid?: number;
     threadId?: string;
+    requestedConfig?: CodexRuntimeConfig;
+    invocationPath?: string;
+    invocationEvidence?: CodexInvocationEvidence;
+    rolloutVerification?: CodexRolloutVerification;
     codexDir?: string;
     eventsPath?: string;
     stderrPath?: string;

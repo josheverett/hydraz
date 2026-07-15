@@ -1,10 +1,14 @@
+import type { CodexReasoningEffort, CodexSpeed } from '../config/schema.js';
+
 export type CodexSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
 
 export interface CodexExecCommandOptions {
   codexCommand?: string;
   prompt: string;
   sandbox?: CodexSandbox;
-  model?: string;
+  model: string;
+  reasoningEffort: CodexReasoningEffort;
+  speed: CodexSpeed;
   search?: boolean;
   webSearchMode?: 'disabled' | 'cached' | 'live';
   skipGitRepoCheck?: boolean;
@@ -50,9 +54,15 @@ function baseArgs(options: CodexExecCommandOptions): string[] {
   if (options.skipGitRepoCheck) {
     args.push('--skip-git-repo-check');
   }
-  if (options.model) {
-    args.push('--model', options.model);
+  const model = options.model.trim();
+  if (!model) {
+    throw new Error('Codex model must be a non-empty string');
   }
+  args.push('--model', model);
+  args.push('-c', `model_reasoning_effort=${JSON.stringify(options.reasoningEffort)}`);
+  const fast = options.speed === 'fast';
+  args.push('-c', `features.fast_mode=${fast}`);
+  args.push('-c', `service_tier=${JSON.stringify(fast ? 'priority' : 'default')}`);
   if (options.search !== false) {
     args.push('-c', `web_search_mode=${JSON.stringify(options.webSearchMode ?? 'live')}`);
   }

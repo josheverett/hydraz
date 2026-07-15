@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { registerAttachCommand } from './attach.js';
 import { registerCleanCommand } from './clean.js';
 import { registerConfigCommand } from './config.js';
+import { registerDebugCommand } from './debug.js';
 import { registerLogsCommand } from './logs.js';
 import { registerResumeCommand } from './resume.js';
 import { registerRunCommand } from './run.js';
@@ -19,6 +20,7 @@ export function registerCommands(program: Command): void {
   registerResumeCommand(program);
   registerStopCommand(program);
   registerLogsCommand(program);
+  registerDebugCommand(program);
   registerCleanCommand(program);
   registerShellCommand(program);
 }

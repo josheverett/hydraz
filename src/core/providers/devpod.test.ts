@@ -338,6 +338,25 @@ describe('sshExec', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('connection refused'); });
     expect(() => sshExec('my-workspace', 'echo hello')).toThrow('connection refused');
   });
+
+  it('does not print serialized runner options in verbose SSH diagnostics', () => {
+    mockExecFileSync.mockReturnValue('123\n' as never);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    setVerbose(true);
+
+    sshExec(
+      'my-workspace',
+      `HYDRAZ_CODEX_RUNNER_OPTIONS='${JSON.stringify({
+        goal: 'TOP_SECRET_GOAL',
+        config: { github: { token: 'github_pat_devpod_secret' } },
+      })}' nohup node runner.js`,
+    );
+
+    const output = stderr.mock.calls.map((call) => String(call[0])).join('');
+    expect(output).toContain('HYDRAZ_CODEX_RUNNER_OPTIONS=[OMITTED]');
+    expect(output).not.toContain('TOP_SECRET_GOAL');
+    expect(output).not.toContain('github_pat_devpod_secret');
+  });
 });
 
 describe('devpodSsh', () => {

@@ -1,9 +1,15 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import { createEvent, appendEvent } from '../events/index.js';
-import type { ExecutionTarget } from '../config/schema.js';
+import type {
+  CodexReasoningEffort,
+  CodexRuntimeConfig,
+  CodexSpeed,
+  ExecutionTarget,
+} from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -32,9 +38,11 @@ import { resolvePlaywrightRuntimeArchive } from '../providers/playwright-runtime
 import { processHydrazIncludes } from '../codex/repo-config.js';
 import { buildCodexContainerImportPlan } from '../codex/container-import.js';
 import { findAllOrphanedWorkspaces } from './cleanup.js';
+import { debug } from '../debug.js';
 import {
   CODEX_EVENTS_FILE,
   CODEX_FINAL_FILE,
+  CODEX_INVOCATION_FILE,
   CODEX_RESULT_FILE,
   CODEX_STDERR_FILE,
   type CodexRunnerOptions,
@@ -55,6 +63,8 @@ export interface RunningSession {
 
 export interface SwarmOptions {
   model?: string;
+  reasoningEffort?: CodexReasoningEffort;
+  speed?: CodexSpeed;
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   verbose?: boolean;
@@ -146,6 +156,7 @@ export async function startSession(
 
   const updated = loadSession(repoRoot, sessionId);
   updated.workspaceDir = workspace.directory;
+  updated.codex = { attemptId: randomUUID() };
   saveSession(repoRoot, updated);
   emit(repoRoot, sessionId, callbacks, 'workspace.created', `Workspace: ${workspace.directory}`);
   emit(repoRoot, sessionId, callbacks, 'branch.created', `Branch: ${session.branchName}`);
@@ -177,6 +188,9 @@ async function startCodexRunner(
   options: SwarmOptions & { resumeThreadId?: string; resumePrompt?: string },
   callbacks: ControllerCallbacks,
 ): Promise<NonNullable<SessionMetadata['codex']>> {
+  const attemptId = session.codex?.attemptId;
+  if (!attemptId) throw new Error('Cannot launch Codex runner without an attempt id.');
+
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const distRoot = getDistRoot();
@@ -222,8 +236,12 @@ async function startCodexRunner(
       },
     );
 
-    const codexDir = `/tmp/hydraz-codex/${session.id}`;
+    const codexDir = `/tmp/hydraz-codex/${session.id}/${attemptId}`;
     const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options, codexHome);
+    debugCodexRuntime(
+      runnerOptions,
+      posix.join(codexDir, CODEX_INVOCATION_FILE),
+    );
     const resultPath = `${codexDir}/${CODEX_RESULT_FILE}`;
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
@@ -254,7 +272,10 @@ async function startCodexRunner(
     }
 
     return {
+      attemptId: runnerOptions.attemptId,
       remotePid: pid,
+      requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
+      invocationPath: posix.join(codexDir, CODEX_INVOCATION_FILE),
       codexDir,
       eventsPath: `${codexDir}/${CODEX_EVENTS_FILE}`,
       stderrPath: `${codexDir}/${CODEX_STDERR_FILE}`,
@@ -265,8 +286,9 @@ async function startCodexRunner(
     };
   }
 
-  const codexDir = join(getSessionDir(repoRoot, session.id), 'codex');
+  const codexDir = join(getSessionDir(repoRoot, session.id), 'codex', attemptId);
   const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
+  debugCodexRuntime(runnerOptions, join(codexDir, CODEX_INVOCATION_FILE));
   const runnerScript = join(getDistRoot(), 'core', 'codex', 'runner.js');
   const child = spawn(process.execPath, [runnerScript], {
     cwd: workspace.directory,
@@ -280,7 +302,10 @@ async function startCodexRunner(
   child.unref();
 
   return {
+    attemptId: runnerOptions.attemptId,
     remotePid: child.pid,
+    requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
+    invocationPath: join(codexDir, CODEX_INVOCATION_FILE),
     codexDir,
     eventsPath: join(codexDir, CODEX_EVENTS_FILE),
     stderrPath: join(codexDir, CODEX_STDERR_FILE),
@@ -315,8 +340,22 @@ function buildRunnerOptions(
       ? 'danger-full-access'
       : undefined
   );
+  const pinnedConfig = options.resumeThreadId ? session.codex?.requestedConfig : undefined;
+  const requestedConfig: CodexRuntimeConfig = {
+    model: options.model ?? pinnedConfig?.model ?? loadedConfig.codex.model,
+    reasoningEffort:
+      options.reasoningEffort
+      ?? pinnedConfig?.reasoningEffort
+      ?? loadedConfig.codex.reasoningEffort,
+    speed: options.speed ?? pinnedConfig?.speed ?? loadedConfig.codex.speed,
+  };
+  const attemptId = session.codex?.attemptId;
+  if (!attemptId) {
+    throw new Error('Cannot launch Codex runner without an attempt id.');
+  }
 
   return {
+    attemptId,
     repoRoot: workspace.directory,
     sessionId: session.id,
     sessionName: session.name,
@@ -327,7 +366,7 @@ function buildRunnerOptions(
     codexDir,
     ...(codexHome === undefined ? {} : { codexHome }),
     config,
-    model: options.model,
+    ...requestedConfig,
     sandbox,
     search: options.search ?? true,
     skipGitRepoCheck: isContainerExecutionTarget(session.executionTarget),
@@ -340,6 +379,24 @@ function buildRunnerOptions(
       keepWorkspace: options.keepWorkspace ?? false,
     },
   };
+}
+
+function runtimeConfigFromRunnerOptions(options: CodexRunnerOptions): CodexRuntimeConfig {
+  return {
+    model: options.model ?? options.config.codex.model,
+    reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
+    speed: options.speed ?? options.config.codex.speed,
+  };
+}
+
+function debugCodexRuntime(options: CodexRunnerOptions, invocationPath: string): void {
+  const config = runtimeConfigFromRunnerOptions(options);
+  const serviceTier = config.speed === 'fast' ? 'priority' : 'default';
+  debug(
+    `Codex runtime: model=${config.model} reasoningEffort=${config.reasoningEffort} `
+    + `speed=${config.speed} serviceTier=${serviceTier}`,
+  );
+  debug(`Codex invocation evidence: ${invocationPath}`);
 }
 
 export function refreshSessionStatus(
@@ -371,10 +428,15 @@ export function refreshSessionStatus(
   } catch {
     return session;
   }
+  if (result.attemptId !== session.codex.attemptId) {
+    return session;
+  }
 
   session.codex.threadId = result.threadId;
   session.codex.exitCode = result.exitCode;
   session.codex.delivery = result.delivery;
+  session.codex.invocationEvidence = result.invocationEvidence;
+  session.codex.rolloutVerification = result.rolloutVerification;
   saveSession(repoRoot, session);
 
   if (result.threadId) {
@@ -445,6 +507,15 @@ export async function resumeSession(
 
   transitionState(repoRoot, sessionId, 'created');
   transitionState(repoRoot, sessionId, 'starting');
+  const attempt = loadSession(repoRoot, sessionId);
+  attempt.codex = {
+    attemptId: randomUUID(),
+    threadId: session.codex.threadId,
+    ...(session.codex.requestedConfig
+      ? { requestedConfig: session.codex.requestedConfig }
+      : {}),
+  };
+  saveSession(repoRoot, attempt);
   const workspace: WorkspaceInfo = {
     id: session.id,
     type: session.executionTarget,

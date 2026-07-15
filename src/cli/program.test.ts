@@ -17,6 +17,7 @@ const EXPECTED_COMMANDS = [
   'resume',
   'stop',
   'logs',
+  'debug',
   'clean',
   'shell',
 ] as const;
@@ -27,8 +28,9 @@ describe('createProgram', () => {
     expect(program.name()).toBe('hydraz');
   });
 
-  it('has the correct version from package.json', () => {
+  it('reports the Hydraz 4.1.0 release version from package.json', () => {
     const program = createProgram();
+    expect(packageJson.version).toBe('4.1.0');
     expect(program.version()).toBe(packageJson.version);
   });
 
@@ -81,6 +83,8 @@ describe('createProgram', () => {
     const optionNames = runCmd.options.map((opt) => opt.long);
 
     expect(optionNames).toContain('--model');
+    expect(optionNames).toContain('--reasoning-effort');
+    expect(optionNames).toContain('--speed');
     expect(optionNames).toContain('--sandbox');
     expect(optionNames).toContain('--search');
     expect(optionNames).toContain('--base');
@@ -90,5 +94,26 @@ describe('createProgram', () => {
     expect(optionNames).not.toContain('--workers');
     expect(optionNames).not.toContain('--reviewers');
     expect(optionNames).not.toContain('--parallel');
+  });
+
+  it('resume command exposes managed Codex model options', () => {
+    const program = createProgram();
+    const resumeCmd = program.commands.find((cmd) => cmd.name() === 'resume')!;
+    const optionNames = resumeCmd.options.map((opt) => opt.long);
+
+    expect(optionNames).toEqual(expect.arrayContaining([
+      '--model',
+      '--reasoning-effort',
+      '--speed',
+    ]));
+  });
+
+  it('registers a session diagnostics command', () => {
+    const program = createProgram();
+    const debugCmd = program.commands.find((cmd) => cmd.name() === 'debug');
+
+    expect(debugCmd).toBeDefined();
+    expect(debugCmd!.registeredArguments).toHaveLength(1);
+    expect(debugCmd!.registeredArguments[0].required).toBe(false);
   });
 });

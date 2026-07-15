@@ -36,6 +36,7 @@ hydraz status [session]    # refresh and show session state
 hydraz attach [session]    # show session details and stream remote Codex events
 hydraz logs <session>      # print Codex JSONL events
 hydraz resume <session> "<prompt>"
+hydraz debug [session]     # show prompt-safe invocation and rollout proof
 hydraz stop [session]      # stop the detached runner
 hydraz sessions            # list sessions
 hydraz sessions clear      # clear local Hydraz sessions for this repo
@@ -52,6 +53,8 @@ hydraz config              # configure Codex/GitHub defaults
 | `--branch <name>` | Branch name |
 | `--base <branch>` | Base branch for workspace creation and PR delivery |
 | `--model <model>` | Pass a model override to Codex |
+| `--reasoning-effort <effort>` | Override Codex reasoning effort |
+| `--speed <speed>` | `fast` or `standard` |
 | `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`; container/cloud runs default Codex to `danger-full-access` inside the DevPod boundary |
 | `--search` | Enable live Codex web search; currently enabled by default via Codex config overrides |
 | `--no-push` | Do not push after Codex completes |
@@ -64,6 +67,41 @@ hydraz config              # configure Codex/GitHub defaults
 | `--verbose` | Enable diagnostic output with known token/API-key values redacted |
 
 Use `--base <branch>` when the session should branch from and open its PR against a branch other than the repository default, for example `hydraz run --base staging "Update the demo"`.
+
+`hydraz resume` accepts the same `--model`, `--reasoning-effort`, and `--speed`
+overrides.
+
+## Managed Codex Runtime Settings
+
+Hydraz owns the model settings used for every Codex run instead of relying on
+ambient Codex defaults. Fresh and legacy Hydraz configs resolve to:
+
+```json
+{
+  "codex": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "ultra",
+    "speed": "fast"
+  }
+}
+```
+
+Use `hydraz config` to view or change these values. Global settings are stored
+in `~/.config/hydraz/config.json`.
+
+Resolution precedence is:
+
+1. `hydraz run` or `hydraz resume` flags
+2. settings pinned to the session being resumed
+3. global Hydraz config
+4. the Sol/Ultra/Fast built-in defaults
+
+Hydraz pins the resolved values in session metadata. A resume therefore keeps
+the original model configuration unless the resume command explicitly
+overrides it. Host Codex config and `.hydraz/codex.container.toml` remain
+available for unrelated preferences, but cannot override these managed values.
+
+Hydraz 4.1 requires Codex CLI 0.144.0 or newer for the GPT-5.6 Sol defaults.
 
 ## Repo Configuration
 
@@ -110,13 +148,41 @@ Hydraz runs Codex non-interactively through `codex exec`. For container and clou
 codex exec \
   --json \
   --sandbox danger-full-access \
+  --model gpt-5.6-sol \
   --skip-git-repo-check \
+  -c 'model_reasoning_effort="ultra"' \
+  -c 'features.fast_mode=true' \
+  -c 'service_tier="priority"' \
   -c 'web_search_mode="live"' \
   -o final.md \
   "<goal prompt>"
 ```
 
-Hydraz intentionally does not pass `codex exec --search`; in Codex CLI 0.143.x that flag belongs to the interactive entrypoint, not `exec`. Live web search is enabled for `exec` with the `web_search_mode` config override instead.
+`fast` maps to `features.fast_mode=true` and `service_tier="priority"`.
+`standard` explicitly maps to `features.fast_mode=false` and
+`service_tier="default"`.
+
+Hydraz intentionally does not pass `codex exec --search`; live web search is
+enabled for `exec` with the `web_search_mode` config override instead.
+
+## Invocation Diagnostics
+
+Each runner writes `codex/invocation.json` from the same command object passed
+to `spawn()`. It records the exact non-prompt argv, requested and normalized
+model settings, mode, timestamps, spawn state, Codex thread id, and exit code.
+The goal or resume prompt is omitted. Completed runner results embed the same
+evidence so it remains available after a remote workspace is destroyed.
+
+Use `hydraz debug [session]` to inspect:
+
+- **Invocation proof**: what Hydraz passed to the Codex process
+- **Codex self-recorded proof**: best-effort model and reasoning values from the
+  matching Codex rollout `turn_context`
+- **Backend routing**: explicitly reported as not externally verifiable
+
+Rollout formats are internal to Codex. Missing or changed data is reported as
+`unavailable` and never fails a run. Service tier is compared only when Codex
+records it.
 
 ## Single Executable
 
@@ -126,7 +192,7 @@ The SEA build smoke checks `hydraz --version` plus both embedded container paylo
 
 ## Secret Redaction
 
-Hydraz redacts known secret formats before writing verbose debug output or session events. This includes GitHub token prefixes such as `github_pat_` and `ghp_`, OpenAI-style `sk-...` keys, authorization header values, and token-like JSON/env fields.
+Hydraz redacts known secret formats before writing verbose debug output or session events. This includes GitHub token prefixes such as `github_pat_` and `ghp_`, OpenAI-style `sk-...` keys, authorization header values, and token-like JSON/env fields. Serialized `HYDRAZ_CODEX_RUNNER_OPTIONS` values are omitted entirely from verbose SSH command output.
 
 Redaction is applied only at logging and local event persistence boundaries. Runtime values passed to DevPod, GitHub, Codex, and subprocess environments are not modified.
 
@@ -141,13 +207,14 @@ Hydraz stores local session metadata under:
   session.json
   events.jsonl
   codex/
+    invocation.json
     events.jsonl
     stderr.log
     final.md
     result.json
 ```
 
-For container/cloud sessions, Codex artifacts live in the remote workspace under `/tmp/hydraz-codex/<session-id>/` and the local `session.json` records their paths plus the detached runner PID, Codex thread id, delivery result, and PR URL when delivery succeeds.
+For container/cloud sessions, Codex artifacts live in the remote workspace under `/tmp/hydraz-codex/<session-id>/` and the local `session.json` records their paths plus the detached runner PID, requested model settings, prompt-safe invocation evidence, rollout verification, Codex thread id, delivery result, and PR URL when delivery succeeds.
 
 Successful delivery may clean up the remote DevPod workspace. After cleanup, commands that need remote artifacts, such as `hydraz logs`, can no longer SSH to those paths. Use `hydraz attach`/`hydraz logs` while a session is active, and use `hydraz status <session>` after completion to refresh local delivery metadata.
 

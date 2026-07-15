@@ -26,7 +26,8 @@ export function debug(msg: string): void {
 
 export function debugExec(cmd: string, args: string[]): void {
   if (!verbose) return;
-  process.stderr.write(`[debug ${ts()}] ${redactSecrets(`exec: ${cmd} ${args.join(' ')}`)}\n`);
+  const safeArgs = args.map(omitSerializedRunnerOptions);
+  process.stderr.write(`[debug ${ts()}] ${redactSecrets(`exec: ${cmd} ${safeArgs.join(' ')}`)}\n`);
 }
 
 export function debugOutput(label: string, output: string): void {
@@ -37,4 +38,11 @@ export function debugOutput(label: string, output: string): void {
 export function debugTiming(label: string, ms: number): void {
   if (!verbose) return;
   process.stderr.write(`[debug ${ts()}] ${redactSecrets(label)}: ${ms}ms\n`);
+}
+
+function omitSerializedRunnerOptions(arg: string): string {
+  const marker = 'HYDRAZ_CODEX_RUNNER_OPTIONS=';
+  const markerIndex = arg.indexOf(marker);
+  if (markerIndex === -1) return arg;
+  return `${arg.slice(0, markerIndex)}${marker}[OMITTED]`;
 }

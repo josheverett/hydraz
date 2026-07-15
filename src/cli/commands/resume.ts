@@ -4,6 +4,12 @@ import { detectRepo } from '../../core/repo/detect.js';
 import { listSessions, findSessionByName } from '../../core/sessions/index.js';
 import { resumeSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
+import {
+  CODEX_REASONING_EFFORTS,
+  CODEX_SPEEDS,
+  type CodexReasoningEffort,
+  type CodexSpeed,
+} from '../../core/config/index.js';
 
 export function registerResumeCommand(program: Command): void {
   program
@@ -11,8 +17,20 @@ export function registerResumeCommand(program: Command): void {
     .description('Resume a preserved Codex session with a follow-up prompt')
     .argument('[session]', 'Session name (prompted if not provided)')
     .argument('[prompt]', 'Prompt to send to codex exec resume')
+    .option('--model <model>', 'Codex model override')
+    .option('--reasoning-effort <effort>', 'Codex reasoning effort override')
+    .option('--speed <speed>', 'Codex speed override: standard or fast')
     .option('--verbose', 'Enable diagnostic output')
-    .action(async (sessionName: string | undefined, prompt: string | undefined, options: { verbose?: boolean }) => {
+    .action(async (
+      sessionName: string | undefined,
+      prompt: string | undefined,
+      options: {
+        model?: string;
+        reasoningEffort?: CodexReasoningEffort;
+        speed?: CodexSpeed;
+        verbose?: boolean;
+      },
+    ) => {
       if (options.verbose) setVerbose(true);
 
       const repo = detectRepo();
@@ -23,6 +41,18 @@ export function registerResumeCommand(program: Command): void {
 
       if (!prompt?.trim()) {
         console.error('A resume prompt is required.');
+        return;
+      }
+      if (options.model !== undefined && !options.model.trim()) {
+        console.error('Invalid Codex model: expected a non-empty value.');
+        return;
+      }
+      if (options.reasoningEffort && !CODEX_REASONING_EFFORTS.includes(options.reasoningEffort)) {
+        console.error(`Invalid reasoning effort: "${options.reasoningEffort}".`);
+        return;
+      }
+      if (options.speed && !CODEX_SPEEDS.includes(options.speed)) {
+        console.error(`Invalid Codex speed: "${options.speed}". Use standard or fast.`);
         return;
       }
 
@@ -36,7 +66,13 @@ export function registerResumeCommand(program: Command): void {
         await resumeSession(session.id, repo.root, {
           onStreamLine: (line) => console.log(line),
           onError: (msg) => console.error(msg),
-        }, { verbose: options.verbose, prompt });
+        }, {
+          verbose: options.verbose,
+          prompt,
+          model: options.model?.trim(),
+          reasoningEffort: options.reasoningEffort,
+          speed: options.speed,
+        });
         return;
       }
 
@@ -57,6 +93,12 @@ export function registerResumeCommand(program: Command): void {
       await resumeSession(chosen, repo.root, {
         onStreamLine: (line) => console.log(line),
         onError: (msg) => console.error(msg),
-      }, { verbose: options.verbose, prompt });
+      }, {
+        verbose: options.verbose,
+        prompt,
+        model: options.model?.trim(),
+        reasoningEffort: options.reasoningEffort,
+        speed: options.speed,
+      });
     });
 }

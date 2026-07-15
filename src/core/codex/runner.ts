@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +12,18 @@ import { finalizeCodexDelivery } from './delivery.js';
 import type { WorkspaceProvider } from '../providers/provider.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import { redactSecrets } from '../display/sanitize.js';
+import {
+  captureCodexRolloutCheckpoint,
+  verifyCodexRollout,
+  type CodexRolloutVerification,
+} from './rollout.js';
+import {
+  CODEX_INVOCATION_FILE,
+  createCodexInvocationRecorder,
+  type CodexInvocationEvidence,
+} from './invocation.js';
+
+export { CODEX_INVOCATION_FILE } from './invocation.js';
 
 export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
@@ -18,6 +31,7 @@ export const CODEX_STDERR_FILE = 'stderr.log';
 export const CODEX_FINAL_FILE = 'final.md';
 
 export interface CodexRunnerOptions {
+  attemptId?: string;
   repoRoot: string;
   sessionId: string;
   sessionName: string;
@@ -29,6 +43,8 @@ export interface CodexRunnerOptions {
   codexHome?: string;
   config: HydrazConfig;
   model?: string;
+  reasoningEffort?: HydrazConfig['codex']['reasoningEffort'];
+  speed?: HydrazConfig['codex']['speed'];
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   skipGitRepoCheck?: boolean;
@@ -43,6 +59,7 @@ export interface CodexRunnerOptions {
 }
 
 export interface CodexRunnerResult {
+  attemptId: string;
   success: boolean;
   threadId?: string;
   exitCode: number | null;
@@ -50,11 +67,14 @@ export interface CodexRunnerResult {
   stderrPath: string;
   finalPath: string;
   resultPath: string;
+  invocationEvidence: CodexInvocationEvidence;
+  rolloutVerification: CodexRolloutVerification;
   delivery?: CodexDeliveryResult;
   error?: string;
 }
 
 export async function executeCodexRunner(options: CodexRunnerOptions): Promise<CodexRunnerResult> {
+  const attemptId = options.attemptId ?? randomUUID();
   mkdirSync(options.codexDir, { recursive: true, mode: 0o700 });
 
   const eventsPath = join(options.codexDir, CODEX_EVENTS_FILE);
@@ -71,6 +91,11 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   const prompt = options.resumeThreadId
     ? (options.resumePrompt ?? options.goal)
     : buildGoalPrompt(options.goal, repoPrompt);
+  const sandbox = options.sandbox ?? options.config.codex.sandbox;
+  const model = options.model ?? options.config.codex.model;
+  const reasoningEffort = options.reasoningEffort ?? options.config.codex.reasoningEffort;
+  const speed = options.speed ?? options.config.codex.speed;
+  const search = options.search ?? options.config.codex.search;
 
   const command = options.resumeThreadId
     ? buildCodexResumeCommand({
@@ -78,20 +103,33 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         threadId: options.resumeThreadId,
         prompt,
         outputLastMessagePath: finalPath,
-        sandbox: options.sandbox ?? options.config.codex.sandbox,
-        model: options.model ?? options.config.codex.model,
-        search: options.search ?? options.config.codex.search,
+        sandbox,
+        model,
+        reasoningEffort,
+        speed,
+        search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       })
     : buildCodexExecCommand({
         codexCommand: options.config.codex.command,
         prompt,
         outputLastMessagePath: finalPath,
-        sandbox: options.sandbox ?? options.config.codex.sandbox,
-        model: options.model ?? options.config.codex.model,
-        search: options.search ?? options.config.codex.search,
+        sandbox,
+        model,
+        reasoningEffort,
+        speed,
+        search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       });
+  const invocation = createCodexInvocationRecorder({
+    attemptId,
+    codexDir: options.codexDir,
+    mode: options.resumeThreadId ? 'resume' : 'exec',
+    command,
+    prompt,
+    requested: { model, reasoningEffort, speed },
+    threadId: options.resumeThreadId,
+  });
 
   let threadId: string | undefined = options.resumeThreadId;
   const codexEnv = { ...process.env };
@@ -99,15 +137,33 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   if (options.codexHome !== undefined) {
     codexEnv.CODEX_HOME = options.codexHome;
   }
+  const rolloutCheckpoint = options.resumeThreadId
+    ? captureCodexRolloutCheckpoint({
+        codexHome: options.codexHome,
+        threadId: options.resumeThreadId,
+      })
+    : undefined;
 
-  const exitCode = await new Promise<number | null>((resolve, reject) => {
+  let spawnError: string | undefined;
+  const exitCode = await new Promise<number | null>((resolve) => {
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: codexEnv,
     });
+    let finished = false;
 
-    child.on('error', reject);
+    child.once('spawn', () => {
+      invocation.markSpawned();
+    });
+
+    child.once('error', (error) => {
+      if (finished) return;
+      finished = true;
+      spawnError = error.message;
+      invocation.markSpawnFailed();
+      resolve(null);
+    });
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -122,6 +178,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         const parsed = parseCodexJsonLine(line);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
+          invocation.markThreadStarted(parsed.threadId);
         }
         writeFileSync(eventsPath, redactSecrets(line) + '\n', { flag: 'a', mode: 0o600 });
       }
@@ -136,17 +193,21 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       }
     });
 
-    child.on('close', (code) => {
+    child.once('close', (code) => {
+      if (finished) return;
+      finished = true;
       if (stdoutBuffer.trim()) {
         const parsed = parseCodexJsonLine(stdoutBuffer);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
+          invocation.markThreadStarted(parsed.threadId);
         }
         writeFileSync(eventsPath, redactSecrets(stdoutBuffer.trimEnd()) + '\n', { flag: 'a', mode: 0o600 });
       }
       if (stderrBuffer.length > 0) {
         writeFileSync(stderrPath, redactSecrets(stderrBuffer), { flag: 'a', mode: 0o600 });
       }
+      invocation.markExited(code);
       resolve(code);
     });
   });
@@ -158,16 +219,34 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       writeFileSync(finalPath, redactedFinalMessage, { mode: 0o600 });
     }
   }
+  const rolloutVerification = verifyCodexRollout({
+    attemptId,
+    codexHome: options.codexHome,
+    threadId,
+    checkpoint: rolloutCheckpoint,
+    expected: {
+      model,
+      reasoningEffort,
+      serviceTier: speed === 'fast' ? 'priority' : 'default',
+    },
+  });
 
   const result: CodexRunnerResult = {
-    success: exitCode === 0,
+    attemptId,
+    success: spawnError === undefined && exitCode === 0,
     threadId,
     exitCode,
     eventsPath,
     stderrPath,
     finalPath,
     resultPath,
-    error: exitCode === 0 ? undefined : `Codex exited with code ${exitCode}`,
+    invocationEvidence: invocation.snapshot(),
+    rolloutVerification,
+    error: spawnError
+      ? `Codex spawn failed: ${spawnError}`
+      : exitCode === 0
+        ? undefined
+        : `Codex exited with code ${exitCode}`,
   };
 
   if (result.success && options.delivery?.enabled) {
