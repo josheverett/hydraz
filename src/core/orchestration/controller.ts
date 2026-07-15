@@ -40,6 +40,7 @@ import { findAllOrphanedWorkspaces } from './cleanup.js';
 import {
   CODEX_EVENTS_FILE,
   CODEX_FINAL_FILE,
+  CODEX_INVOCATION_FILE,
   CODEX_RESULT_FILE,
   CODEX_STDERR_FILE,
   type CodexRunnerOptions,
@@ -263,6 +264,7 @@ async function startCodexRunner(
     return {
       remotePid: pid,
       requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
+      invocationPath: posix.join(codexDir, CODEX_INVOCATION_FILE),
       codexDir,
       eventsPath: `${codexDir}/${CODEX_EVENTS_FILE}`,
       stderrPath: `${codexDir}/${CODEX_STDERR_FILE}`,
@@ -290,6 +292,7 @@ async function startCodexRunner(
   return {
     remotePid: child.pid,
     requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
+    invocationPath: join(codexDir, CODEX_INVOCATION_FILE),
     codexDir,
     eventsPath: join(codexDir, CODEX_EVENTS_FILE),
     stderrPath: join(codexDir, CODEX_STDERR_FILE),

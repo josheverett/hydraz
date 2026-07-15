@@ -42,6 +42,7 @@ export interface SessionMetadata {
     remotePid?: number;
     threadId?: string;
     requestedConfig?: CodexRuntimeConfig;
+    invocationPath?: string;
     codexDir?: string;
     eventsPath?: string;
     stderrPath?: string;

@@ -56,6 +56,14 @@ function renderStatus(session: SessionMetadata): void {
   if (session.codex?.remotePid) {
     console.log(`  Runner PID: ${session.codex.remotePid}`);
   }
+  if (session.codex?.requestedConfig) {
+    console.log(`  Codex model: ${session.codex.requestedConfig.model}`);
+    console.log(`  Reasoning:   ${session.codex.requestedConfig.reasoningEffort}`);
+    console.log(`  Speed:       ${session.codex.requestedConfig.speed}`);
+  }
+  if (session.codex?.invocationPath) {
+    console.log(`  Invocation:  ${session.codex.invocationPath}`);
+  }
 
   if (session.blockerMessage) {
     console.log(`  Blocker:    ${session.blockerMessage}`);
