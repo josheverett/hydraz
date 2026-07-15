@@ -64,6 +64,16 @@ function renderStatus(session: SessionMetadata): void {
   if (session.codex?.invocationPath) {
     console.log(`  Invocation:  ${session.codex.invocationPath}`);
   }
+  if (session.codex?.rolloutVerification) {
+    const verification = session.codex.rolloutVerification;
+    console.log(`  Rollout:     ${verification.status}`);
+    console.log(`  Model check: ${verification.checks.model}`);
+    console.log(`  Effort check: ${verification.checks.reasoningEffort}`);
+    console.log(`  Tier check:  ${verification.checks.serviceTier}`);
+    if (verification.reason) {
+      console.log(`  Rollout note: ${verification.reason}`);
+    }
+  }
 
   if (session.blockerMessage) {
     console.log(`  Blocker:    ${session.blockerMessage}`);
