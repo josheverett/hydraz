@@ -98,4 +98,10 @@ describe('validateConfig', () => {
       ConfigValidationError,
     );
   });
+
+  it.each(['', '   '])('rejects an empty Codex model', (model) => {
+    expect(() => validateConfig({ codex: { model } })).toThrow(
+      ConfigValidationError,
+    );
+  });
 });

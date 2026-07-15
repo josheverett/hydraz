@@ -96,4 +96,23 @@ describe('resume command', () => {
     expect(console.error).toHaveBeenCalledWith(message);
     expect(resumeSession).not.toHaveBeenCalled();
   });
+
+  it('rejects a whitespace-only model override', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'resume',
+      'demo',
+      'Continue',
+      '--model',
+      '   ',
+    ]);
+
+    expect(console.error).toHaveBeenCalledWith(
+      'Invalid Codex model: expected a non-empty value.',
+    );
+    expect(resumeSession).not.toHaveBeenCalled();
+  });
 });

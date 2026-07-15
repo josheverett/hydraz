@@ -111,6 +111,15 @@ describe('buildCodexExecCommand', () => {
     expect(command.cmd).toBe('/opt/bin/codex');
     expect(command.args).toContain('danger-full-access');
   });
+
+  it('rejects an empty managed model instead of omitting --model', () => {
+    expect(() => buildCodexExecCommand({
+      ...MANAGED_MODEL,
+      model: '   ',
+      prompt: 'Do the work',
+      outputLastMessagePath: '/tmp/final.md',
+    })).toThrow('Codex model must be a non-empty string');
+  });
 });
 
 describe('buildCodexResumeCommand', () => {
