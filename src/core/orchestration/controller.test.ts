@@ -233,7 +233,11 @@ describe('Codex controller', () => {
     expect(loaded.codex).toMatchObject({
       remotePid: 4242,
       resultPath: `/tmp/hydraz-codex/${session.id}/result.json`,
+      attemptId: expect.any(String),
     });
+    expect(getRunnerOptionsFromLaunchCommand(session.id).attemptId).toBe(
+      loaded.codex?.attemptId,
+    );
     expect(vi.mocked(sshExec).mock.calls.some((call) => call[1].includes('nohup node'))).toBe(true);
   });
 
@@ -633,9 +637,13 @@ describe('Codex controller', () => {
     transitionState(repoRoot, session.id, 'syncing');
     const loaded = loadSession(repoRoot, session.id);
     loaded.workspaceDir = '/workspaces/hydraz-test';
-    loaded.codex = { resultPath: '/tmp/hydraz-codex/session/result.json' };
+    loaded.codex = {
+      attemptId: 'attempt-current',
+      resultPath: '/tmp/hydraz-codex/session/result.json',
+    };
     saveSession(repoRoot, loaded);
     vi.mocked(sshExec).mockReturnValueOnce(JSON.stringify({
+      attemptId: 'attempt-current',
       success: true,
       threadId: 'thread-1',
       exitCode: 0,
@@ -644,6 +652,7 @@ describe('Codex controller', () => {
       finalPath: '/tmp/final',
       resultPath: '/tmp/result',
       invocationEvidence: {
+        attemptId: 'attempt-current',
         version: 1,
         mode: 'exec',
         command: 'codex',
@@ -664,6 +673,7 @@ describe('Codex controller', () => {
         exitCode: 0,
       },
       rolloutVerification: {
+        attemptId: 'attempt-current',
         status: 'mismatched',
         checkedAt: '2026-07-15T00:01:00.000Z',
         observed: { model: 'gpt-5.5', reasoningEffort: 'medium' },
@@ -683,6 +693,82 @@ describe('Codex controller', () => {
     expect(refreshed.codex?.rolloutVerification?.status).toBe('mismatched');
   });
 
+  it('clears old proof and ignores a late result from a prior resume attempt', async () => {
+    const session = makeSession('resume-attempt-isolation');
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'failed', 'retry');
+    const stored = loadSession(repoRoot, session.id);
+    stored.workspaceDir = '/workspaces/hydraz-test';
+    stored.codex = {
+      attemptId: 'attempt-old',
+      threadId: 'thread-1',
+      requestedConfig: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'ultra',
+        speed: 'fast',
+      },
+      resultPath: `/tmp/hydraz-codex/${session.id}/result.json`,
+      invocationEvidence: {
+        attemptId: 'attempt-old',
+        version: 1,
+        mode: 'exec',
+        command: 'codex',
+        args: ['exec', '--json'],
+        promptOmitted: true,
+        promptArgumentIndex: 2,
+        requested: {
+          model: 'gpt-5.6-sol',
+          reasoningEffort: 'ultra',
+          speed: 'fast',
+        },
+        normalized: { fastMode: true, serviceTier: 'priority' },
+        preparedAt: '2026-07-15T00:00:00.000Z',
+        spawnState: 'exited',
+      },
+      rolloutVerification: {
+        attemptId: 'attempt-old',
+        status: 'matched',
+        checkedAt: '2026-07-15T00:01:00.000Z',
+        checks: {
+          model: 'matched',
+          reasoningEffort: 'matched',
+          serviceTier: 'unavailable',
+        },
+      },
+    };
+    saveSession(repoRoot, stored);
+
+    await resumeSession(session.id, repoRoot, {}, { prompt: 'Continue' });
+
+    const resumed = loadSession(repoRoot, session.id);
+    expect(resumed.state).toBe('syncing');
+    expect(resumed.codex?.attemptId).toEqual(expect.any(String));
+    expect(resumed.codex?.attemptId).not.toBe('attempt-old');
+    expect(getRunnerOptionsFromLaunchCommand(session.id).attemptId).toBe(
+      resumed.codex?.attemptId,
+    );
+    expect(resumed.codex?.invocationEvidence).toBeUndefined();
+    expect(resumed.codex?.rolloutVerification).toBeUndefined();
+
+    vi.mocked(sshExec).mockReturnValueOnce(JSON.stringify({
+      attemptId: 'attempt-old',
+      success: true,
+      threadId: 'thread-1',
+      exitCode: 0,
+      eventsPath: '/tmp/events',
+      stderrPath: '/tmp/stderr',
+      finalPath: '/tmp/final',
+      resultPath: `/tmp/hydraz-codex/${session.id}/result.json`,
+    }));
+
+    const refreshed = refreshSessionStatus(session.id, repoRoot);
+
+    expect(refreshed.state).toBe('syncing');
+    expect(refreshed.codex?.attemptId).toBe(resumed.codex?.attemptId);
+    expect(refreshed.codex?.invocationEvidence).toBeUndefined();
+    expect(refreshed.codex?.rolloutVerification).toBeUndefined();
+  });
+
   it('refreshes a finished local runner result from disk', () => {
     const session = createNewSession({
       name: 'refresh-local',
@@ -697,6 +783,7 @@ describe('Codex controller', () => {
     const resultPath = `${codexDir}/result.json`;
     mkdirSync(codexDir, { recursive: true });
     writeFileSync(resultPath, JSON.stringify({
+      attemptId: 'attempt-local',
       success: true,
       threadId: 'thread-local',
       exitCode: 0,
@@ -707,7 +794,7 @@ describe('Codex controller', () => {
     }));
     const loaded = loadSession(repoRoot, session.id);
     loaded.workspaceDir = repoRoot;
-    loaded.codex = { resultPath };
+    loaded.codex = { attemptId: 'attempt-local', resultPath };
     saveSession(repoRoot, loaded);
 
     const refreshed = refreshSessionStatus(session.id, repoRoot);

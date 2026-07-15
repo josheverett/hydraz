@@ -41,6 +41,7 @@ vi.mock('../../core/providers/devpod.js', async (importOriginal) => {
 });
 
 const evidence = {
+  attemptId: 'attempt-current',
   version: 1 as const,
   mode: 'exec' as const,
   command: 'codex',
@@ -86,8 +87,10 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     createdAt: '2026-07-15T00:00:00.000Z',
     updatedAt: '2026-07-15T00:01:00.000Z',
     codex: {
+      attemptId: 'attempt-current',
       invocationEvidence: evidence,
       rolloutVerification: {
+        attemptId: 'attempt-current',
         status: 'matched' as const,
         checkedAt: '2026-07-15T00:01:00.000Z',
         observed: {
@@ -217,5 +220,65 @@ describe('debug command', () => {
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
       'Invocation proof: unavailable',
     );
+  });
+
+  it('rejects persisted invocation and rollout proof from another attempt', async () => {
+    const session = makeSession({
+      codex: {
+        attemptId: 'attempt-current',
+        invocationEvidence: {
+          ...evidence,
+          attemptId: 'attempt-old',
+        },
+        rolloutVerification: {
+          attemptId: 'attempt-old',
+          status: 'matched',
+          checkedAt: '2026-07-15T00:01:00.000Z',
+          checks: {
+            model: 'matched',
+            reasoningEffort: 'matched',
+            serviceTier: 'unavailable',
+          },
+        },
+      },
+    });
+    vi.mocked(findSessionByName).mockReturnValue(session);
+    vi.mocked(refreshSessionStatus).mockReturnValue(session);
+
+    await expect(
+      makeProgram().parseAsync(['node', 'hydraz', 'debug', 'demo']),
+    ).resolves.toBeDefined();
+
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('Invocation proof: unavailable');
+    expect(output).toContain('Codex self-recorded: unavailable');
+    expect(output).not.toContain('Invocation proof: proven');
+  });
+
+  it('rejects an invocation artifact from another attempt', async () => {
+    tempRoot = mkdtempSync(join(tmpdir(), 'hydraz-debug-test-'));
+    const invocationPath = join(tempRoot, 'invocation.json');
+    writeFileSync(invocationPath, JSON.stringify({
+      ...evidence,
+      attemptId: 'attempt-old',
+    }));
+    const session = makeSession({
+      executionTarget: 'local',
+      state: 'syncing',
+      codex: {
+        attemptId: 'attempt-current',
+        invocationPath,
+      },
+    });
+    vi.mocked(findSessionByName).mockReturnValue(session);
+    vi.mocked(refreshSessionStatus).mockReturnValue(session);
+
+    await expect(
+      makeProgram().parseAsync(['node', 'hydraz', 'debug', 'demo']),
+    ).resolves.toBeDefined();
+
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('Invocation proof: unavailable');
+    expect(output).not.toContain('Invocation proof: proven');
   });
 });
