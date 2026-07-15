@@ -1,5 +1,22 @@
 export type ExecutionTarget = 'local' | 'local-container' | 'cloud';
 export type DisplayVerbosity = 'compact' | 'tool-results' | 'full';
+export const CODEX_REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra',
+] as const;
+export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
+export const CODEX_SPEEDS = ['standard', 'fast'] as const;
+export type CodexSpeed = (typeof CODEX_SPEEDS)[number];
+
+export const DEFAULT_CODEX_MODEL = 'gpt-5.6-sol';
+export const DEFAULT_CODEX_REASONING_EFFORT: CodexReasoningEffort = 'ultra';
+export const DEFAULT_CODEX_SPEED: CodexSpeed = 'fast';
 
 export interface BranchNamingConfig {
   prefix: string;
@@ -17,6 +34,8 @@ export interface RetentionConfig {
 export interface CodexConfig {
   command: string;
   model?: string;
+  reasoningEffort: CodexReasoningEffort;
+  speed: CodexSpeed;
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
   search: boolean;
 }
@@ -39,6 +58,9 @@ export function createDefaultConfig(): HydrazConfig {
     github: {},
     codex: {
       command: 'codex',
+      model: DEFAULT_CODEX_MODEL,
+      reasoningEffort: DEFAULT_CODEX_REASONING_EFFORT,
+      speed: DEFAULT_CODEX_SPEED,
       sandbox: 'workspace-write',
       search: false,
     },
@@ -75,7 +97,19 @@ export function validateConfig(data: unknown): HydrazConfig {
 
   const codex = expectObject(obj, 'codex', defaults.codex, (val) => ({
     command: expectString(val as Record<string, unknown>, 'command', defaults.codex.command),
-    model: expectOptionalString(val as Record<string, unknown>, 'model'),
+    model: expectString(val as Record<string, unknown>, 'model', DEFAULT_CODEX_MODEL),
+    reasoningEffort: expectEnum(
+      val as Record<string, unknown>,
+      'reasoningEffort',
+      CODEX_REASONING_EFFORTS,
+      DEFAULT_CODEX_REASONING_EFFORT,
+    ),
+    speed: expectEnum(
+      val as Record<string, unknown>,
+      'speed',
+      CODEX_SPEEDS,
+      DEFAULT_CODEX_SPEED,
+    ),
     sandbox: expectEnum(
       val as Record<string, unknown>,
       'sandbox',
