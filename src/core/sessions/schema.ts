@@ -41,12 +41,13 @@ export interface SessionMetadata {
   blockerMessage?: string;
   failureMessage?: string;
   codex?: {
+    attemptId?: string;
     remotePid?: number;
     threadId?: string;
     requestedConfig?: CodexRuntimeConfig;
     invocationPath?: string;
     invocationEvidence?: CodexInvocationEvidence;
-    rolloutVerification?: CodexRolloutVerification;
+    rolloutVerification?: CodexRolloutVerification & { attemptId: string };
     codexDir?: string;
     eventsPath?: string;
     stderrPath?: string;

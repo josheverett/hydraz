@@ -11,6 +11,7 @@ export type CodexInvocationSpawnState =
   | 'spawn-failed';
 
 export interface CodexInvocationEvidence {
+  attemptId: string;
   version: 1;
   mode: 'exec' | 'resume';
   command: string;
@@ -40,6 +41,7 @@ export interface CodexInvocationRecorder {
 }
 
 export function createCodexInvocationRecorder(options: {
+  attemptId: string;
   codexDir: string;
   mode: 'exec' | 'resume';
   command: { cmd: string; args: string[] };
@@ -55,6 +57,7 @@ export function createCodexInvocationRecorder(options: {
   const path = join(options.codexDir, CODEX_INVOCATION_FILE);
   const fastMode = options.requested.speed === 'fast';
   const evidence: CodexInvocationEvidence = {
+    attemptId: options.attemptId,
     version: 1,
     mode: options.mode,
     command: options.command.cmd,

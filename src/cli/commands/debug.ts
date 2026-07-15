@@ -46,7 +46,14 @@ function loadInvocationEvidence(session: SessionMetadata): {
   evidence?: CodexInvocationEvidence;
   error?: string;
 } {
+  const attemptId = session.codex?.attemptId;
+  if (!attemptId) {
+    return { error: 'No Codex attempt id has been recorded.' };
+  }
   if (session.codex?.invocationEvidence) {
+    if (session.codex.invocationEvidence.attemptId !== attemptId) {
+      return { error: 'Persisted invocation evidence belongs to another attempt.' };
+    }
     return { evidence: session.codex.invocationEvidence };
   }
   const path = session.codex?.invocationPath;
@@ -61,6 +68,9 @@ function loadInvocationEvidence(session: SessionMetadata): {
     const parsed = JSON.parse(raw) as unknown;
     if (!isInvocationEvidence(parsed)) {
       return { error: 'Invocation artifact has an unsupported shape.' };
+    }
+    if (parsed.attemptId !== attemptId) {
+      return { error: 'Invocation artifact belongs to another attempt.' };
     }
     return { evidence: parsed };
   } catch (error) {
@@ -96,7 +106,7 @@ function renderDiagnostics(
   }
 
   const rollout = session.codex?.rolloutVerification;
-  if (!rollout) {
+  if (!rollout || rollout.attemptId !== session.codex?.attemptId) {
     safeLog('  Codex self-recorded: unavailable');
   } else {
     safeLog(`  Codex self-recorded: ${rollout.status}`);
@@ -115,6 +125,7 @@ function safeLog(message: string): void {
 
 function isInvocationEvidence(value: unknown): value is CodexInvocationEvidence {
   if (!isRecord(value) || value['version'] !== 1) return false;
+  if (typeof value['attemptId'] !== 'string') return false;
   if (value['mode'] !== 'exec' && value['mode'] !== 'resume') return false;
   if (typeof value['command'] !== 'string') return false;
   if (

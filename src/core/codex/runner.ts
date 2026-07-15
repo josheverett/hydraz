@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +30,7 @@ export const CODEX_STDERR_FILE = 'stderr.log';
 export const CODEX_FINAL_FILE = 'final.md';
 
 export interface CodexRunnerOptions {
+  attemptId?: string;
   repoRoot: string;
   sessionId: string;
   sessionName: string;
@@ -56,6 +58,7 @@ export interface CodexRunnerOptions {
 }
 
 export interface CodexRunnerResult {
+  attemptId: string;
   success: boolean;
   threadId?: string;
   exitCode: number | null;
@@ -64,12 +67,13 @@ export interface CodexRunnerResult {
   finalPath: string;
   resultPath: string;
   invocationEvidence: CodexInvocationEvidence;
-  rolloutVerification: CodexRolloutVerification;
+  rolloutVerification: CodexRolloutVerification & { attemptId: string };
   delivery?: CodexDeliveryResult;
   error?: string;
 }
 
 export async function executeCodexRunner(options: CodexRunnerOptions): Promise<CodexRunnerResult> {
+  const attemptId = options.attemptId ?? randomUUID();
   mkdirSync(options.codexDir, { recursive: true, mode: 0o700 });
 
   const eventsPath = join(options.codexDir, CODEX_EVENTS_FILE);
@@ -117,6 +121,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         skipGitRepoCheck: options.skipGitRepoCheck,
       });
   const invocation = createCodexInvocationRecorder({
+    attemptId,
     codexDir: options.codexDir,
     mode: options.resumeThreadId ? 'resume' : 'exec',
     command,
@@ -197,17 +202,21 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       writeFileSync(finalPath, redactedFinalMessage, { mode: 0o600 });
     }
   }
-  const rolloutVerification = verifyCodexRollout({
-    codexHome: options.codexHome,
-    threadId,
-    expected: {
-      model,
-      reasoningEffort,
-      serviceTier: speed === 'fast' ? 'priority' : 'default',
-    },
-  });
+  const rolloutVerification = {
+    ...verifyCodexRollout({
+      codexHome: options.codexHome,
+      threadId,
+      expected: {
+        model,
+        reasoningEffort,
+        serviceTier: speed === 'fast' ? 'priority' : 'default',
+      },
+    }),
+    attemptId,
+  };
 
   const result: CodexRunnerResult = {
+    attemptId,
     success: exitCode === 0,
     threadId,
     exitCode,

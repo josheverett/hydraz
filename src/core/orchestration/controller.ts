@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { loadConfig } from '../config/index.js';
@@ -155,6 +156,7 @@ export async function startSession(
 
   const updated = loadSession(repoRoot, sessionId);
   updated.workspaceDir = workspace.directory;
+  updated.codex = { attemptId: randomUUID() };
   saveSession(repoRoot, updated);
   emit(repoRoot, sessionId, callbacks, 'workspace.created', `Workspace: ${workspace.directory}`);
   emit(repoRoot, sessionId, callbacks, 'branch.created', `Branch: ${session.branchName}`);
@@ -267,6 +269,7 @@ async function startCodexRunner(
     }
 
     return {
+      attemptId: runnerOptions.attemptId,
       remotePid: pid,
       requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
       invocationPath: posix.join(codexDir, CODEX_INVOCATION_FILE),
@@ -296,6 +299,7 @@ async function startCodexRunner(
   child.unref();
 
   return {
+    attemptId: runnerOptions.attemptId,
     remotePid: child.pid,
     requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
     invocationPath: join(codexDir, CODEX_INVOCATION_FILE),
@@ -342,8 +346,13 @@ function buildRunnerOptions(
       ?? loadedConfig.codex.reasoningEffort,
     speed: options.speed ?? pinnedConfig?.speed ?? loadedConfig.codex.speed,
   };
+  const attemptId = session.codex?.attemptId;
+  if (!attemptId) {
+    throw new Error('Cannot launch Codex runner without an attempt id.');
+  }
 
   return {
+    attemptId,
     repoRoot: workspace.directory,
     sessionId: session.id,
     sessionName: session.name,
@@ -414,6 +423,9 @@ export function refreshSessionStatus(
   try {
     result = JSON.parse(raw) as CodexRunnerResult;
   } catch {
+    return session;
+  }
+  if (result.attemptId !== session.codex.attemptId) {
     return session;
   }
 
@@ -492,6 +504,15 @@ export async function resumeSession(
 
   transitionState(repoRoot, sessionId, 'created');
   transitionState(repoRoot, sessionId, 'starting');
+  const attempt = loadSession(repoRoot, sessionId);
+  attempt.codex = {
+    attemptId: randomUUID(),
+    threadId: session.codex.threadId,
+    ...(session.codex.requestedConfig
+      ? { requestedConfig: session.codex.requestedConfig }
+      : {}),
+  };
+  saveSession(repoRoot, attempt);
   const workspace: WorkspaceInfo = {
     id: session.id,
     type: session.executionTarget,

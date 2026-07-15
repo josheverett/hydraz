@@ -167,7 +167,7 @@ describe('debug command', () => {
     const session = makeSession({
       executionTarget: 'local',
       state: 'syncing',
-      codex: { invocationPath },
+      codex: { attemptId: 'attempt-current', invocationPath },
     });
     vi.mocked(getActiveSessions).mockReturnValue([session]);
     vi.mocked(refreshSessionStatus).mockReturnValue(session);
@@ -185,7 +185,10 @@ describe('debug command', () => {
   it('reads active remote evidence over the workspace connection', async () => {
     const session = makeSession({
       state: 'syncing',
-      codex: { invocationPath: '/tmp/hydraz-codex/session-1/invocation.json' },
+      codex: {
+        attemptId: 'attempt-current',
+        invocationPath: '/tmp/hydraz-codex/session-1/invocation.json',
+      },
     });
     vi.mocked(findSessionByName).mockReturnValue(session);
     vi.mocked(refreshSessionStatus).mockReturnValue(session);
@@ -207,7 +210,10 @@ describe('debug command', () => {
   it('reports malformed evidence as unavailable without throwing', async () => {
     const session = makeSession({
       state: 'syncing',
-      codex: { invocationPath: '/tmp/hydraz-codex/session-1/invocation.json' },
+      codex: {
+        attemptId: 'attempt-current',
+        invocationPath: '/tmp/hydraz-codex/session-1/invocation.json',
+      },
     });
     vi.mocked(findSessionByName).mockReturnValue(session);
     vi.mocked(refreshSessionStatus).mockReturnValue(session);
