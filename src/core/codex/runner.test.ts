@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -115,6 +123,49 @@ fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(
     expect(args).toContain('model_reasoning_effort="ultra"');
     expect(args).toContain('features.fast_mode=true');
     expect(args).toContain('service_tier="priority"');
+  });
+
+  it('records the exact spawned argv without persisting the prompt', async () => {
+    const root = makeTempRoot();
+    const argvFile = join(root, 'argv.json');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+`);
+    const options = makeOptions(root, codex);
+    options.task = 'PROMPT_SECRET_7c493f';
+
+    await executeCodexRunner(options);
+
+    const invocationPath = join(root, 'codex', 'codex-invocation.json');
+    const serialized = readFileSync(invocationPath, 'utf-8');
+    const evidence = JSON.parse(serialized) as {
+      command: string;
+      args: string[];
+      promptOmitted: boolean;
+      resolvedConfig: {
+        model: string;
+        reasoningEffort: string;
+        speed: string;
+        serviceTier: string;
+      };
+    };
+    const spawnedArgs = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+
+    expect(evidence.command).toBe(codex);
+    expect(evidence.args).toEqual(spawnedArgs.slice(0, -1));
+    expect(evidence.promptOmitted).toBe(true);
+    expect(evidence.resolvedConfig).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra',
+      speed: 'fast',
+      serviceTier: 'priority',
+    });
+    expect(spawnedArgs.at(-1)).toContain('PROMPT_SECRET_7c493f');
+    expect(serialized).not.toContain('PROMPT_SECRET_7c493f');
+    if (process.platform !== 'win32') {
+      expect(statSync(invocationPath).mode & 0o777).toBe(0o600);
+    }
   });
 
   it.each([
