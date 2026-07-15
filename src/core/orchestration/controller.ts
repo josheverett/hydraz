@@ -37,6 +37,7 @@ import { resolvePlaywrightRuntimeArchive } from '../providers/playwright-runtime
 import { processHydrazIncludes } from '../codex/repo-config.js';
 import { buildCodexContainerImportPlan } from '../codex/container-import.js';
 import { findAllOrphanedWorkspaces } from './cleanup.js';
+import { debug } from '../debug.js';
 import {
   CODEX_EVENTS_FILE,
   CODEX_FINAL_FILE,
@@ -232,6 +233,10 @@ async function startCodexRunner(
 
     const codexDir = `/tmp/hydraz-codex/${session.id}`;
     const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options, codexHome);
+    debugCodexRuntime(
+      runnerOptions,
+      posix.join(codexDir, CODEX_INVOCATION_FILE),
+    );
     const resultPath = `${codexDir}/${CODEX_RESULT_FILE}`;
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
@@ -277,6 +282,7 @@ async function startCodexRunner(
 
   const codexDir = join(getSessionDir(repoRoot, session.id), 'codex');
   const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
+  debugCodexRuntime(runnerOptions, join(codexDir, CODEX_INVOCATION_FILE));
   const runnerScript = join(getDistRoot(), 'core', 'codex', 'runner.js');
   const child = spawn(process.execPath, [runnerScript], {
     cwd: workspace.directory,
@@ -369,6 +375,16 @@ function runtimeConfigFromRunnerOptions(options: CodexRunnerOptions): CodexRunti
     reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
     speed: options.speed ?? options.config.codex.speed,
   };
+}
+
+function debugCodexRuntime(options: CodexRunnerOptions, invocationPath: string): void {
+  const config = runtimeConfigFromRunnerOptions(options);
+  const serviceTier = config.speed === 'fast' ? 'priority' : 'default';
+  debug(
+    `Codex runtime: model=${config.model} reasoningEffort=${config.reasoningEffort} `
+    + `speed=${config.speed} serviceTier=${serviceTier}`,
+  );
+  debug(`Codex invocation evidence: ${invocationPath}`);
 }
 
 export function refreshSessionStatus(
