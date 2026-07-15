@@ -7,7 +7,14 @@ const testConfig = {
   executionTarget: 'cloud',
   branchNaming: { prefix: 'hydraz/' },
   github: { token: 'ghp-test' },
-  codex: { command: 'codex', sandbox: 'workspace-write', search: false },
+  codex: {
+    command: 'codex',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'ultra',
+    speed: 'fast',
+    sandbox: 'workspace-write',
+    search: false,
+  },
   retention: { keepTranscripts: false, keepTestLogs: false },
   displayVerbosity: 'compact',
 };
@@ -135,6 +142,9 @@ describe('Codex controller', () => {
       .mockReturnValue('/fake/dist/runtime/playwright-runtime.tar.gz');
     testConfig.executionTarget = 'cloud';
     testConfig.codex.command = 'codex';
+    testConfig.codex.model = 'gpt-5.6-sol';
+    testConfig.codex.reasoningEffort = 'ultra';
+    testConfig.codex.speed = 'fast';
     repoRoot = mkdtempSync(tmpdir() + '/hydraz-controller-v3-test-');
     initRepoState(repoRoot);
     vi.spyOn(CloudProvider.prototype, 'checkAvailability').mockReturnValue({ available: true });
@@ -248,6 +258,9 @@ describe('Codex controller', () => {
       );
       expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
         codexHome,
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'ultra',
+        speed: 'fast',
         config: { codex: { command: 'codex' } },
       });
       const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
@@ -420,6 +433,9 @@ describe('Codex controller', () => {
     const spawnEnvironment = vi.mocked(spawn).mock.calls[0]?.[2]?.env;
     const runnerOptions = JSON.parse(spawnEnvironment?.HYDRAZ_CODEX_RUNNER_OPTIONS ?? '{}');
     expect(runnerOptions).toMatchObject({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra',
+      speed: 'fast',
       config: {
         executionTarget: 'local',
         codex: { command: '/opt/codex/custom-codex' },
@@ -482,6 +498,53 @@ describe('Codex controller', () => {
       sandbox: 'danger-full-access',
       search: true,
       skipGitRepoCheck: true,
+    });
+  });
+
+  it('pins explicit managed Codex settings on the session', async () => {
+    const session = makeSession('cloud-managed-model');
+
+    await startSession(session.id, repoRoot, {}, {
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
+    });
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
+    });
+    expect(loadSession(repoRoot, session.id).codex?.requestedConfig).toEqual({
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
+    });
+  });
+
+  it('reuses pinned managed Codex settings when resuming', async () => {
+    const session = makeSession('cloud-managed-resume');
+    transitionState(repoRoot, session.id, 'starting');
+    transitionState(repoRoot, session.id, 'failed', 'stopped');
+    const stored = loadSession(repoRoot, session.id);
+    stored.workspaceDir = '/workspaces/hydraz-test';
+    stored.codex = {
+      threadId: 'thread-managed',
+      requestedConfig: {
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        speed: 'standard',
+      },
+    };
+    saveSession(repoRoot, stored);
+
+    await resumeSession(session.id, repoRoot, {}, { prompt: 'Continue' });
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
+      resumeThreadId: 'thread-managed',
     });
   });
 

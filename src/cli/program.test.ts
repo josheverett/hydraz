@@ -81,6 +81,8 @@ describe('createProgram', () => {
     const optionNames = runCmd.options.map((opt) => opt.long);
 
     expect(optionNames).toContain('--model');
+    expect(optionNames).toContain('--reasoning-effort');
+    expect(optionNames).toContain('--speed');
     expect(optionNames).toContain('--sandbox');
     expect(optionNames).toContain('--search');
     expect(optionNames).toContain('--base');
@@ -90,5 +92,17 @@ describe('createProgram', () => {
     expect(optionNames).not.toContain('--workers');
     expect(optionNames).not.toContain('--reviewers');
     expect(optionNames).not.toContain('--parallel');
+  });
+
+  it('resume command exposes managed Codex model options', () => {
+    const program = createProgram();
+    const resumeCmd = program.commands.find((cmd) => cmd.name() === 'resume')!;
+    const optionNames = resumeCmd.options.map((opt) => opt.long);
+
+    expect(optionNames).toEqual(expect.arrayContaining([
+      '--model',
+      '--reasoning-effort',
+      '--speed',
+    ]));
   });
 });

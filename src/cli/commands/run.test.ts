@@ -127,4 +127,34 @@ describe('run command', () => {
     expect(startSession).not.toHaveBeenCalled();
     expect(initializeConfigDir).not.toHaveBeenCalled();
   });
+
+  it('passes managed Codex overrides to the controller', async () => {
+    const program = makeProgram();
+
+    await expect(program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--session',
+      'demo',
+      '--model',
+      'gpt-5.5',
+      '--reasoning-effort',
+      'high',
+      '--speed',
+      'standard',
+      'Do it',
+    ])).resolves.toBeDefined();
+
+    expect(startSession).toHaveBeenCalledWith(
+      'session-1',
+      '/repo',
+      expect.any(Object),
+      expect.objectContaining({
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        speed: 'standard',
+      }),
+    );
+  });
 });

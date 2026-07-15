@@ -100,6 +100,23 @@ process.exit(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
   });
 
+  it('passes every managed model setting to codex exec', async () => {
+    const root = makeTempRoot();
+    const argvFile = join(root, 'argv.json');
+    const codex = makeFakeCodex(root, `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+`);
+
+    await executeCodexRunner(makeOptions(root, codex));
+
+    const args = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+    expect(args).toContain('gpt-5.6-sol');
+    expect(args).toContain('model_reasoning_effort="ultra"');
+    expect(args).toContain('features.fast_mode=true');
+    expect(args).toContain('service_tier="priority"');
+  });
+
   it.each([
     {
       name: 'inherits the ambient CODEX_HOME',
@@ -261,6 +278,14 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       '--json',
       '--sandbox',
       'workspace-write',
+      '--model',
+      'gpt-5.6-sol',
+      '-c',
+      'model_reasoning_effort="ultra"',
+      '-c',
+      'features.fast_mode=true',
+      '-c',
+      'service_tier="priority"',
       '-o',
       join(root, 'codex', CODEX_FINAL_FILE),
       'resume',
