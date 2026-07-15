@@ -130,6 +130,37 @@ process.exit(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
   });
 
+  it('persists an attempt-bound failed result when Codex cannot spawn', async () => {
+    const root = makeTempRoot();
+    const options = makeOptions(root, join(root, 'missing-codex'));
+    options.attemptId = 'attempt-spawn-failed';
+
+    await expect(executeCodexRunner(options)).resolves.toMatchObject({
+      attemptId: 'attempt-spawn-failed',
+      success: false,
+      exitCode: null,
+      invocationEvidence: {
+        attemptId: 'attempt-spawn-failed',
+        spawnState: 'spawn-failed',
+      },
+    });
+
+    const result = JSON.parse(
+      readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8'),
+    ) as Record<string, unknown>;
+    expect(result).toMatchObject({
+      attemptId: 'attempt-spawn-failed',
+      success: false,
+      exitCode: null,
+      invocationEvidence: {
+        attemptId: 'attempt-spawn-failed',
+        spawnState: 'spawn-failed',
+      },
+    });
+    expect(result['error']).toEqual(expect.stringContaining('missing-codex'));
+    expect(result['invocationEvidence']).not.toHaveProperty('spawnedAt');
+  });
+
   it('passes every managed model setting to codex exec', async () => {
     const root = makeTempRoot();
     const argvFile = join(root, 'argv.json');

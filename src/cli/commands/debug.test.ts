@@ -160,6 +160,37 @@ describe('debug command', () => {
     expect(output).not.toContain('TOP_SECRET_GOAL');
   });
 
+  it.each(['prepared', 'spawn-failed'] as const)(
+    'does not claim %s invocation evidence is proven',
+    async (spawnState) => {
+      const session = makeSession({
+        codex: {
+          attemptId: 'attempt-current',
+          invocationEvidence: {
+            ...evidence,
+            spawnState,
+            spawnedAt: undefined,
+            exitedAt: spawnState === 'spawn-failed'
+              ? '2026-07-15T00:00:01.000Z'
+              : undefined,
+            exitCode: undefined,
+          },
+        },
+      });
+      vi.mocked(findSessionByName).mockReturnValue(session);
+      vi.mocked(refreshSessionStatus).mockReturnValue(session);
+
+      await expect(
+        makeProgram().parseAsync(['node', 'hydraz', 'debug', 'demo']),
+      ).resolves.toBeDefined();
+
+      const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+      expect(output).toContain('Invocation proof: not proven');
+      expect(output).toContain(`Spawn state: ${spawnState}`);
+      expect(output).not.toContain('Invocation proof: proven');
+    },
+  );
+
   it('reads active local evidence from the recorded artifact path', async () => {
     tempRoot = mkdtempSync(join(tmpdir(), 'hydraz-debug-test-'));
     const invocationPath = join(tempRoot, 'invocation.json');
