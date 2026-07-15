@@ -76,21 +76,23 @@ describe('debugExec', () => {
     expect(written).toContain('none');
   });
 
-  it('redacts secrets in command arguments while preserving command context', () => {
+  it('omits serialized runner options from command arguments', () => {
     setVerbose(true);
     debugExec('ssh', [
       'hydraz-test.devpod',
       `HYDRAZ_CODEX_RUNNER_OPTIONS='${JSON.stringify({
         config: { github: { token: 'github_pat_abc123' } },
         branchName: 'hydraz/test',
+        goal: 'TOP_SECRET_GOAL',
       })}'`,
     ]);
 
     const written = stderrSpy.mock.calls[0]?.[0] as string;
     expect(written).toContain('exec: ssh');
     expect(written).toContain('HYDRAZ_CODEX_RUNNER_OPTIONS');
-    expect(written).toContain('hydraz/test');
-    expect(written).toContain('"token":"[REDACTED]"');
+    expect(written).toContain('[OMITTED]');
+    expect(written).not.toContain('hydraz/test');
+    expect(written).not.toContain('TOP_SECRET_GOAL');
     expect(written).not.toContain('github_pat_abc123');
   });
 

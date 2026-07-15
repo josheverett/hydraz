@@ -111,6 +111,7 @@ import { scpToContainer, sshExec, stageCodexContainerImport } from '../providers
 import { ensurePlaywrightContainerRuntime } from '../providers/playwright-container.js';
 import { resolvePlaywrightRuntimeArchive } from '../providers/playwright-runtime.js';
 import { processHydrazIncludes } from '../codex/repo-config.js';
+import { setVerbose } from '../debug.js';
 
 describe('getProvider', () => {
   it('returns LocalProvider for local target', () => {
@@ -131,6 +132,7 @@ describe('Codex controller', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setVerbose(false);
     vi.mocked(stageCodexContainerImport).mockReset().mockResolvedValue(undefined);
     vi.mocked(ensurePlaywrightContainerRuntime).mockReset().mockResolvedValue({
       runtimeRoot: '/home/codex/.hydraz/runtimes/playwright/1.61.1',
@@ -166,6 +168,7 @@ describe('Codex controller', () => {
   });
 
   afterEach(() => {
+    setVerbose(false);
     vi.restoreAllMocks();
     rmSync(repoRoot, { recursive: true, force: true });
     const paths = resolveRepoDataPaths(repoRoot);
@@ -524,6 +527,26 @@ describe('Codex controller', () => {
     expect(codex?.invocationPath).toBe(
       `/tmp/hydraz-codex/${session.id}/codex-invocation.json`,
     );
+  });
+
+  it('prints prompt-safe managed Codex diagnostics in verbose mode', async () => {
+    const session = makeSession('cloud-managed-debug');
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    setVerbose(true);
+
+    await startSession(session.id, repoRoot, {}, {
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
+    });
+
+    const output = stderr.mock.calls.map((call) => String(call[0])).join('');
+    expect(output).toContain('model=gpt-5.5');
+    expect(output).toContain('reasoningEffort=high');
+    expect(output).toContain('speed=standard');
+    expect(output).toContain('serviceTier=default');
+    expect(output).toContain('codex-invocation.json');
+    expect(output).not.toContain('Implement v3');
   });
 
   it('reuses pinned managed Codex settings when resuming', async () => {
