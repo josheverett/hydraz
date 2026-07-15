@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { HydrazConfig } from '../config/schema.js';
@@ -16,6 +16,7 @@ export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
 export const CODEX_STDERR_FILE = 'stderr.log';
 export const CODEX_FINAL_FILE = 'final.md';
+export const CODEX_INVOCATION_FILE = 'codex-invocation.json';
 
 export interface CodexRunnerOptions {
   repoRoot: string;
@@ -73,6 +74,11 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   const prompt = options.resumeThreadId
     ? (options.resumePrompt ?? options.goal)
     : buildGoalPrompt(options.goal, repoPrompt);
+  const sandbox = options.sandbox ?? options.config.codex.sandbox;
+  const model = options.model ?? options.config.codex.model;
+  const reasoningEffort = options.reasoningEffort ?? options.config.codex.reasoningEffort;
+  const speed = options.speed ?? options.config.codex.speed;
+  const search = options.search ?? options.config.codex.search;
 
   const command = options.resumeThreadId
     ? buildCodexResumeCommand({
@@ -80,24 +86,30 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         threadId: options.resumeThreadId,
         prompt,
         outputLastMessagePath: finalPath,
-        sandbox: options.sandbox ?? options.config.codex.sandbox,
-        model: options.model ?? options.config.codex.model,
-        reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
-        speed: options.speed ?? options.config.codex.speed,
-        search: options.search ?? options.config.codex.search,
+        sandbox,
+        model,
+        reasoningEffort,
+        speed,
+        search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       })
     : buildCodexExecCommand({
         codexCommand: options.config.codex.command,
         prompt,
         outputLastMessagePath: finalPath,
-        sandbox: options.sandbox ?? options.config.codex.sandbox,
-        model: options.model ?? options.config.codex.model,
-        reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
-        speed: options.speed ?? options.config.codex.speed,
-        search: options.search ?? options.config.codex.search,
+        sandbox,
+        model,
+        reasoningEffort,
+        speed,
+        search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       });
+  writeInvocationEvidence(options.codexDir, command, prompt, {
+    model,
+    reasoningEffort,
+    speed,
+    serviceTier: speed === 'fast' ? 'priority' : 'default',
+  });
 
   let threadId: string | undefined = options.resumeThreadId;
   const codexEnv = { ...process.env };
@@ -209,6 +221,35 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
 
   writeFileSync(resultPath, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
   return result;
+}
+
+function writeInvocationEvidence(
+  codexDir: string,
+  command: { cmd: string; args: string[] },
+  prompt: string,
+  resolvedConfig: {
+    model: string;
+    reasoningEffort: HydrazConfig['codex']['reasoningEffort'];
+    speed: HydrazConfig['codex']['speed'];
+    serviceTier: 'priority' | 'default';
+  },
+): void {
+  const promptArgumentIndex = command.args.length - 1;
+  if (command.args[promptArgumentIndex] !== prompt) {
+    throw new Error('Refusing to persist Codex invocation evidence: prompt is not the final argument.');
+  }
+
+  const invocationPath = join(codexDir, CODEX_INVOCATION_FILE);
+  writeFileSync(invocationPath, JSON.stringify({
+    version: 1,
+    recordedAt: new Date().toISOString(),
+    command: command.cmd,
+    args: command.args.slice(0, promptArgumentIndex),
+    promptOmitted: true,
+    promptArgumentIndex,
+    resolvedConfig,
+  }, null, 2) + '\n', { mode: 0o600 });
+  chmodSync(invocationPath, 0o600);
 }
 
 const NOOP_PROVIDER: WorkspaceProvider = {

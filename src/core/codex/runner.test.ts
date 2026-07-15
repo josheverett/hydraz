@@ -133,7 +133,7 @@ const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
 `);
     const options = makeOptions(root, codex);
-    options.task = 'PROMPT_SECRET_7c493f';
+    options.goal = 'PROMPT_SECRET_7c493f';
 
     await executeCodexRunner(options);
 
