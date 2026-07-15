@@ -288,6 +288,36 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence
     }));
   });
 
+  it('does not reuse pre-resume rollout context when no new context is appended', async () => {
+    const root = makeTempRoot();
+    const threadId = 'thread-rollout-resume-stale';
+    const codexHome = join(root, 'codex-home');
+    writeRollout(codexHome, threadId, [
+      {
+        timestamp: '2026-07-15T00:00:00.000Z',
+        type: 'turn_context',
+        payload: { model: 'gpt-5.6-sol', effort: 'ultra' },
+      },
+    ]);
+    const codex = makeFakeCodex(
+      root,
+      `console.log(${JSON.stringify(JSON.stringify({ type: 'thread.started', thread_id: threadId }))});`,
+    );
+    const options = makeOptions(root, codex);
+    options.attemptId = 'attempt-resume';
+    options.codexHome = codexHome;
+    options.resumeThreadId = threadId;
+    options.resumePrompt = 'Continue';
+
+    const result = await executeCodexRunner(options);
+
+    expect(result.rolloutVerification).toMatchObject({
+      attemptId: 'attempt-resume',
+      status: 'unavailable',
+      reason: expect.stringContaining('No new turn_context'),
+    });
+  });
+
   it('reports rollout mismatches without failing the run', async () => {
     const root = makeTempRoot();
     const threadId = 'thread-rollout-mismatch';
