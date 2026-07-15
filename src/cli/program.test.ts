@@ -17,6 +17,7 @@ const EXPECTED_COMMANDS = [
   'resume',
   'stop',
   'logs',
+  'debug',
   'clean',
   'shell',
 ] as const;
@@ -104,5 +105,14 @@ describe('createProgram', () => {
       '--reasoning-effort',
       '--speed',
     ]));
+  });
+
+  it('registers a session diagnostics command', () => {
+    const program = createProgram();
+    const debugCmd = program.commands.find((cmd) => cmd.name() === 'debug');
+
+    expect(debugCmd).toBeDefined();
+    expect(debugCmd!.registeredArguments).toHaveLength(1);
+    expect(debugCmd!.registeredArguments[0].required).toBe(false);
   });
 });
