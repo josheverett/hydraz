@@ -188,6 +188,9 @@ async function startCodexRunner(
   options: SwarmOptions & { resumeThreadId?: string; resumePrompt?: string },
   callbacks: ControllerCallbacks,
 ): Promise<NonNullable<SessionMetadata['codex']>> {
+  const attemptId = session.codex?.attemptId;
+  if (!attemptId) throw new Error('Cannot launch Codex runner without an attempt id.');
+
   if (isContainerExecutionTarget(session.executionTarget)) {
     const workspaceName = `hydraz-${session.id}`;
     const distRoot = getDistRoot();
@@ -233,7 +236,7 @@ async function startCodexRunner(
       },
     );
 
-    const codexDir = `/tmp/hydraz-codex/${session.id}`;
+    const codexDir = `/tmp/hydraz-codex/${session.id}/${attemptId}`;
     const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options, codexHome);
     debugCodexRuntime(
       runnerOptions,
@@ -283,7 +286,7 @@ async function startCodexRunner(
     };
   }
 
-  const codexDir = join(getSessionDir(repoRoot, session.id), 'codex');
+  const codexDir = join(getSessionDir(repoRoot, session.id), 'codex', attemptId);
   const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
   debugCodexRuntime(runnerOptions, join(codexDir, CODEX_INVOCATION_FILE));
   const runnerScript = join(getDistRoot(), 'core', 'codex', 'runner.js');

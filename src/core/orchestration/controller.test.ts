@@ -232,7 +232,8 @@ describe('Codex controller', () => {
     expect(loaded.workspaceDir).toBe('/workspaces/hydraz-test');
     expect(loaded.codex).toMatchObject({
       remotePid: 4242,
-      resultPath: `/tmp/hydraz-codex/${session.id}/result.json`,
+      resultPath:
+        `/tmp/hydraz-codex/${session.id}/${loaded.codex?.attemptId}/result.json`,
       attemptId: expect.any(String),
     });
     expect(getRunnerOptionsFromLaunchCommand(session.id).attemptId).toBe(
@@ -529,7 +530,7 @@ describe('Codex controller', () => {
       speed: 'standard',
     });
     expect(codex?.invocationPath).toBe(
-      `/tmp/hydraz-codex/${session.id}/invocation.json`,
+      `/tmp/hydraz-codex/${session.id}/${codex?.attemptId}/invocation.json`,
     );
   });
 
