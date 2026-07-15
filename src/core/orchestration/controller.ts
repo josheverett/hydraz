@@ -3,7 +3,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import { createEvent, appendEvent } from '../events/index.js';
-import type { ExecutionTarget } from '../config/schema.js';
+import type {
+  CodexReasoningEffort,
+  CodexRuntimeConfig,
+  CodexSpeed,
+  ExecutionTarget,
+} from '../config/schema.js';
 import {
   loadSession,
   saveSession,
@@ -55,6 +60,8 @@ export interface RunningSession {
 
 export interface SwarmOptions {
   model?: string;
+  reasoningEffort?: CodexReasoningEffort;
+  speed?: CodexSpeed;
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   verbose?: boolean;
@@ -255,6 +262,7 @@ async function startCodexRunner(
 
     return {
       remotePid: pid,
+      requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
       codexDir,
       eventsPath: `${codexDir}/${CODEX_EVENTS_FILE}`,
       stderrPath: `${codexDir}/${CODEX_STDERR_FILE}`,
@@ -281,6 +289,7 @@ async function startCodexRunner(
 
   return {
     remotePid: child.pid,
+    requestedConfig: runtimeConfigFromRunnerOptions(runnerOptions),
     codexDir,
     eventsPath: join(codexDir, CODEX_EVENTS_FILE),
     stderrPath: join(codexDir, CODEX_STDERR_FILE),
@@ -315,6 +324,15 @@ function buildRunnerOptions(
       ? 'danger-full-access'
       : undefined
   );
+  const pinnedConfig = options.resumeThreadId ? session.codex?.requestedConfig : undefined;
+  const requestedConfig: CodexRuntimeConfig = {
+    model: options.model ?? pinnedConfig?.model ?? loadedConfig.codex.model,
+    reasoningEffort:
+      options.reasoningEffort
+      ?? pinnedConfig?.reasoningEffort
+      ?? loadedConfig.codex.reasoningEffort,
+    speed: options.speed ?? pinnedConfig?.speed ?? loadedConfig.codex.speed,
+  };
 
   return {
     repoRoot: workspace.directory,
@@ -327,7 +345,7 @@ function buildRunnerOptions(
     codexDir,
     ...(codexHome === undefined ? {} : { codexHome }),
     config,
-    model: options.model,
+    ...requestedConfig,
     sandbox,
     search: options.search ?? true,
     skipGitRepoCheck: isContainerExecutionTarget(session.executionTarget),
@@ -339,6 +357,14 @@ function buildRunnerOptions(
       createPullRequest: !options.noPr,
       keepWorkspace: options.keepWorkspace ?? false,
     },
+  };
+}
+
+function runtimeConfigFromRunnerOptions(options: CodexRunnerOptions): CodexRuntimeConfig {
+  return {
+    model: options.model ?? options.config.codex.model,
+    reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
+    speed: options.speed ?? options.config.codex.speed,
   };
 }
 

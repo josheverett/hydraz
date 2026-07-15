@@ -2,6 +2,7 @@ export { resolveConfigPaths, type ConfigPaths } from './paths.js';
 export {
   type HydrazConfig,
   type ExecutionTarget,
+  type CodexRuntimeConfig,
   type CodexReasoningEffort,
   type CodexSpeed,
   type BranchNamingConfig,

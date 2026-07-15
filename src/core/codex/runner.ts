@@ -29,6 +29,8 @@ export interface CodexRunnerOptions {
   codexHome?: string;
   config: HydrazConfig;
   model?: string;
+  reasoningEffort?: HydrazConfig['codex']['reasoningEffort'];
+  speed?: HydrazConfig['codex']['speed'];
   sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   search?: boolean;
   skipGitRepoCheck?: boolean;
@@ -80,6 +82,8 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         outputLastMessagePath: finalPath,
         sandbox: options.sandbox ?? options.config.codex.sandbox,
         model: options.model ?? options.config.codex.model,
+        reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
+        speed: options.speed ?? options.config.codex.speed,
         search: options.search ?? options.config.codex.search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       })
@@ -89,6 +93,8 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         outputLastMessagePath: finalPath,
         sandbox: options.sandbox ?? options.config.codex.sandbox,
         model: options.model ?? options.config.codex.model,
+        reasoningEffort: options.reasoningEffort ?? options.config.codex.reasoningEffort,
+        speed: options.speed ?? options.config.codex.speed,
         search: options.search ?? options.config.codex.search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       });

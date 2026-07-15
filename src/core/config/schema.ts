@@ -31,11 +31,14 @@ export interface RetentionConfig {
   keepTestLogs: boolean;
 }
 
-export interface CodexConfig {
-  command: string;
-  model?: string;
+export interface CodexRuntimeConfig {
+  model: string;
   reasoningEffort: CodexReasoningEffort;
   speed: CodexSpeed;
+}
+
+export interface CodexConfig extends CodexRuntimeConfig {
+  command: string;
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
   search: boolean;
 }

@@ -1,6 +1,14 @@
 import type { Command } from 'commander';
 import { detectRepo } from '../../core/repo/detect.js';
-import { loadConfig, configExists, initializeConfigDir } from '../../core/config/index.js';
+import {
+  loadConfig,
+  configExists,
+  initializeConfigDir,
+  CODEX_REASONING_EFFORTS,
+  CODEX_SPEEDS,
+  type CodexReasoningEffort,
+  type CodexSpeed,
+} from '../../core/config/index.js';
 import {
   createNewSession,
   initRepoState,
@@ -25,6 +33,8 @@ export function registerRunCommand(program: Command): void {
     .option('--container', 'Run locally in a container')
     .option('--cloud', 'Run in cloud (default)')
     .option('--model <model>', 'Codex model override')
+    .option('--reasoning-effort <effort>', 'Codex reasoning effort override')
+    .option('--speed <speed>', 'Codex speed override: standard or fast')
     .option('--sandbox <mode>', 'Codex sandbox mode: read-only, workspace-write, danger-full-access')
     .option('--search', 'Enable live Codex web search')
     .option('--no-push', 'Do not push the session branch after Codex completes')
@@ -40,6 +50,8 @@ export function registerRunCommand(program: Command): void {
       container?: boolean;
       cloud?: boolean;
       model?: string;
+      reasoningEffort?: CodexReasoningEffort;
+      speed?: CodexSpeed;
       sandbox?: Sandbox;
       search?: boolean;
       push?: boolean;
@@ -82,6 +94,14 @@ export function registerRunCommand(program: Command): void {
 
       if (options.sandbox && !['read-only', 'workspace-write', 'danger-full-access'].includes(options.sandbox)) {
         console.error(`Invalid sandbox mode: "${options.sandbox}".`);
+        return;
+      }
+      if (options.reasoningEffort && !CODEX_REASONING_EFFORTS.includes(options.reasoningEffort)) {
+        console.error(`Invalid reasoning effort: "${options.reasoningEffort}".`);
+        return;
+      }
+      if (options.speed && !CODEX_SPEEDS.includes(options.speed)) {
+        console.error(`Invalid Codex speed: "${options.speed}". Use standard or fast.`);
         return;
       }
 
@@ -128,6 +148,8 @@ export function registerRunCommand(program: Command): void {
         onError: (msg) => console.error(msg),
       }, {
         model: options.model,
+        reasoningEffort: options.reasoningEffort,
+        speed: options.speed,
         sandbox: options.sandbox,
         search: options.search,
         baseBranch: options.base,

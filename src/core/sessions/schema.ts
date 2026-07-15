@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ExecutionTarget } from '../config/schema.js';
+import type { CodexRuntimeConfig, ExecutionTarget } from '../config/schema.js';
 import {
   type SessionState,
   ACTIVE_STATES,
@@ -41,6 +41,7 @@ export interface SessionMetadata {
   codex?: {
     remotePid?: number;
     threadId?: string;
+    requestedConfig?: CodexRuntimeConfig;
     codexDir?: string;
     eventsPath?: string;
     stderrPath?: string;
