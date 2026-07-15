@@ -90,8 +90,13 @@ function renderDiagnostics(
     safeLog('  Invocation proof: unavailable');
     if (evidenceError) safeLog(`  Invocation note: ${evidenceError}`);
   } else {
-    safeLog('  Invocation proof: proven');
-    safeLog('  Proof scope:  exact non-prompt argv passed by Hydraz to Codex');
+    const proven = evidence.spawnState === 'spawned' || evidence.spawnState === 'exited';
+    safeLog(`  Invocation proof: ${proven ? 'proven' : 'not proven'}`);
+    safeLog(
+      proven
+        ? '  Proof scope:  exact non-prompt argv passed by Hydraz to Codex'
+        : '  Proof scope:  prepared argv; Codex process spawn was not confirmed',
+    );
     safeLog(`  Mode:        ${evidence.mode}`);
     safeLog(`  Model:       ${evidence.requested.model}`);
     safeLog(`  Reasoning:   ${evidence.requested.reasoningEffort}`);

@@ -137,17 +137,25 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     codexEnv.CODEX_HOME = options.codexHome;
   }
 
-  const exitCode = await new Promise<number | null>((resolve, reject) => {
+  let spawnError: string | undefined;
+  const exitCode = await new Promise<number | null>((resolve) => {
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: codexEnv,
     });
-    invocation.markSpawned();
+    let finished = false;
 
-    child.on('error', (error) => {
+    child.once('spawn', () => {
+      invocation.markSpawned();
+    });
+
+    child.once('error', (error) => {
+      if (finished) return;
+      finished = true;
+      spawnError = error.message;
       invocation.markSpawnFailed();
-      reject(error);
+      resolve(null);
     });
 
     let stdoutBuffer = '';
@@ -178,7 +186,9 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       }
     });
 
-    child.on('close', (code) => {
+    child.once('close', (code) => {
+      if (finished) return;
+      finished = true;
       if (stdoutBuffer.trim()) {
         const parsed = parseCodexJsonLine(stdoutBuffer);
         if (parsed?.type === 'thread.started') {
@@ -217,7 +227,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
 
   const result: CodexRunnerResult = {
     attemptId,
-    success: exitCode === 0,
+    success: spawnError === undefined && exitCode === 0,
     threadId,
     exitCode,
     eventsPath,
@@ -226,7 +236,11 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     resultPath,
     invocationEvidence: invocation.snapshot(),
     rolloutVerification,
-    error: exitCode === 0 ? undefined : `Codex exited with code ${exitCode}`,
+    error: spawnError
+      ? `Codex spawn failed: ${spawnError}`
+      : exitCode === 0
+        ? undefined
+        : `Codex exited with code ${exitCode}`,
   };
 
   if (result.success && options.delivery?.enabled) {
