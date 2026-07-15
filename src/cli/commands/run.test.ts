@@ -18,11 +18,15 @@ vi.mock('../../core/repo/detect.js', () => ({
   detectRepo: vi.fn(),
 }));
 
-vi.mock('../../core/config/index.js', () => ({
-  configExists: vi.fn(),
-  initializeConfigDir: vi.fn(),
-  loadConfig: vi.fn(),
-}));
+vi.mock('../../core/config/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../core/config/index.js')>();
+  return {
+    ...actual,
+    configExists: vi.fn(),
+    initializeConfigDir: vi.fn(),
+    loadConfig: vi.fn(),
+  };
+});
 
 vi.mock('../../core/sessions/index.js', () => ({
   createNewSession: vi.fn(),
@@ -156,5 +160,17 @@ describe('run command', () => {
         speed: 'standard',
       }),
     );
+  });
+
+  it.each([
+    ['--reasoning-effort', 'impossible', 'Invalid reasoning effort: "impossible".'],
+    ['--speed', 'ludicrous', 'Invalid Codex speed: "ludicrous". Use standard or fast.'],
+  ])('rejects an invalid %s value', async (flag, value, message) => {
+    const program = makeProgram();
+
+    await program.parseAsync(['node', 'hydraz', 'run', flag, value, 'Do it']);
+
+    expect(console.error).toHaveBeenCalledWith(message);
+    expect(startSession).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectRepo } from '../../core/repo/detect.js';
 import { findSessionByName } from '../../core/sessions/index.js';
 import { resumeSession } from '../../core/orchestration/index.js';
@@ -48,6 +48,11 @@ describe('resume command', () => {
       createdAt: '2026-07-15T00:00:00.000Z',
       updatedAt: '2026-07-15T00:00:00.000Z',
     });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('passes managed Codex overrides to the controller', async () => {
@@ -78,5 +83,17 @@ describe('resume command', () => {
         speed: 'standard',
       }),
     );
+  });
+
+  it.each([
+    ['--reasoning-effort', 'impossible', 'Invalid reasoning effort: "impossible".'],
+    ['--speed', 'ludicrous', 'Invalid Codex speed: "ludicrous". Use standard or fast.'],
+  ])('rejects an invalid %s value', async (flag, value, message) => {
+    const program = makeProgram();
+
+    await program.parseAsync(['node', 'hydraz', 'resume', 'demo', 'Continue', flag, value]);
+
+    expect(console.error).toHaveBeenCalledWith(message);
+    expect(resumeSession).not.toHaveBeenCalled();
   });
 });
