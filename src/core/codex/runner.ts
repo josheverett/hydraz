@@ -13,6 +13,7 @@ import type { WorkspaceProvider } from '../providers/provider.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import { redactSecrets } from '../display/sanitize.js';
 import {
+  captureCodexRolloutCheckpoint,
   verifyCodexRollout,
   type CodexRolloutVerification,
 } from './rollout.js';
@@ -67,7 +68,7 @@ export interface CodexRunnerResult {
   finalPath: string;
   resultPath: string;
   invocationEvidence: CodexInvocationEvidence;
-  rolloutVerification: CodexRolloutVerification & { attemptId: string };
+  rolloutVerification: CodexRolloutVerification;
   delivery?: CodexDeliveryResult;
   error?: string;
 }
@@ -136,6 +137,12 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   if (options.codexHome !== undefined) {
     codexEnv.CODEX_HOME = options.codexHome;
   }
+  const rolloutCheckpoint = options.resumeThreadId
+    ? captureCodexRolloutCheckpoint({
+        codexHome: options.codexHome,
+        threadId: options.resumeThreadId,
+      })
+    : undefined;
 
   let spawnError: string | undefined;
   const exitCode = await new Promise<number | null>((resolve) => {
@@ -212,18 +219,17 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       writeFileSync(finalPath, redactedFinalMessage, { mode: 0o600 });
     }
   }
-  const rolloutVerification = {
-    ...verifyCodexRollout({
-      codexHome: options.codexHome,
-      threadId,
-      expected: {
-        model,
-        reasoningEffort,
-        serviceTier: speed === 'fast' ? 'priority' : 'default',
-      },
-    }),
+  const rolloutVerification = verifyCodexRollout({
     attemptId,
-  };
+    codexHome: options.codexHome,
+    threadId,
+    checkpoint: rolloutCheckpoint,
+    expected: {
+      model,
+      reasoningEffort,
+      serviceTier: speed === 'fast' ? 'priority' : 'default',
+    },
+  });
 
   const result: CodexRunnerResult = {
     attemptId,

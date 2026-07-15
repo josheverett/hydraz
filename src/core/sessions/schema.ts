@@ -47,7 +47,7 @@ export interface SessionMetadata {
     requestedConfig?: CodexRuntimeConfig;
     invocationPath?: string;
     invocationEvidence?: CodexInvocationEvidence;
-    rolloutVerification?: CodexRolloutVerification & { attemptId: string };
+    rolloutVerification?: CodexRolloutVerification;
     codexDir?: string;
     eventsPath?: string;
     stderrPath?: string;
