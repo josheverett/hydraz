@@ -118,10 +118,15 @@ process.exit(9);
 `);
 
     const result = await executeCodexRunner(makeOptions(root, codex));
+    const evidence = JSON.parse(
+      readFileSync(join(root, 'codex', 'invocation.json'), 'utf-8'),
+    ) as { spawnState: string; exitCode: number };
 
     expect(result.success).toBe(false);
     expect(result.exitCode).toBe(9);
     expect(result.threadId).toBe('thread-fail');
+    expect(evidence.spawnState).toBe('exited');
+    expect(evidence.exitCode).toBe(9);
     expect(readFileSync(join(root, 'codex', CODEX_RESULT_FILE), 'utf-8')).toContain('"success": false');
   });
 
@@ -148,38 +153,65 @@ fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(
     const codex = makeFakeCodex(root, `
 const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence' }));
 `);
     const options = makeOptions(root, codex);
     options.goal = 'PROMPT_SECRET_7c493f';
+    options.config.github.token = 'github_pat_evidence_secret';
 
-    await executeCodexRunner(options);
+    const result = await executeCodexRunner(options);
 
-    const invocationPath = join(root, 'codex', 'codex-invocation.json');
+    const invocationPath = join(root, 'codex', 'invocation.json');
     const serialized = readFileSync(invocationPath, 'utf-8');
     const evidence = JSON.parse(serialized) as {
+      version: number;
+      mode: string;
       command: string;
       args: string[];
       promptOmitted: boolean;
-      resolvedConfig: {
+      requested: {
         model: string;
         reasoningEffort: string;
         speed: string;
+      };
+      normalized: {
+        fastMode: boolean;
         serviceTier: string;
       };
+      preparedAt: string;
+      spawnedAt: string;
+      exitedAt: string;
+      spawnState: string;
+      threadId: string;
+      exitCode: number;
     };
     const spawnedArgs = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
 
+    expect(evidence.version).toBe(1);
+    expect(evidence.mode).toBe('exec');
     expect(evidence.command).toBe(codex);
     expect(evidence.args).toEqual(spawnedArgs.slice(0, -1));
     expect(evidence.promptOmitted).toBe(true);
-    expect(evidence.resolvedConfig).toEqual({
+    expect(evidence.requested).toEqual({
       model: 'gpt-5.6-sol',
       reasoningEffort: 'ultra',
       speed: 'fast',
+    });
+    expect(evidence.normalized).toEqual({
+      fastMode: true,
       serviceTier: 'priority',
     });
+    expect(evidence.preparedAt).toEqual(expect.any(String));
+    expect(evidence.spawnedAt).toEqual(expect.any(String));
+    expect(evidence.exitedAt).toEqual(expect.any(String));
+    expect(evidence.spawnState).toBe('exited');
+    expect(evidence.threadId).toBe('thread-evidence');
+    expect(evidence.exitCode).toBe(0);
+    expect(result.invocationEvidence).toEqual(evidence);
     expect(spawnedArgs.at(-1)).toContain('PROMPT_SECRET_7c493f');
     expect(serialized).not.toContain('PROMPT_SECRET_7c493f');
+    expect(serialized).not.toContain('github_pat_evidence_secret');
+    expect(serialized).not.toContain('HYDRAZ_CODEX_RUNNER_OPTIONS');
     if (process.platform !== 'win32') {
       expect(statSync(invocationPath).mode & 0o777).toBe(0o600);
     }
@@ -440,7 +472,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
 `);
     const options = makeOptions(root, codex);
 
-    await executeCodexRunner({
+    const result = await executeCodexRunner({
       ...options,
       resumeThreadId: 'thread-1',
       resumePrompt: 'Keep going',
@@ -465,6 +497,19 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       'thread-1',
       'Keep going',
     ]);
+    const serialized = readFileSync(join(root, 'codex', 'invocation.json'), 'utf-8');
+    const evidence = JSON.parse(serialized) as {
+      mode: string;
+      args: string[];
+      threadId: string;
+    };
+    expect(evidence.mode).toBe('resume');
+    expect(evidence.args).toEqual(
+      (JSON.parse(readFileSync(argvFile, 'utf-8')) as string[]).slice(0, -1),
+    );
+    expect(evidence.threadId).toBe('thread-1');
+    expect(result.invocationEvidence).toEqual(evidence);
+    expect(serialized).not.toContain('Keep going');
   });
 
   it('passes the configured base branch into delivery', async () => {

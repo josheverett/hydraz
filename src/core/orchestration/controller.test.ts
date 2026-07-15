@@ -525,7 +525,7 @@ describe('Codex controller', () => {
       speed: 'standard',
     });
     expect(codex?.invocationPath).toBe(
-      `/tmp/hydraz-codex/${session.id}/codex-invocation.json`,
+      `/tmp/hydraz-codex/${session.id}/invocation.json`,
     );
   });
 
@@ -643,6 +643,26 @@ describe('Codex controller', () => {
       stderrPath: '/tmp/stderr',
       finalPath: '/tmp/final',
       resultPath: '/tmp/result',
+      invocationEvidence: {
+        version: 1,
+        mode: 'exec',
+        command: 'codex',
+        args: ['exec', '--json'],
+        promptOmitted: true,
+        promptArgumentIndex: 2,
+        requested: {
+          model: 'gpt-5.6-sol',
+          reasoningEffort: 'ultra',
+          speed: 'fast',
+        },
+        normalized: { fastMode: true, serviceTier: 'priority' },
+        preparedAt: '2026-07-15T00:00:00.000Z',
+        spawnedAt: '2026-07-15T00:00:01.000Z',
+        exitedAt: '2026-07-15T00:01:00.000Z',
+        spawnState: 'exited',
+        threadId: 'thread-1',
+        exitCode: 0,
+      },
       rolloutVerification: {
         status: 'mismatched',
         checkedAt: '2026-07-15T00:01:00.000Z',
@@ -659,6 +679,7 @@ describe('Codex controller', () => {
 
     expect(refreshed.state).toBe('completed');
     expect(refreshed.codex?.threadId).toBe('thread-1');
+    expect(refreshed.codex?.invocationEvidence?.spawnState).toBe('exited');
     expect(refreshed.codex?.rolloutVerification?.status).toBe('mismatched');
   });
 

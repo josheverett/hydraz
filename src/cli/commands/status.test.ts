@@ -34,7 +34,7 @@ const session = {
       reasoningEffort: 'ultra' as const,
       speed: 'fast' as const,
     },
-    invocationPath: '/tmp/hydraz-codex/session-1/codex-invocation.json',
+    invocationPath: '/tmp/hydraz-codex/session-1/invocation.json',
     rolloutVerification: {
       status: 'matched' as const,
       checkedAt: '2026-07-15T00:01:00.000Z',
@@ -76,7 +76,7 @@ describe('status command', () => {
     expect(output).toContain('Reasoning:   ultra');
     expect(output).toContain('Speed:       fast');
     expect(output).toContain(
-      'Invocation:  /tmp/hydraz-codex/session-1/codex-invocation.json',
+      'Invocation:  /tmp/hydraz-codex/session-1/invocation.json',
     );
     expect(output).toContain('Rollout:     matched');
     expect(output).toContain('Model check: matched');
