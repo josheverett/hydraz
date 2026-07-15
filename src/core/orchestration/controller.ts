@@ -420,6 +420,7 @@ export function refreshSessionStatus(
   session.codex.threadId = result.threadId;
   session.codex.exitCode = result.exitCode;
   session.codex.delivery = result.delivery;
+  session.codex.invocationEvidence = result.invocationEvidence;
   session.codex.rolloutVerification = result.rolloutVerification;
   saveSession(repoRoot, session);
 

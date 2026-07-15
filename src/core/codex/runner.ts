@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { HydrazConfig } from '../config/schema.js';
@@ -15,12 +15,18 @@ import {
   verifyCodexRollout,
   type CodexRolloutVerification,
 } from './rollout.js';
+import {
+  CODEX_INVOCATION_FILE,
+  createCodexInvocationRecorder,
+  type CodexInvocationEvidence,
+} from './invocation.js';
+
+export { CODEX_INVOCATION_FILE } from './invocation.js';
 
 export const CODEX_RESULT_FILE = 'result.json';
 export const CODEX_EVENTS_FILE = 'events.jsonl';
 export const CODEX_STDERR_FILE = 'stderr.log';
 export const CODEX_FINAL_FILE = 'final.md';
-export const CODEX_INVOCATION_FILE = 'codex-invocation.json';
 
 export interface CodexRunnerOptions {
   repoRoot: string;
@@ -57,6 +63,7 @@ export interface CodexRunnerResult {
   stderrPath: string;
   finalPath: string;
   resultPath: string;
+  invocationEvidence: CodexInvocationEvidence;
   rolloutVerification: CodexRolloutVerification;
   delivery?: CodexDeliveryResult;
   error?: string;
@@ -109,11 +116,13 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         search,
         skipGitRepoCheck: options.skipGitRepoCheck,
       });
-  writeInvocationEvidence(options.codexDir, command, prompt, {
-    model,
-    reasoningEffort,
-    speed,
-    serviceTier: speed === 'fast' ? 'priority' : 'default',
+  const invocation = createCodexInvocationRecorder({
+    codexDir: options.codexDir,
+    mode: options.resumeThreadId ? 'resume' : 'exec',
+    command,
+    prompt,
+    requested: { model, reasoningEffort, speed },
+    threadId: options.resumeThreadId,
   });
 
   let threadId: string | undefined = options.resumeThreadId;
@@ -129,8 +138,12 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
       stdio: ['ignore', 'pipe', 'pipe'],
       env: codexEnv,
     });
+    invocation.markSpawned();
 
-    child.on('error', reject);
+    child.on('error', (error) => {
+      invocation.markSpawnFailed();
+      reject(error);
+    });
 
     let stdoutBuffer = '';
     let stderrBuffer = '';
@@ -145,6 +158,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         const parsed = parseCodexJsonLine(line);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
+          invocation.markThreadStarted(parsed.threadId);
         }
         writeFileSync(eventsPath, redactSecrets(line) + '\n', { flag: 'a', mode: 0o600 });
       }
@@ -164,12 +178,14 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         const parsed = parseCodexJsonLine(stdoutBuffer);
         if (parsed?.type === 'thread.started') {
           threadId = parsed.threadId;
+          invocation.markThreadStarted(parsed.threadId);
         }
         writeFileSync(eventsPath, redactSecrets(stdoutBuffer.trimEnd()) + '\n', { flag: 'a', mode: 0o600 });
       }
       if (stderrBuffer.length > 0) {
         writeFileSync(stderrPath, redactSecrets(stderrBuffer), { flag: 'a', mode: 0o600 });
       }
+      invocation.markExited(code);
       resolve(code);
     });
   });
@@ -199,6 +215,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
     stderrPath,
     finalPath,
     resultPath,
+    invocationEvidence: invocation.snapshot(),
     rolloutVerification,
     error: exitCode === 0 ? undefined : `Codex exited with code ${exitCode}`,
   };
@@ -236,35 +253,6 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
 
   writeFileSync(resultPath, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
   return result;
-}
-
-function writeInvocationEvidence(
-  codexDir: string,
-  command: { cmd: string; args: string[] },
-  prompt: string,
-  resolvedConfig: {
-    model: string;
-    reasoningEffort: HydrazConfig['codex']['reasoningEffort'];
-    speed: HydrazConfig['codex']['speed'];
-    serviceTier: 'priority' | 'default';
-  },
-): void {
-  const promptArgumentIndex = command.args.length - 1;
-  if (command.args[promptArgumentIndex] !== prompt) {
-    throw new Error('Refusing to persist Codex invocation evidence: prompt is not the final argument.');
-  }
-
-  const invocationPath = join(codexDir, CODEX_INVOCATION_FILE);
-  writeFileSync(invocationPath, JSON.stringify({
-    version: 1,
-    recordedAt: new Date().toISOString(),
-    command: command.cmd,
-    args: command.args.slice(0, promptArgumentIndex),
-    promptOmitted: true,
-    promptArgumentIndex,
-    resolvedConfig,
-  }, null, 2) + '\n', { mode: 0o600 });
-  chmodSync(invocationPath, 0o600);
 }
 
 const NOOP_PROVIDER: WorkspaceProvider = {

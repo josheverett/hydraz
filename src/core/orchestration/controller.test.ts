@@ -545,7 +545,7 @@ describe('Codex controller', () => {
     expect(output).toContain('reasoningEffort=high');
     expect(output).toContain('speed=standard');
     expect(output).toContain('serviceTier=default');
-    expect(output).toContain('codex-invocation.json');
+    expect(output).toContain('invocation.json');
     expect(output).not.toContain('Implement v3');
   });
 
