@@ -35,6 +35,19 @@ const session = {
       speed: 'fast' as const,
     },
     invocationPath: '/tmp/hydraz-codex/session-1/codex-invocation.json',
+    rolloutVerification: {
+      status: 'matched' as const,
+      checkedAt: '2026-07-15T00:01:00.000Z',
+      observed: {
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'ultra',
+      },
+      checks: {
+        model: 'matched' as const,
+        reasoningEffort: 'matched' as const,
+        serviceTier: 'unavailable' as const,
+      },
+    },
   },
 };
 
@@ -65,5 +78,9 @@ describe('status command', () => {
     expect(output).toContain(
       'Invocation:  /tmp/hydraz-codex/session-1/codex-invocation.json',
     );
+    expect(output).toContain('Rollout:     matched');
+    expect(output).toContain('Model check: matched');
+    expect(output).toContain('Effort check: matched');
+    expect(output).toContain('Tier check:  unavailable');
   });
 });

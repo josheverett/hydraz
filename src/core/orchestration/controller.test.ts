@@ -620,12 +620,23 @@ describe('Codex controller', () => {
       stderrPath: '/tmp/stderr',
       finalPath: '/tmp/final',
       resultPath: '/tmp/result',
+      rolloutVerification: {
+        status: 'mismatched',
+        checkedAt: '2026-07-15T00:01:00.000Z',
+        observed: { model: 'gpt-5.5', reasoningEffort: 'medium' },
+        checks: {
+          model: 'mismatched',
+          reasoningEffort: 'mismatched',
+          serviceTier: 'unavailable',
+        },
+      },
     }));
 
     const refreshed = refreshSessionStatus(session.id, repoRoot);
 
     expect(refreshed.state).toBe('completed');
     expect(refreshed.codex?.threadId).toBe('thread-1');
+    expect(refreshed.codex?.rolloutVerification?.status).toBe('mismatched');
   });
 
   it('refreshes a finished local runner result from disk', () => {
