@@ -12,6 +12,9 @@ describe('createDefaultConfig', () => {
     expect(config.branchNaming.prefix).toBe('hydraz/');
     expect(config.codex).toEqual({
       command: 'codex',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra',
+      speed: 'fast',
       sandbox: 'workspace-write',
       search: false,
     });
@@ -42,6 +45,8 @@ describe('validateConfig', () => {
       codex: {
         command: '/opt/bin/codex',
         model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        speed: 'standard',
         sandbox: 'danger-full-access',
         search: true,
       },
@@ -50,6 +55,8 @@ describe('validateConfig', () => {
     expect(result.codex).toEqual({
       command: '/opt/bin/codex',
       model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      speed: 'standard',
       sandbox: 'danger-full-access',
       search: true,
     });
@@ -78,5 +85,17 @@ describe('validateConfig', () => {
 
   it('rejects non-boolean Codex search', () => {
     expect(() => validateConfig({ codex: { search: 'yes' } })).toThrow(ConfigValidationError);
+  });
+
+  it('rejects an invalid Codex reasoning effort', () => {
+    expect(() => validateConfig({ codex: { reasoningEffort: 'impossible' } })).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it('rejects an invalid Codex speed', () => {
+    expect(() => validateConfig({ codex: { speed: 'ludicrous' } })).toThrow(
+      ConfigValidationError,
+    );
   });
 });
