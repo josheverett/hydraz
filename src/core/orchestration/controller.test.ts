@@ -515,11 +515,15 @@ describe('Codex controller', () => {
       reasoningEffort: 'high',
       speed: 'standard',
     });
-    expect(loadSession(repoRoot, session.id).codex?.requestedConfig).toEqual({
+    const codex = loadSession(repoRoot, session.id).codex;
+    expect(codex?.requestedConfig).toEqual({
       model: 'gpt-5.5',
       reasoningEffort: 'high',
       speed: 'standard',
     });
+    expect(codex?.invocationPath).toBe(
+      `/tmp/hydraz-codex/${session.id}/codex-invocation.json`,
+    );
   });
 
   it('reuses pinned managed Codex settings when resuming', async () => {
