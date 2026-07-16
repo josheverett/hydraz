@@ -3,9 +3,15 @@ import { detectRepo } from '../../core/repo/detect.js';
 import {
   findSessionByName,
   getActiveSessions,
+  isTerminalState,
   type SessionMetadata,
 } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
+import {
+  formatStoppedWorkspaceNotice,
+  getSessionWorkspaceHealth,
+  type SessionWorkspaceHealth,
+} from '../workspace-health.js';
 
 export function registerStatusCommand(program: Command): void {
   program
@@ -37,16 +43,32 @@ export function registerStatusCommand(program: Command): void {
       }
 
       const selected = session;
-      session = refreshSessionStatus(selected.id, repo.root);
-      renderStatus(session);
+      let workspaceHealth = getSessionWorkspaceHealth(selected);
+      if (workspaceHealth === null || workspaceHealth.status === 'Running') {
+        session = refreshSessionStatus(selected.id, repo.root);
+        workspaceHealth = getSessionWorkspaceHealth(session);
+      }
+      renderStatus(session, workspaceHealth);
     });
 }
 
-function renderStatus(session: SessionMetadata): void {
+function renderStatus(
+  session: SessionMetadata,
+  workspaceHealth: SessionWorkspaceHealth | null,
+): void {
   console.log(`\n  Session:    ${session.name}`);
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
+  if (workspaceHealth) {
+    const status = workspaceHealth.status === 'NotFound'
+      ? 'not found'
+      : workspaceHealth.status.toLowerCase();
+    console.log(`  Workspace:  ${status}`);
+  }
+  if (session.maxRuntime) {
+    console.log(`  Max runtime: ${session.maxRuntime}`);
+  }
   console.log(`  Goal:       ${truncate(session.task, 80)}`);
   console.log(`  Created:    ${session.createdAt}`);
   console.log(`  Updated:    ${session.updatedAt}`);
@@ -80,6 +102,12 @@ function renderStatus(session: SessionMetadata): void {
   }
   if (session.failureMessage) {
     console.log(`  Failure:    ${session.failureMessage}`);
+  }
+  if (
+    workspaceHealth?.status === 'Stopped'
+    && !isTerminalState(session.state)
+  ) {
+    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth, session)}`);
   }
   console.log();
 }

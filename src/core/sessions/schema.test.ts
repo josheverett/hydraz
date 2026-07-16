@@ -73,6 +73,19 @@ describe('createSession', () => {
 
     expect(session.baseBranch).toBe('staging');
   });
+
+  it('stores the optional cloud maximum runtime', () => {
+    const session = createSession({
+      name: 'test',
+      repoRoot: '/tmp/repo',
+      branchName: 'hydraz/test',
+      executionTarget: 'cloud',
+      task: 'Fix it',
+      maxRuntime: '12h',
+    });
+
+    expect(session.maxRuntime).toBe('12h');
+  });
 });
 
 describe('isValidTransition', () => {

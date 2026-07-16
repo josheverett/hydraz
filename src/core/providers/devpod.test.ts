@@ -1,5 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import type { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough, Writable } from 'node:stream';
 import type { SpawnHeartbeatPromise } from './spawn-heartbeat.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +15,7 @@ import {
   verifyBranchPushed,
   verifyCodexInContainer,
   sshExec,
+  sshStream,
   devpodSsh,
   createWorktreeInContainer,
   copyWorktreeIncludesInContainer,
@@ -46,8 +49,9 @@ vi.mock('./tar-ssh-transfer.js', async (importOriginal) => {
   };
 });
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 const mockExecFileSync = vi.mocked(execFileSync);
+const mockSpawn = vi.mocked(spawn);
 const { execFileSync: realExecFileSync } = await vi.importActual<typeof import('node:child_process')>(
   'node:child_process',
 );
@@ -356,6 +360,59 @@ describe('sshExec', () => {
     expect(output).toContain('HYDRAZ_CODEX_RUNNER_OPTIONS=[OMITTED]');
     expect(output).not.toContain('TOP_SECRET_GOAL');
     expect(output).not.toContain('github_pat_devpod_secret');
+  });
+});
+
+describe('sshStream', () => {
+  function createChild(): ChildProcess & { stdout: PassThrough; stderr: PassThrough } {
+    const child = new EventEmitter() as ChildProcess & {
+      stdout: PassThrough;
+      stderr: PassThrough;
+    };
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    return child;
+  }
+
+  it('streams output larger than one MiB without buffering it', async () => {
+    const child = createChild();
+    mockSpawn.mockReturnValue(child);
+    const pause = vi.spyOn(child.stdout, 'pause');
+    let received = 0;
+    const output = new Writable({
+      highWaterMark: 1,
+      write(chunk, _encoding, callback) {
+        received += Buffer.byteLength(chunk);
+        setImmediate(callback);
+      },
+    });
+
+    const streaming = sshStream('my-workspace', 'cat /tmp/events.jsonl', {
+      stdout: output,
+      stderr: output,
+    });
+    child.stdout?.end(Buffer.alloc(2 * 1024 * 1024, 'x'));
+    child.emit('close', 0);
+    await streaming;
+
+    expect(received).toBe(2 * 1024 * 1024);
+    expect(pause).toHaveBeenCalled();
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'ssh',
+      ['my-workspace.devpod', 'cat /tmp/events.jsonl'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  });
+
+  it('rejects when the SSH process exits unsuccessfully', async () => {
+    const child = createChild();
+    mockSpawn.mockReturnValue(child);
+
+    const streaming = sshStream('my-workspace', 'cat /tmp/events.jsonl');
+    const rejection = expect(streaming).rejects.toThrow('SSH exited with code 12');
+    child.emit('close', 12);
+
+    await rejection;
   });
 });
 
@@ -949,6 +1006,22 @@ describe('devpodUp', () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--provider');
+  });
+
+  it('passes provider options to devpod up', async () => {
+    await devpodUp(
+      'git@github.com:org/repo.git',
+      'hydraz-abc',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { INACTIVITY_TIMEOUT: '24h' },
+    );
+
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('--provider-option');
+    expect(args).toContain('INACTIVITY_TIMEOUT=24h');
   });
 
   it('appends branch to source URL with @ syntax when branch is specified', async () => {

@@ -5,6 +5,10 @@ import { detectRepo } from '../../core/repo/detect.js';
 import { getActiveSessions, findSessionByName, type SessionMetadata } from '../../core/sessions/index.js';
 import { readEvents, formatEvent } from '../../core/events/index.js';
 import { shellEscape } from '../../core/shell.js';
+import {
+  formatStoppedWorkspaceNotice,
+  getSessionWorkspaceHealth,
+} from '../workspace-health.js';
 
 export function registerAttachCommand(program: Command): void {
   program
@@ -52,7 +56,8 @@ export function buildTailEventsCommand(eventsPath: string): string {
   return `tail -f ${shellEscape(eventsPath)}`;
 }
 
-function renderAttachView(session: SessionMetadata, repoRoot: string): void {
+export function renderAttachView(session: SessionMetadata, repoRoot: string): void {
+  const workspaceHealth = getSessionWorkspaceHealth(session);
   console.log(`\n  Session:    ${session.name}`);
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
@@ -73,6 +78,12 @@ function renderAttachView(session: SessionMetadata, repoRoot: string): void {
     for (const event of recent) {
       console.log(`    ${formatEvent(event)}`);
     }
+  }
+
+  if (workspaceHealth?.status === 'Stopped') {
+    console.log(`\n  Workspace:  stopped`);
+    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth, session)}\n`);
+    return;
   }
 
   if (session.executionTarget !== 'local' && session.codex?.eventsPath) {

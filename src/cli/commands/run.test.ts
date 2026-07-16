@@ -31,6 +31,7 @@ vi.mock('../../core/config/index.js', async (importOriginal) => {
 vi.mock('../../core/sessions/index.js', () => ({
   createNewSession: vi.fn(),
   initRepoState: vi.fn(),
+  DEFAULT_CLOUD_MAX_RUNTIME: '24h',
   SessionError: class SessionError extends Error {},
 }));
 
@@ -119,6 +120,96 @@ describe('run command', () => {
     expect(initRepoState).toHaveBeenCalledWith('/repo');
     expect(createEvent).toHaveBeenCalled();
     expect(appendEvent).toHaveBeenCalled();
+  });
+
+  it('pins the 24h default maximum runtime for cloud sessions', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync(['node', 'hydraz', 'run', '--session', 'demo', 'Do it']);
+
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      executionTarget: 'cloud',
+      maxRuntime: '24h',
+    }));
+    expect(console.log).toHaveBeenCalledWith('Max runtime: 24h');
+  });
+
+  it('pins an explicit maximum runtime for cloud sessions', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--cloud',
+      '--max-runtime',
+      '36h',
+      '--session',
+      'demo',
+      'Do it',
+    ]);
+
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      executionTarget: 'cloud',
+      maxRuntime: '36h',
+    }));
+    expect(console.log).toHaveBeenCalledWith('Max runtime: 36h');
+  });
+
+  it('accepts a compound cloud maximum runtime', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--max-runtime',
+      '1h30m',
+      '--session',
+      'demo',
+      'Do it',
+    ]);
+
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      maxRuntime: '1h30m',
+    }));
+  });
+
+  it('rejects an invalid cloud maximum runtime', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--max-runtime',
+      'forever',
+      'Do it',
+    ]);
+
+    expect(console.error).toHaveBeenCalledWith(
+      'Invalid maximum runtime: "forever". Use a positive duration such as 90m, 12h, or 1h30m.',
+    );
+    expect(createNewSession).not.toHaveBeenCalled();
+    expect(startSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a maximum runtime outside cloud mode', async () => {
+    const program = makeProgram();
+
+    await program.parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--local',
+      '--max-runtime',
+      '2h',
+      'Do it',
+    ]);
+
+    expect(console.error).toHaveBeenCalledWith('--max-runtime is only supported with cloud runs.');
+    expect(createNewSession).not.toHaveBeenCalled();
+    expect(startSession).not.toHaveBeenCalled();
   });
 
   it('rejects invalid base branch names', async () => {

@@ -26,6 +26,8 @@ export const ARTIFACT_FILES = [
 
 export type ArtifactFile = (typeof ARTIFACT_FILES)[number];
 
+export const DEFAULT_CLOUD_MAX_RUNTIME = '24h';
+
 export interface SessionMetadata {
   id: string;
   name: string;
@@ -33,6 +35,7 @@ export interface SessionMetadata {
   branchName: string;
   baseBranch?: string;
   executionTarget: ExecutionTarget;
+  maxRuntime?: string;
   task: string;
   state: SessionState;
   createdAt: string;
@@ -72,6 +75,7 @@ export function createSession(params: {
   branchName: string;
   baseBranch?: string;
   executionTarget: ExecutionTarget;
+  maxRuntime?: string;
   task: string;
 }): SessionMetadata {
   const now = new Date().toISOString();
@@ -82,6 +86,7 @@ export function createSession(params: {
     branchName: params.branchName,
     baseBranch: params.baseBranch,
     executionTarget: params.executionTarget,
+    maxRuntime: params.maxRuntime,
     task: params.task,
     state: 'created',
     createdAt: now,

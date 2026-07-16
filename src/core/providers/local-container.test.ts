@@ -539,5 +539,19 @@ describe('CloudProvider', () => {
       expect(providerArg).toBeUndefined();
       expect(branchArg).toBeUndefined();
     });
+
+    it('passes a maximum runtime only for cloud workspaces', async () => {
+      const config = makeConfig();
+      const localSession = Object.assign(makeSession('local-session'), { maxRuntime: '8h' });
+      const cloudSession = Object.assign(makeSession('cloud-session', 'cloud'), { maxRuntime: '8h' });
+
+      await new LocalContainerProvider().createWorkspace({ session: localSession, config });
+      await new CloudProvider().createWorkspace({ session: cloudSession, config });
+
+      expect(mockDevpodUp.mock.calls[0]?.[6]).toBeUndefined();
+      expect(mockDevpodUp.mock.calls[1]?.[6]).toEqual({
+        INACTIVITY_TIMEOUT: '8h',
+      });
+    });
   });
 });

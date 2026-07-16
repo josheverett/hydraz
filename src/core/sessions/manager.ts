@@ -69,6 +69,7 @@ export function createNewSession(params: {
   branchName: string;
   baseBranch?: string;
   executionTarget: ExecutionTarget;
+  maxRuntime?: string;
   task: string;
 }): SessionMetadata {
   const existing = listSessions(params.repoRoot);

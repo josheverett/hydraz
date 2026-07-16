@@ -1,6 +1,6 @@
 {
   "name": "hydraz",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "A Codex cloud harness for detached long-running coding goals",
   "type": "module",
   "packageManager": "pnpm@10.1.0",

@@ -140,6 +140,7 @@ export async function startSession(
       session,
       config,
       branchOverride: options.baseBranch ?? session.baseBranch,
+      maxRuntime: session.maxRuntime,
       skipClone: options.skipClone,
       onHeartbeat: (label, elapsedMs) => {
         emit(repoRoot, sessionId, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);

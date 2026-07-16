@@ -3,7 +3,11 @@ import type { Command } from 'commander';
 import { detectRepo } from '../../core/repo/detect.js';
 import { findSessionByName } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
-import { sshExec } from '../../core/providers/devpod.js';
+import { sshStream } from '../../core/providers/devpod.js';
+import {
+  formatStoppedWorkspaceNotice,
+  getSessionWorkspaceHealth,
+} from '../workspace-health.js';
 
 export function registerLogsCommand(program: Command): void {
   program
@@ -23,6 +27,12 @@ export function registerLogsCommand(program: Command): void {
         return;
       }
 
+      const initialWorkspaceHealth = getSessionWorkspaceHealth(found);
+      if (initialWorkspaceHealth?.status === 'Stopped') {
+        console.log(`\n${formatStoppedWorkspaceNotice(initialWorkspaceHealth, found)}\n`);
+        return;
+      }
+
       const session = refreshSessionStatus(found.id, repo.root);
       if (!session.codex?.eventsPath) {
         console.log('\nNo Codex event log recorded for this session.\n');
@@ -30,8 +40,16 @@ export function registerLogsCommand(program: Command): void {
       }
 
       if (session.executionTarget !== 'local') {
+        const workspaceHealth = getSessionWorkspaceHealth(session);
+        if (workspaceHealth?.status === 'Stopped') {
+          console.log(`\n${formatStoppedWorkspaceNotice(workspaceHealth, session)}\n`);
+          return;
+        }
         try {
-          console.log(sshExec(`hydraz-${session.id}`, `cat ${quote(session.codex.eventsPath)}`));
+          await sshStream(
+            workspaceHealth?.workspaceName ?? `hydraz-${session.id}`,
+            `cat ${quote(session.codex.eventsPath)}`,
+          );
         } catch (err) {
           console.error(err instanceof Error ? err.message : String(err));
         }

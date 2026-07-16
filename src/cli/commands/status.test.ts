@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectRepo } from '../../core/repo/detect.js';
 import { findSessionByName } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
+import {
+  formatStoppedWorkspaceNotice,
+  getSessionWorkspaceHealth,
+} from '../workspace-health.js';
 import { registerStatusCommand } from './status.js';
 
 vi.mock('../../core/repo/detect.js', () => ({
@@ -12,10 +16,16 @@ vi.mock('../../core/repo/detect.js', () => ({
 vi.mock('../../core/sessions/index.js', () => ({
   findSessionByName: vi.fn(),
   getActiveSessions: vi.fn(() => []),
+  isTerminalState: vi.fn(() => false),
 }));
 
 vi.mock('../../core/orchestration/index.js', () => ({
   refreshSessionStatus: vi.fn(),
+}));
+
+vi.mock('../workspace-health.js', () => ({
+  getSessionWorkspaceHealth: vi.fn(),
+  formatStoppedWorkspaceNotice: vi.fn(),
 }));
 
 const session = {
@@ -24,6 +34,7 @@ const session = {
   repoRoot: '/repo',
   branchName: 'hydraz/demo',
   executionTarget: 'cloud' as const,
+  maxRuntime: '24h',
   task: 'Do it',
   state: 'syncing' as const,
   createdAt: '2026-07-15T00:00:00.000Z',
@@ -57,6 +68,11 @@ describe('status command', () => {
     vi.mocked(detectRepo).mockReturnValue({ root: '/repo', name: 'repo' });
     vi.mocked(findSessionByName).mockReturnValue(session);
     vi.mocked(refreshSessionStatus).mockReturnValue(session);
+    vi.mocked(getSessionWorkspaceHealth).mockReturnValue({
+      workspaceName: 'hydraz-session-1',
+      status: 'Running',
+    });
+    vi.mocked(formatStoppedWorkspaceNotice).mockReturnValue('');
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -75,6 +91,7 @@ describe('status command', () => {
     expect(output).toContain('Codex model: gpt-5.6-sol');
     expect(output).toContain('Reasoning:   ultra');
     expect(output).toContain('Speed:       fast');
+    expect(output).toContain('Max runtime: 24h');
     expect(output).toContain(
       'Invocation:  /tmp/hydraz-codex/session-1/invocation.json',
     );
@@ -82,5 +99,26 @@ describe('status command', () => {
     expect(output).toContain('Model check: matched');
     expect(output).toContain('Effort check: matched');
     expect(output).toContain('Tier check:  unavailable');
+  });
+
+  it('reports a stopped workspace without changing the session state', async () => {
+    vi.mocked(getSessionWorkspaceHealth).mockReturnValue({
+      workspaceName: 'hydraz-session-1',
+      status: 'Stopped',
+    });
+    vi.mocked(formatStoppedWorkspaceNotice).mockReturnValue(
+      'Workspace stopped before Hydraz received a runner result. Restart it with: devpod up hydraz-session-1',
+    );
+    const program = new Command();
+    program.exitOverride();
+    registerStatusCommand(program);
+
+    await program.parseAsync(['node', 'hydraz', 'status', 'demo']);
+
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('State:      syncing');
+    expect(output).toContain('Workspace:  stopped');
+    expect(output).toContain('devpod up hydraz-session-1');
+    expect(refreshSessionStatus).not.toHaveBeenCalled();
   });
 });

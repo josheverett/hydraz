@@ -131,11 +131,15 @@ export async function devpodUp(
   branch?: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
   env?: Record<string, string>,
+  providerOptions?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
   const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
   if (provider) {
     args.push('--provider', provider);
+  }
+  for (const [key, value] of Object.entries(providerOptions ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    args.push('--provider-option', `${key}=${value}`);
   }
 
   let envFilePath: string | undefined;
@@ -242,6 +246,44 @@ export function sshExec(workspaceName: string, command: string): string {
   debugOutput('ssh stdout', output);
   debugTiming('sshExec', Date.now() - start);
   return output;
+}
+
+export interface SshStreamOptions {
+  stdout?: NodeJS.WritableStream;
+  stderr?: NodeJS.WritableStream;
+}
+
+export function sshStream(
+  workspaceName: string,
+  command: string,
+  options: SshStreamOptions = {},
+): Promise<void> {
+  debugExec('ssh', [`${workspaceName}.devpod`, command]);
+  const child = spawn('ssh', [`${workspaceName}.devpod`, command], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdout = options.stdout ?? process.stdout;
+  const stderr = options.stderr ?? process.stderr;
+  child.stdout?.pipe(stdout, { end: false });
+  child.stderr?.pipe(stderr, { end: false });
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    child.once('error', (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+    child.once('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`SSH exited with code ${code ?? 'unknown'}`));
+      }
+    });
+  });
 }
 
 export function getContainerHome(workspaceName: string): string {
