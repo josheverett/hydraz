@@ -4,6 +4,10 @@ import { detectRepo } from '../../core/repo/detect.js';
 import { findSessionByName } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
 import { sshExec } from '../../core/providers/devpod.js';
+import {
+  formatStoppedWorkspaceNotice,
+  getSessionWorkspaceHealth,
+} from '../workspace-health.js';
 
 export function registerLogsCommand(program: Command): void {
   program
@@ -30,6 +34,11 @@ export function registerLogsCommand(program: Command): void {
       }
 
       if (session.executionTarget !== 'local') {
+        const workspaceHealth = getSessionWorkspaceHealth(session);
+        if (workspaceHealth?.status === 'Stopped') {
+          console.log(`\n${formatStoppedWorkspaceNotice(workspaceHealth)}\n`);
+          return;
+        }
         try {
           console.log(sshExec(`hydraz-${session.id}`, `cat ${quote(session.codex.eventsPath)}`));
         } catch (err) {
