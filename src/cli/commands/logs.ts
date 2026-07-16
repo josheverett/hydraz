@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { detectRepo } from '../../core/repo/detect.js';
 import { findSessionByName } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
-import { sshExec } from '../../core/providers/devpod.js';
+import { sshStream } from '../../core/providers/devpod.js';
 import {
   formatStoppedWorkspaceNotice,
   getSessionWorkspaceHealth,
@@ -40,7 +40,10 @@ export function registerLogsCommand(program: Command): void {
           return;
         }
         try {
-          console.log(sshExec(`hydraz-${session.id}`, `cat ${quote(session.codex.eventsPath)}`));
+          await sshStream(
+            workspaceHealth?.workspaceName ?? `hydraz-${session.id}`,
+            `cat ${quote(session.codex.eventsPath)}`,
+          );
         } catch (err) {
           console.error(err instanceof Error ? err.message : String(err));
         }

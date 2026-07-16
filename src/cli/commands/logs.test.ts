@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectRepo } from '../../core/repo/detect.js';
-import { sshExec } from '../../core/providers/devpod.js';
+import { sshExec, sshStream } from '../../core/providers/devpod.js';
 import { findSessionByName, type SessionMetadata } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
 import {
@@ -16,6 +16,7 @@ vi.mock('../../core/repo/detect.js', () => ({
 
 vi.mock('../../core/providers/devpod.js', () => ({
   sshExec: vi.fn(),
+  sshStream: vi.fn(async () => {}),
 }));
 
 vi.mock('../../core/sessions/index.js', () => ({
@@ -80,5 +81,32 @@ describe('logs command', () => {
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
       'devpod up hydraz-session-1',
     );
+  });
+
+  it('streams remote logs instead of buffering them', async () => {
+    vi.mocked(getSessionWorkspaceHealth).mockReturnValue({
+      workspaceName: 'hydraz-session-1',
+      status: 'Running',
+    });
+
+    await makeProgram().parseAsync(['node', 'hydraz', 'logs', 'demo']);
+
+    expect(sshStream).toHaveBeenCalledWith(
+      'hydraz-session-1',
+      "cat '/tmp/events.jsonl'",
+    );
+    expect(sshExec).not.toHaveBeenCalled();
+  });
+
+  it('reports a streaming SSH failure', async () => {
+    vi.mocked(getSessionWorkspaceHealth).mockReturnValue({
+      workspaceName: 'hydraz-session-1',
+      status: 'Running',
+    });
+    vi.mocked(sshStream).mockRejectedValueOnce(new Error('SSH exited with code 12'));
+
+    await makeProgram().parseAsync(['node', 'hydraz', 'logs', 'demo']);
+
+    expect(console.error).toHaveBeenCalledWith('SSH exited with code 12');
   });
 });

@@ -248,6 +248,48 @@ export function sshExec(workspaceName: string, command: string): string {
   return output;
 }
 
+export interface SshStreamOptions {
+  stdout?: NodeJS.WritableStream;
+  stderr?: NodeJS.WritableStream;
+}
+
+export function sshStream(
+  workspaceName: string,
+  command: string,
+  options: SshStreamOptions = {},
+): Promise<void> {
+  debugExec('ssh', [`${workspaceName}.devpod`, command]);
+  const child = spawn('ssh', [`${workspaceName}.devpod`, command], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdout = options.stdout ?? process.stdout;
+  const stderr = options.stderr ?? process.stderr;
+  child.stdout?.on('data', (chunk) => {
+    stdout.write(chunk);
+  });
+  child.stderr?.on('data', (chunk) => {
+    stderr.write(chunk);
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    child.once('error', (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+    child.once('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`SSH exited with code ${code ?? 'unknown'}`));
+      }
+    });
+  });
+}
+
 export function getContainerHome(workspaceName: string): string {
   return sshExec(workspaceName, 'echo $HOME').trim();
 }
