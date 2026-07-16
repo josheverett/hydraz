@@ -55,6 +55,7 @@ hydraz config              # configure Codex/GitHub defaults
 | `--model <model>` | Pass a model override to Codex |
 | `--reasoning-effort <effort>` | Override Codex reasoning effort |
 | `--speed <speed>` | `fast` or `standard` |
+| `--max-runtime <duration>` | Maximum cloud workspace runtime; defaults to `24h` |
 | `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`; container/cloud runs default Codex to `danger-full-access` inside the DevPod boundary |
 | `--search` | Enable live Codex web search; currently enabled by default via Codex config overrides |
 | `--no-push` | Do not push after Codex completes |
@@ -67,6 +68,8 @@ hydraz config              # configure Codex/GitHub defaults
 | `--verbose` | Enable diagnostic output with known token/API-key values redacted |
 
 Use `--base <branch>` when the session should branch from and open its PR against a branch other than the repository default, for example `hydraz run --base staging "Update the demo"`.
+
+Cloud runs pass the maximum runtime to DevPod as the workspace inactivity timeout. DevPod measures its own control-plane activity rather than Codex CPU, process, network, or repository activity, so Hydraz treats this value as a hard runtime lease for detached work. Override the `24h` default when a goal needs a different bound, for example `hydraz run --max-runtime 36h "Run the reliability evaluation"`.
 
 `hydraz resume` accepts the same `--model`, `--reasoning-effort`, and `--speed`
 overrides.
