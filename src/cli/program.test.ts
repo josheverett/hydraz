@@ -28,9 +28,9 @@ describe('createProgram', () => {
     expect(program.name()).toBe('hydraz');
   });
 
-  it('reports the Hydraz 4.1.0 release version from package.json', () => {
+  it('reports the Hydraz 4.2.0 release version from package.json', () => {
     const program = createProgram();
-    expect(packageJson.version).toBe('4.1.0');
+    expect(packageJson.version).toBe('4.2.0');
     expect(program.version()).toBe(packageJson.version);
   });
 
