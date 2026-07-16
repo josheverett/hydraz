@@ -11,6 +11,7 @@ import {
 } from '../../core/config/index.js';
 import {
   createNewSession,
+  DEFAULT_CLOUD_MAX_RUNTIME,
   initRepoState,
   SessionError,
 } from '../../core/sessions/index.js';
@@ -20,6 +21,8 @@ import { startSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
 
 type Sandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
+
+const POSITIVE_DEVPOD_DURATION = /^(?=.*[1-9])(?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|s|m|h))+$/;
 
 export function registerRunCommand(program: Command): void {
   program
@@ -35,6 +38,7 @@ export function registerRunCommand(program: Command): void {
     .option('--model <model>', 'Codex model override')
     .option('--reasoning-effort <effort>', 'Codex reasoning effort override')
     .option('--speed <speed>', 'Codex speed override: standard or fast')
+    .option('--max-runtime <duration>', 'Maximum cloud workspace runtime')
     .option('--sandbox <mode>', 'Codex sandbox mode: read-only, workspace-write, danger-full-access')
     .option('--search', 'Enable live Codex web search')
     .option('--no-push', 'Do not push the session branch after Codex completes')
@@ -52,6 +56,7 @@ export function registerRunCommand(program: Command): void {
       model?: string;
       reasoningEffort?: CodexReasoningEffort;
       speed?: CodexSpeed;
+      maxRuntime?: string;
       sandbox?: Sandbox;
       search?: boolean;
       push?: boolean;
@@ -92,6 +97,27 @@ export function registerRunCommand(program: Command): void {
         return;
       }
 
+      const executionTarget = options.local
+        ? 'local' as const
+        : options.container
+          ? 'local-container' as const
+          : 'cloud' as const;
+      if (options.maxRuntime !== undefined && executionTarget !== 'cloud') {
+        console.error('--max-runtime is only supported with cloud runs.');
+        return;
+      }
+      const maxRuntime = executionTarget === 'cloud'
+        ? options.maxRuntime === undefined
+          ? DEFAULT_CLOUD_MAX_RUNTIME
+          : options.maxRuntime.trim()
+        : undefined;
+      if (maxRuntime !== undefined && !POSITIVE_DEVPOD_DURATION.test(maxRuntime)) {
+        console.error(
+          `Invalid maximum runtime: "${options.maxRuntime ?? maxRuntime}". Use a positive duration such as 90m, 12h, or 1h30m.`,
+        );
+        return;
+      }
+
       if (options.sandbox && !['read-only', 'workspace-write', 'danger-full-access'].includes(options.sandbox)) {
         console.error(`Invalid sandbox mode: "${options.sandbox}".`);
         return;
@@ -109,12 +135,6 @@ export function registerRunCommand(program: Command): void {
         return;
       }
 
-      const executionTarget = options.local
-        ? 'local' as const
-        : options.container
-          ? 'local-container' as const
-          : 'cloud' as const;
-
       let session;
       try {
         session = createNewSession({
@@ -123,6 +143,7 @@ export function registerRunCommand(program: Command): void {
           branchName,
           baseBranch: options.base,
           executionTarget,
+          maxRuntime,
           task: goal,
         });
       } catch (err) {
@@ -145,6 +166,9 @@ export function registerRunCommand(program: Command): void {
       }
       console.log(`Goal: ${goal}`);
       console.log(`Target: ${executionTarget}`);
+      if (maxRuntime) {
+        console.log(`Max runtime: ${maxRuntime}`);
+      }
       console.log('');
 
       await startSession(session.id, repo.root, {

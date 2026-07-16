@@ -16,6 +16,7 @@ export interface CreateWorkspaceParams {
   session: SessionMetadata;
   config: HydrazConfig;
   branchOverride?: string;
+  maxRuntime?: string;
   skipClone?: boolean;
   onHeartbeat?: (label: string, elapsedMs: number) => void;
   gitIdentity?: GitHubGitIdentity;

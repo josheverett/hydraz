@@ -24,6 +24,7 @@ const session = {
   repoRoot: '/repo',
   branchName: 'hydraz/demo',
   executionTarget: 'cloud' as const,
+  maxRuntime: '24h',
   task: 'Do it',
   state: 'syncing' as const,
   createdAt: '2026-07-15T00:00:00.000Z',
@@ -75,6 +76,7 @@ describe('status command', () => {
     expect(output).toContain('Codex model: gpt-5.6-sol');
     expect(output).toContain('Reasoning:   ultra');
     expect(output).toContain('Speed:       fast');
+    expect(output).toContain('Max runtime: 24h');
     expect(output).toContain(
       'Invocation:  /tmp/hydraz-codex/session-1/invocation.json',
     );

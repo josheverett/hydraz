@@ -47,6 +47,9 @@ function renderStatus(session: SessionMetadata): void {
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
+  if (session.maxRuntime) {
+    console.log(`  Max runtime: ${session.maxRuntime}`);
+  }
   console.log(`  Goal:       ${truncate(session.task, 80)}`);
   console.log(`  Created:    ${session.createdAt}`);
   console.log(`  Updated:    ${session.updatedAt}`);

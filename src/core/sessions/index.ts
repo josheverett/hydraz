@@ -7,6 +7,7 @@ export {
   RESUMABLE_STATES,
   VALID_TRANSITIONS,
   ARTIFACT_FILES,
+  DEFAULT_CLOUD_MAX_RUNTIME,
   createSession,
   isValidTransition,
   isActiveState,

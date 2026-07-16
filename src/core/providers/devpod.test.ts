@@ -951,6 +951,22 @@ describe('devpodUp', () => {
     expect(args).not.toContain('--provider');
   });
 
+  it('passes provider options to devpod up', async () => {
+    await devpodUp(
+      'git@github.com:org/repo.git',
+      'hydraz-abc',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { INACTIVITY_TIMEOUT: '24h' },
+    );
+
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('--provider-option');
+    expect(args).toContain('INACTIVITY_TIMEOUT=24h');
+  });
+
   it('appends branch to source URL with @ syntax when branch is specified', async () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];

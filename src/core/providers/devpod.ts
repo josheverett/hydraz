@@ -131,11 +131,15 @@ export async function devpodUp(
   branch?: string,
   onHeartbeat?: (label: string, elapsedMs: number) => void,
   env?: Record<string, string>,
+  providerOptions?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
   const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
   if (provider) {
     args.push('--provider', provider);
+  }
+  for (const [key, value] of Object.entries(providerOptions ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    args.push('--provider-option', `${key}=${value}`);
   }
 
   let envFilePath: string | undefined;

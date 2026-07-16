@@ -7,6 +7,7 @@ import type {
   ProviderCheckResult,
 } from './provider.js';
 import type { ExecutionTarget } from '../config/schema.js';
+import { DEFAULT_CLOUD_MAX_RUNTIME } from '../sessions/schema.js';
 import {
   checkDevPodAvailability,
   checkDockerAvailability,
@@ -122,7 +123,21 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     try {
       const authEnv = prepareContainerAuthEnv(params.config, gitIdentity);
-      await devpodUp(devpodSource, workspaceName, devpodProvider, currentBranch, params.onHeartbeat, authEnv);
+      const commonArgs = [
+        devpodSource,
+        workspaceName,
+        devpodProvider,
+        currentBranch,
+        params.onHeartbeat,
+        authEnv,
+      ] as const;
+      if (this.type === 'cloud') {
+        await devpodUp(...commonArgs, {
+          INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME,
+        });
+      } else {
+        await devpodUp(...commonArgs);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
