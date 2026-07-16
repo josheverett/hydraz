@@ -1,5 +1,8 @@
 import { devpodStatus } from '../core/providers/devpod.js';
-import type { SessionMetadata } from '../core/sessions/index.js';
+import {
+  isTerminalState,
+  type SessionMetadata,
+} from '../core/sessions/index.js';
 
 export interface SessionWorkspaceHealth {
   workspaceName: string;
@@ -22,6 +25,10 @@ export function getSessionWorkspaceHealth(
 
 export function formatStoppedWorkspaceNotice(
   health: SessionWorkspaceHealth,
+  session: SessionMetadata,
 ): string {
+  if (isTerminalState(session.state)) {
+    return `Workspace is stopped. Restart it to access remote artifacts: devpod up ${health.workspaceName}`;
+  }
   return `Workspace stopped before Hydraz received a runner result. Restart it with: devpod up ${health.workspaceName}`;
 }

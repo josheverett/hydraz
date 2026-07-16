@@ -45,11 +45,24 @@ describe('session workspace health', () => {
   });
 
   it('formats an actionable stopped-workspace notice', () => {
+    const session = makeSession('cloud');
     expect(formatStoppedWorkspaceNotice({
       workspaceName: 'hydraz-session-1',
       status: 'Stopped',
-    })).toBe(
+    }, session)).toBe(
       'Workspace stopped before Hydraz received a runner result. Restart it with: devpod up hydraz-session-1',
+    );
+  });
+
+  it('does not claim a terminal session stopped before receiving a result', () => {
+    const session = makeSession('cloud');
+    session.state = 'completed';
+
+    expect(formatStoppedWorkspaceNotice({
+      workspaceName: 'hydraz-session-1',
+      status: 'Stopped',
+    }, session)).toBe(
+      'Workspace is stopped. Restart it to access remote artifacts: devpod up hydraz-session-1',
     );
   });
 });

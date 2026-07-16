@@ -43,8 +43,12 @@ export function registerStatusCommand(program: Command): void {
       }
 
       const selected = session;
-      session = refreshSessionStatus(selected.id, repo.root);
-      renderStatus(session, getSessionWorkspaceHealth(session));
+      let workspaceHealth = getSessionWorkspaceHealth(selected);
+      if (workspaceHealth === null || workspaceHealth.status === 'Running') {
+        session = refreshSessionStatus(selected.id, repo.root);
+        workspaceHealth = getSessionWorkspaceHealth(session);
+      }
+      renderStatus(session, workspaceHealth);
     });
 }
 
@@ -103,7 +107,7 @@ function renderStatus(
     workspaceHealth?.status === 'Stopped'
     && !isTerminalState(session.state)
   ) {
-    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth)}`);
+    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth, session)}`);
   }
   console.log();
 }

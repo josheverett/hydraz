@@ -82,7 +82,7 @@ export function renderAttachView(session: SessionMetadata, repoRoot: string): vo
 
   if (workspaceHealth?.status === 'Stopped') {
     console.log(`\n  Workspace:  stopped`);
-    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth)}\n`);
+    console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth, session)}\n`);
     return;
   }
 

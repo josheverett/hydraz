@@ -27,6 +27,12 @@ export function registerLogsCommand(program: Command): void {
         return;
       }
 
+      const initialWorkspaceHealth = getSessionWorkspaceHealth(found);
+      if (initialWorkspaceHealth?.status === 'Stopped') {
+        console.log(`\n${formatStoppedWorkspaceNotice(initialWorkspaceHealth, found)}\n`);
+        return;
+      }
+
       const session = refreshSessionStatus(found.id, repo.root);
       if (!session.codex?.eventsPath) {
         console.log('\nNo Codex event log recorded for this session.\n');
@@ -36,7 +42,7 @@ export function registerLogsCommand(program: Command): void {
       if (session.executionTarget !== 'local') {
         const workspaceHealth = getSessionWorkspaceHealth(session);
         if (workspaceHealth?.status === 'Stopped') {
-          console.log(`\n${formatStoppedWorkspaceNotice(workspaceHealth)}\n`);
+          console.log(`\n${formatStoppedWorkspaceNotice(workspaceHealth, session)}\n`);
           return;
         }
         try {

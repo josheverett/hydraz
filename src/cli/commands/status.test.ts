@@ -119,5 +119,6 @@ describe('status command', () => {
     expect(output).toContain('State:      syncing');
     expect(output).toContain('Workspace:  stopped');
     expect(output).toContain('devpod up hydraz-session-1');
+    expect(refreshSessionStatus).not.toHaveBeenCalled();
   });
 });

@@ -264,12 +264,8 @@ export function sshStream(
   });
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  child.stdout?.on('data', (chunk) => {
-    stdout.write(chunk);
-  });
-  child.stderr?.on('data', (chunk) => {
-    stderr.write(chunk);
-  });
+  child.stdout?.pipe(stdout, { end: false });
+  child.stderr?.pipe(stderr, { end: false });
 
   return new Promise<void>((resolve, reject) => {
     let settled = false;

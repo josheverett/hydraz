@@ -81,6 +81,7 @@ describe('logs command', () => {
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
       'devpod up hydraz-session-1',
     );
+    expect(refreshSessionStatus).not.toHaveBeenCalled();
   });
 
   it('streams remote logs instead of buffering them', async () => {

@@ -377,11 +377,13 @@ describe('sshStream', () => {
   it('streams output larger than one MiB without buffering it', async () => {
     const child = createChild();
     mockSpawn.mockReturnValue(child);
+    const pause = vi.spyOn(child.stdout, 'pause');
     let received = 0;
     const output = new Writable({
+      highWaterMark: 1,
       write(chunk, _encoding, callback) {
         received += Buffer.byteLength(chunk);
-        callback();
+        setImmediate(callback);
       },
     });
 
@@ -394,6 +396,7 @@ describe('sshStream', () => {
     await streaming;
 
     expect(received).toBe(2 * 1024 * 1024);
+    expect(pause).toHaveBeenCalled();
     expect(mockSpawn).toHaveBeenCalledWith(
       'ssh',
       ['my-workspace.devpod', 'cat /tmp/events.jsonl'],
