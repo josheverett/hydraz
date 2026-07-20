@@ -121,4 +121,29 @@ describe('status command', () => {
     expect(output).toContain('devpod up hydraz-session-1');
     expect(refreshSessionStatus).not.toHaveBeenCalled();
   });
+
+  it('does not print large file-backed goal content', async () => {
+    const task = `TOP_SECRET_STATUS_GOAL${'x'.repeat(256 * 1024)}`;
+    const largeSession = {
+      ...session,
+      task,
+      taskSource: {
+        kind: 'file' as const,
+        label: '/tmp/private status goal.md',
+        byteLength: Buffer.byteLength(task, 'utf8'),
+        sha256: 'status-sha',
+      },
+    };
+    vi.mocked(findSessionByName).mockReturnValue(largeSession);
+    vi.mocked(refreshSessionStatus).mockReturnValue(largeSession);
+    const program = new Command();
+    program.exitOverride();
+    registerStatusCommand(program);
+
+    await program.parseAsync(['node', 'hydraz', 'status', 'demo']);
+
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('file /tmp/private status goal.md');
+    expect(output).not.toContain('TOP_SECRET_STATUS_GOAL');
+  });
 });

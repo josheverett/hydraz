@@ -33,4 +33,28 @@ describe('buildPullRequestContent', () => {
     expect(content.title).toBe('Hydraz: auth-cleanup');
     expect(content.body).toContain('Switch container delivery to GitHub HTTPS auth');
   });
+
+  it('bounds file-backed goals in fallback pull request bodies', () => {
+    const task = `TOP_SECRET_PULL_REQUEST_GOAL${'x'.repeat(256 * 1024)}`;
+    const session = createSession({
+      name: 'large-goal',
+      repoRoot: '/tmp/repo',
+      branchName: 'hydraz/large-goal',
+      executionTarget: 'cloud',
+      task,
+      taskSource: {
+        kind: 'file',
+        label: '/Users/josh/private/goal.md',
+        byteLength: Buffer.byteLength(task, 'utf8'),
+        sha256: 'public-sha',
+      },
+    });
+
+    const content = buildPullRequestContent(session, null);
+
+    expect(content.body).toContain('file-backed goal');
+    expect(content.body).not.toContain('TOP_SECRET_PULL_REQUEST_GOAL');
+    expect(content.body).not.toContain('/Users/josh/private');
+    expect(content.body.length).toBeLessThan(1_000);
+  });
 });

@@ -19,6 +19,7 @@ import { createEvent, appendEvent } from '../../core/events/index.js';
 import { suggestBranchName, isValidBranchName, isValidSessionName } from '../../core/branches/index.js';
 import { startSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
+import { formatGoalSummary } from '../../core/display/goal-summary.js';
 import { GoalInputError, resolveGoalInput } from '../goal-input.js';
 
 type Sandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
@@ -180,7 +181,7 @@ export function registerRunCommand(program: Command): void {
       if (options.base) {
         console.log(`Base: ${options.base}`);
       }
-      console.log(`Goal: ${resolvedGoal}`);
+      console.log(`Goal: ${formatGoalSummary(resolvedGoal, resolvedGoalInput.source)}`);
       console.log(`Target: ${executionTarget}`);
       if (maxRuntime) {
         console.log(`Max runtime: ${maxRuntime}`);

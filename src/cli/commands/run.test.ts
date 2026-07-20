@@ -183,6 +183,24 @@ describe('run command', () => {
         sha256: 'file-sha',
       },
     }));
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).toContain('file /tmp/my goal.md');
+    expect(output).not.toContain('# File goal');
+  });
+
+  it('keeps a concise positional goal recognizable in startup output', async () => {
+    await makeProgram().parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--session',
+      'demo',
+      'Do it',
+    ]);
+
+    expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(
+      'Goal: Do it',
+    );
   });
 
   it('stores stdin content and provenance in the session', async () => {

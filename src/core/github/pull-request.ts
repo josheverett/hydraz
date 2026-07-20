@@ -1,4 +1,5 @@
 import type { SessionMetadata } from '../sessions/schema.js';
+import { formatGoalSummary } from '../display/goal-summary.js';
 
 export interface PullRequestContent {
   title: string;
@@ -15,7 +16,7 @@ export function buildPullRequestContent(
       body: [
         `Automated pull request created by Hydraz for session "${session.name}".`,
         '',
-        `Task: ${session.task}`,
+        `Task: ${formatGoalSummary(session.task, session.taskSource, 'public')}`,
       ].join('\n'),
     };
   }

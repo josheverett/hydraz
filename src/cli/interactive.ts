@@ -10,6 +10,7 @@ import {
 import { createEvent, appendEvent, readEvents, formatEvent } from '../core/events/index.js';
 import { suggestBranchName, isValidSessionName, isValidBranchName } from '../core/branches/index.js';
 import { startSession } from '../core/orchestration/index.js';
+import { formatGoalSummary } from '../core/display/goal-summary.js';
 import { configMenu } from './commands/config.js';
 
 export async function runInteractive(): Promise<void> {
@@ -118,7 +119,7 @@ async function newSessionFlow(repoRoot: string, repoName: string): Promise<void>
   console.log(`    Session:   ${sessionName}`);
   console.log(`    Branch:    ${branchName}`);
   console.log(`    Target:    ${executionTarget}`);
-  console.log(`    Goal:      ${goal}\n`);
+  console.log(`    Goal:      ${formatGoalSummary(goal)}\n`);
 
   const confirmed = await confirm({ message: 'Launch session?', default: true });
   if (!confirmed) {
@@ -170,7 +171,7 @@ async function attachFlow(repoRoot: string): Promise<void> {
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
   if (session.codex?.threadId) console.log(`  Codex:      ${session.codex.threadId}`);
-  console.log(`  Goal:       ${session.task}`);
+  console.log(`  Goal:       ${formatGoalSummary(session.task, session.taskSource)}`);
 
   const events = readEvents(repoRoot, session.id);
   if (events.length > 0) {
@@ -212,7 +213,7 @@ async function reviewFlow(repoRoot: string): Promise<void> {
   if (session.codex?.remotePid) console.log(`  Runner PID:    ${session.codex.remotePid}`);
 
   console.log('\n  ── Goal ──');
-  console.log(`  ${session.task}`);
+  console.log(`  ${formatGoalSummary(session.task, session.taskSource)}`);
 
   if (session.blockerMessage) {
     console.log('\n  ── Blocker ──');
