@@ -19,6 +19,7 @@ import { createEvent, appendEvent } from '../../core/events/index.js';
 import { suggestBranchName, isValidBranchName, isValidSessionName } from '../../core/branches/index.js';
 import { startSession } from '../../core/orchestration/index.js';
 import { setVerbose } from '../../core/debug.js';
+import { GoalInputError, resolveGoalInput } from '../goal-input.js';
 
 type Sandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
 
@@ -28,7 +29,8 @@ export function registerRunCommand(program: Command): void {
   program
     .command('run')
     .description('Launch a detached Codex goal in a Hydraz-managed workspace')
-    .argument('<goal>', 'Goal description')
+    .argument('[goal]', 'Goal description')
+    .option('--goal-file <path>', 'Read the goal from a local UTF-8 file, or - for stdin')
     .option('--session <name>', 'Session name')
     .option('--branch <name>', 'Branch name')
     .option('--base <branch>', 'Base branch for workspace creation and PR delivery')
@@ -46,7 +48,8 @@ export function registerRunCommand(program: Command): void {
     .option('--keep-workspace', 'Preserve the workspace after successful delivery')
     .option('--no-clone', 'Use local repo path instead of cloning from remote')
     .option('--verbose', 'Enable diagnostic output')
-    .action(async (goal: string, options: {
+    .action(async (goal: string | undefined, options: {
+      goalFile?: string;
       session?: string;
       branch?: string;
       base?: string;
@@ -67,6 +70,17 @@ export function registerRunCommand(program: Command): void {
     }) => {
       if (options.verbose) setVerbose(true);
 
+      let resolvedGoalInput;
+      try {
+        resolvedGoalInput = resolveGoalInput(goal, options.goalFile);
+      } catch (error) {
+        if (error instanceof GoalInputError) {
+          console.error(error.message);
+          return;
+        }
+        throw error;
+      }
+
       const repo = detectRepo();
       if (!repo) {
         console.error('Not in a git repository.');
@@ -79,7 +93,8 @@ export function registerRunCommand(program: Command): void {
       initRepoState(repo.root);
 
       const config = loadConfig();
-      const sessionName = options.session ?? generateSessionName(goal);
+      const resolvedGoal = resolvedGoalInput.content;
+      const sessionName = options.session ?? generateSessionName(resolvedGoal);
 
       if (options.session && !isValidSessionName(sessionName)) {
         console.error(`Invalid session name: "${sessionName}". Use 2-64 chars: lowercase letters, numbers, hyphens.`);
@@ -144,7 +159,8 @@ export function registerRunCommand(program: Command): void {
           baseBranch: options.base,
           executionTarget,
           maxRuntime,
-          task: goal,
+          task: resolvedGoal,
+          taskSource: resolvedGoalInput.source,
         });
       } catch (err) {
         if (err instanceof SessionError) {
@@ -164,7 +180,7 @@ export function registerRunCommand(program: Command): void {
       if (options.base) {
         console.log(`Base: ${options.base}`);
       }
-      console.log(`Goal: ${goal}`);
+      console.log(`Goal: ${resolvedGoal}`);
       console.log(`Target: ${executionTarget}`);
       if (maxRuntime) {
         console.log(`Max runtime: ${maxRuntime}`);

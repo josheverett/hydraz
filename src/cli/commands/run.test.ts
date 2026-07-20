@@ -12,6 +12,7 @@ import {
 } from '../../core/sessions/index.js';
 import { appendEvent, createEvent } from '../../core/events/index.js';
 import { startSession } from '../../core/orchestration/index.js';
+import { GoalInputError, resolveGoalInput } from '../goal-input.js';
 import { registerRunCommand } from './run.js';
 
 vi.mock('../../core/repo/detect.js', () => ({
@@ -48,6 +49,14 @@ vi.mock('../../core/debug.js', () => ({
   setVerbose: vi.fn(),
 }));
 
+vi.mock('../goal-input.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../goal-input.js')>();
+  return {
+    ...actual,
+    resolveGoalInput: vi.fn(),
+  };
+});
+
 const testConfig = {
   executionTarget: 'cloud' as const,
   branchNaming: { prefix: 'hydraz/' },
@@ -81,6 +90,14 @@ describe('run command', () => {
     vi.mocked(detectRepo).mockReturnValue({ root: '/repo', name: 'repo' });
     vi.mocked(configExists).mockReturnValue(true);
     vi.mocked(loadConfig).mockReturnValue(testConfig);
+    vi.mocked(resolveGoalInput).mockImplementation((goal) => ({
+      content: goal ?? '',
+      source: {
+        kind: 'inline',
+        byteLength: Buffer.byteLength(goal ?? '', 'utf8'),
+        sha256: 'inline-sha',
+      },
+    }));
     vi.mocked(createNewSession).mockImplementation((params: any) => ({
       id: 'session-1',
       name: params.name,
@@ -89,6 +106,7 @@ describe('run command', () => {
       baseBranch: params.baseBranch,
       executionTarget: params.executionTarget,
       task: params.task,
+      taskSource: params.taskSource,
       state: 'created',
       createdAt: '2026-07-08T00:00:00.000Z',
       updatedAt: '2026-07-08T00:00:00.000Z',
@@ -132,6 +150,91 @@ describe('run command', () => {
       maxRuntime: '24h',
     }));
     expect(console.log).toHaveBeenCalledWith('Max runtime: 24h');
+  });
+
+  it('stores goal-file content and provenance in the session', async () => {
+    vi.mocked(resolveGoalInput).mockReturnValueOnce({
+      content: '# File goal\n',
+      source: {
+        kind: 'file',
+        label: '/tmp/my goal.md',
+        byteLength: 12,
+        sha256: 'file-sha',
+      },
+    });
+
+    await makeProgram().parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--goal-file',
+      '/tmp/my goal.md',
+      '--session',
+      'demo',
+    ]);
+
+    expect(resolveGoalInput).toHaveBeenCalledWith(undefined, '/tmp/my goal.md');
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      task: '# File goal\n',
+      taskSource: {
+        kind: 'file',
+        label: '/tmp/my goal.md',
+        byteLength: 12,
+        sha256: 'file-sha',
+      },
+    }));
+  });
+
+  it('stores stdin content and provenance in the session', async () => {
+    vi.mocked(resolveGoalInput).mockReturnValueOnce({
+      content: '# Stdin goal\n',
+      source: {
+        kind: 'stdin',
+        byteLength: 13,
+        sha256: 'stdin-sha',
+      },
+    });
+
+    await makeProgram().parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--goal-file',
+      '-',
+      '--session',
+      'demo',
+    ]);
+
+    expect(resolveGoalInput).toHaveBeenCalledWith(undefined, '-');
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      task: '# Stdin goal\n',
+      taskSource: expect.objectContaining({ kind: 'stdin' }),
+    }));
+  });
+
+  it.each([
+    {
+      label: 'neither input',
+      argv: ['--session', 'demo'],
+    },
+    {
+      label: 'both inputs',
+      argv: ['--goal-file', '/tmp/goal.md', '--session', 'demo', 'Inline goal'],
+    },
+  ])('reports goal input errors for $label', async ({ argv }) => {
+    vi.mocked(resolveGoalInput).mockImplementationOnce(() => {
+      throw new GoalInputError(
+        'Provide exactly one goal: a positional goal or --goal-file <path>.',
+      );
+    });
+
+    await makeProgram().parseAsync(['node', 'hydraz', 'run', ...argv]);
+
+    expect(console.error).toHaveBeenCalledWith(
+      'Provide exactly one goal: a positional goal or --goal-file <path>.',
+    );
+    expect(createNewSession).not.toHaveBeenCalled();
+    expect(startSession).not.toHaveBeenCalled();
   });
 
   it('pins an explicit maximum runtime for cloud sessions', async () => {

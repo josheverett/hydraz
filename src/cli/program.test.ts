@@ -69,12 +69,13 @@ describe('createProgram', () => {
     );
   });
 
-  it('run command accepts a required goal argument', () => {
+  it('run command accepts either an optional goal argument or goal-file', () => {
     const program = createProgram();
     const runCmd = program.commands.find((cmd) => cmd.name() === 'run');
     expect(runCmd).toBeDefined();
     expect(runCmd!.registeredArguments).toHaveLength(1);
-    expect(runCmd!.registeredArguments[0].required).toBe(true);
+    expect(runCmd!.registeredArguments[0].required).toBe(false);
+    expect(runCmd!.options.map((option) => option.long)).toContain('--goal-file');
   });
 
   it('run command exposes Codex v3 options and rejects old worker/review options', () => {

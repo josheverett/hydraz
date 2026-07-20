@@ -61,6 +61,29 @@ describe('createSession', () => {
     expect(session.task).toBe('Fix it');
   });
 
+  it('stores optional goal input provenance', () => {
+    const session = createSession({
+      name: 'test',
+      repoRoot: '/tmp/repo',
+      branchName: 'hydraz/test',
+      executionTarget: 'cloud',
+      task: '# File goal\n',
+      taskSource: {
+        kind: 'file',
+        label: '/tmp/goal.md',
+        byteLength: 12,
+        sha256: 'abc123',
+      },
+    });
+
+    expect(session.taskSource).toEqual({
+      kind: 'file',
+      label: '/tmp/goal.md',
+      byteLength: 12,
+      sha256: 'abc123',
+    });
+  });
+
   it('stores the optional base branch', () => {
     const session = createSession({
       name: 'test',

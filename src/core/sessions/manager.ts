@@ -8,6 +8,7 @@ import type { ExecutionTarget } from '../config/schema.js';
 import {
   type SessionMetadata,
   type SessionState,
+  type GoalInputSource,
   createSession,
   isValidTransition,
   isActiveState,
@@ -71,6 +72,7 @@ export function createNewSession(params: {
   executionTarget: ExecutionTarget;
   maxRuntime?: string;
   task: string;
+  taskSource?: GoalInputSource;
 }): SessionMetadata {
   const existing = listSessions(params.repoRoot);
   if (existing.some((s) => s.name === params.name)) {
