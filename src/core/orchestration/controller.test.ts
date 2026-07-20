@@ -69,6 +69,15 @@ vi.mock('../codex/repo-config.js', () => ({
   processHydrazIncludes: vi.fn(async () => {}),
 }));
 
+vi.mock('../codex/runner-options.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../codex/runner-options.js')>();
+  return {
+    ...actual,
+    writeRunnerOptionsFile: vi.fn((directory: string) =>
+      `${directory}/runner-options.json`),
+  };
+});
+
 vi.mock('./cleanup.js', () => ({
   findAllOrphanedWorkspaces: vi.fn(() => ({ known: [], unknown: [], total: 0 })),
 }));
@@ -111,6 +120,11 @@ import { scpToContainer, sshExec, stageCodexContainerImport } from '../providers
 import { ensurePlaywrightContainerRuntime } from '../providers/playwright-container.js';
 import { resolvePlaywrightRuntimeArchive } from '../providers/playwright-runtime.js';
 import { processHydrazIncludes } from '../codex/repo-config.js';
+import {
+  RUNNER_OPTIONS_FILE_ENV,
+  writeRunnerOptionsFile,
+} from '../codex/runner-options.js';
+import { readEvents } from '../events/index.js';
 import { setVerbose } from '../debug.js';
 
 describe('getProvider', () => {
@@ -133,6 +147,8 @@ describe('Codex controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setVerbose(false);
+    vi.mocked(sshExec).mockReset().mockReturnValue('4242\n');
+    vi.mocked(scpToContainer).mockReset().mockResolvedValue(undefined);
     vi.mocked(stageCodexContainerImport).mockReset().mockResolvedValue(undefined);
     vi.mocked(ensurePlaywrightContainerRuntime).mockReset().mockResolvedValue({
       runtimeRoot: '/home/codex/.hydraz/runtimes/playwright/1.61.1',
@@ -142,11 +158,15 @@ describe('Codex controller', () => {
     vi.mocked(resolvePlaywrightRuntimeArchive)
       .mockReset()
       .mockReturnValue('/fake/dist/runtime/playwright-runtime.tar.gz');
+    vi.mocked(writeRunnerOptionsFile)
+      .mockReset()
+      .mockImplementation((directory) => `${directory}/runner-options.json`);
     testConfig.executionTarget = 'cloud';
     testConfig.codex.command = 'codex';
     testConfig.codex.model = 'gpt-5.6-sol';
     testConfig.codex.reasoningEffort = 'ultra';
     testConfig.codex.speed = 'fast';
+    testConfig.github.token = 'ghp-test';
     repoRoot = mkdtempSync(tmpdir() + '/hydraz-controller-v3-test-');
     initRepoState(repoRoot);
     vi.spyOn(CloudProvider.prototype, 'checkAvailability').mockReturnValue({ available: true });
@@ -206,14 +226,11 @@ describe('Codex controller', () => {
   }
 
   function getRunnerOptionsFromLaunchCommand(sessionId: string) {
-    const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
-      call[1].includes('HYDRAZ_CODEX_RUNNER_OPTIONS=') &&
-      call[1].includes(`/tmp/hydraz-codex/${sessionId}`),
-    )?.[1];
-    expect(launchCommand).toBeDefined();
-    const match = launchCommand?.match(/HYDRAZ_CODEX_RUNNER_OPTIONS='([^']+)'/);
-    expect(match).toBeTruthy();
-    return JSON.parse(match![1]);
+    const writeCall = vi.mocked(writeRunnerOptionsFile).mock.calls.find(
+      ([, runnerOptions]) => runnerOptions.sessionId === sessionId,
+    );
+    expect(writeCall).toBeDefined();
+    return writeCall?.[1] as Parameters<typeof writeRunnerOptionsFile>[1];
   }
 
   function parseAsPosixShell(command: string): void {
@@ -272,9 +289,10 @@ describe('Codex controller', () => {
         config: { codex: { command: 'codex' } },
       });
       const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
-        call[1].includes('HYDRAZ_CODEX_RUNNER_OPTIONS='),
+        call[1].includes(`${RUNNER_OPTIONS_FILE_ENV}=`),
       )?.[1];
       expect(launchCommand).toContain(`CODEX_HOME='${codexHome}'`);
+      expect(launchCommand).not.toContain('HYDRAZ_CODEX_RUNNER_OPTIONS=');
     },
   );
 
@@ -404,7 +422,7 @@ describe('Codex controller', () => {
 
       const runnerLaunchCommands = vi.mocked(sshExec).mock.calls
         .map((call) => call[1])
-        .filter((command) => command.includes('HYDRAZ_CODEX_RUNNER_OPTIONS='));
+        .filter((command) => command.includes(`${RUNNER_OPTIONS_FILE_ENV}=`));
       expect(runnerLaunchCommands).toHaveLength(2);
       expect(runnerLaunchCommands[1]).toContain("PATH='/home/codex/.hydraz/bin':$PATH");
       expect(runnerLaunchCommands[1]).toContain(
@@ -439,7 +457,9 @@ describe('Codex controller', () => {
     expect(sshExec).not.toHaveBeenCalled();
     expect(spawn).toHaveBeenCalledOnce();
     const spawnEnvironment = vi.mocked(spawn).mock.calls[0]?.[2]?.env;
-    const runnerOptions = JSON.parse(spawnEnvironment?.HYDRAZ_CODEX_RUNNER_OPTIONS ?? '{}');
+    expect(spawnEnvironment?.HYDRAZ_CODEX_RUNNER_OPTIONS).toBeUndefined();
+    expect(spawnEnvironment?.[RUNNER_OPTIONS_FILE_ENV]).toContain('runner-options.json');
+    const runnerOptions = getRunnerOptionsFromLaunchCommand(session.id);
     expect(runnerOptions).toMatchObject({
       model: 'gpt-5.6-sol',
       reasoningEffort: 'ultra',
@@ -471,7 +491,7 @@ describe('Codex controller', () => {
     await startSession(session.id, repoRoot);
 
     const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
-      call[1].includes('HYDRAZ_CODEX_RUNNER_OPTIONS='),
+      call[1].includes(`${RUNNER_OPTIONS_FILE_ENV}=`),
     )?.[1];
     expect(launchCommand).toBeDefined();
     expect(launchCommand).toContain(' && (');
@@ -493,8 +513,71 @@ describe('Codex controller', () => {
       call[1].includes(`/tmp/hydraz-codex/${session.id}`),
     )?.[1];
     expect(launchCommand).toBeDefined();
-    expect(launchCommand).toContain("O'\\''Brien; $(not-run) and `also-not-run`");
+    expect(launchCommand).not.toContain("O'Brien");
+    expect(launchCommand).toContain(`${RUNNER_OPTIONS_FILE_ENV}=`);
     expect(() => parseAsPosixShell(launchCommand!)).not.toThrow();
+  });
+
+  it('keeps a 256 KiB goal and token out of the remote launch command', async () => {
+    const secretGoal = `TOP_SECRET_GOAL '$() ${'x'.repeat(256 * 1024)}`;
+    testConfig.github.token = 'github_pat_controller_secret_test';
+    const session = createNewSession({
+      name: 'large-runner-options',
+      repoRoot,
+      branchName: 'hydraz/large-runner-options',
+      executionTarget: 'cloud',
+      task: secretGoal,
+    });
+
+    await startSession(session.id, repoRoot);
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      goal: secretGoal,
+      config: { github: { token: 'github_pat_controller_secret_test' } },
+    });
+    const launchCommand = vi.mocked(sshExec).mock.calls.find((call) =>
+      call[1].includes(`${RUNNER_OPTIONS_FILE_ENV}=`),
+    )?.[1] ?? '';
+    expect(Buffer.byteLength(launchCommand, 'utf8')).toBeLessThan(4096);
+    expect(launchCommand).not.toContain('TOP_SECRET_GOAL');
+    expect(launchCommand).not.toContain('github_pat_controller_secret_test');
+    expect(scpToContainer).toHaveBeenCalledWith(
+      `hydraz-${session.id}`,
+      expect.stringContaining('runner-options.json'),
+      expect.stringMatching(
+        new RegExp(`/tmp/hydraz-codex/${session.id}/[^/]+/runner-options\\.json$`),
+      ),
+      expect.any(Function),
+    );
+  });
+
+  it('does not persist goal or token content when remote launch fails', async () => {
+    const secretGoal = 'TOP_SECRET_FAILURE_GOAL';
+    testConfig.github.token = 'github_pat_controller_failure_test';
+    const session = createNewSession({
+      name: 'safe-launch-failure',
+      repoRoot,
+      branchName: 'hydraz/safe-launch-failure',
+      executionTarget: 'cloud',
+      task: secretGoal,
+    });
+    vi.mocked(sshExec).mockImplementation((_workspace, command) => {
+      if (command.includes('nohup node')) {
+        throw new Error(`Command failed: ${command}`);
+      }
+      return '4242\n';
+    });
+
+    await startSession(session.id, repoRoot);
+
+    const failed = loadSession(repoRoot, session.id);
+    const persisted = JSON.stringify({
+      failureMessage: failed.failureMessage,
+      events: readEvents(repoRoot, session.id),
+    });
+    expect(failed.state).toBe('failed');
+    expect(persisted).not.toContain(secretGoal);
+    expect(persisted).not.toContain('github_pat_controller_failure_test');
   });
 
   it('defaults cloud Codex runs to dangerous access and web search', async () => {

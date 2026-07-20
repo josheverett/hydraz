@@ -340,7 +340,40 @@ describe('sshExec', () => {
 
   it('throws on failure', () => {
     mockExecFileSync.mockImplementation(() => { throw new Error('connection refused'); });
-    expect(() => sshExec('my-workspace', 'echo hello')).toThrow('connection refused');
+    expect(() => sshExec('my-workspace', 'echo hello')).toThrow('SSH command failed.');
+  });
+
+  it('does not expose the command or secrets in SSH failures', () => {
+    const failure = Object.assign(
+      new Error(
+        'Command failed: ssh my-workspace.devpod TOP_SECRET_GOAL github_pat_command_failure_secret',
+      ),
+      {
+        stderr: Buffer.from(
+          'remote failed with github_pat_stderr_failure_secret',
+        ),
+      },
+    );
+    mockExecFileSync.mockImplementation(() => {
+      throw failure;
+    });
+
+    expect(() => sshExec(
+      'my-workspace',
+      'TOP_SECRET_GOAL github_pat_command_failure_secret',
+    )).toThrowError(
+      'SSH command failed: remote failed with [REDACTED]',
+    );
+    try {
+      sshExec(
+        'my-workspace',
+        'TOP_SECRET_GOAL github_pat_command_failure_secret',
+      );
+    } catch (error) {
+      expect(String(error)).not.toContain('TOP_SECRET_GOAL');
+      expect(String(error)).not.toContain('github_pat_command_failure_secret');
+      expect(String(error)).not.toContain('github_pat_stderr_failure_secret');
+    }
   });
 
   it('does not print serialized runner options in verbose SSH diagnostics', () => {

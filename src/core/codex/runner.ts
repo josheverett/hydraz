@@ -22,6 +22,10 @@ import {
   createCodexInvocationRecorder,
   type CodexInvocationEvidence,
 } from './invocation.js';
+import {
+  loadRunnerOptionsFile,
+  RUNNER_OPTIONS_FILE_ENV,
+} from './runner-options.js';
 
 export { CODEX_INVOCATION_FILE } from './invocation.js';
 
@@ -134,6 +138,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   let threadId: string | undefined = options.resumeThreadId;
   const codexEnv = { ...process.env };
   delete codexEnv.HYDRAZ_CODEX_RUNNER_OPTIONS;
+  delete codexEnv[RUNNER_OPTIONS_FILE_ENV];
   if (options.codexHome !== undefined) {
     codexEnv.CODEX_HOME = options.codexHome;
   }
@@ -294,15 +299,8 @@ const NOOP_PROVIDER: WorkspaceProvider = {
 };
 
 export async function runMain(): Promise<void> {
-  const json = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
-  if (!json) {
-    process.stderr.write('Missing HYDRAZ_CODEX_RUNNER_OPTIONS\n');
-    process.exit(1);
-    return;
-  }
-
   try {
-    const result = await executeCodexRunner(JSON.parse(json) as CodexRunnerOptions);
+    const result = await executeCodexRunner(loadRunnerOptionsFile());
     process.exit(result.success ? 0 : 1);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

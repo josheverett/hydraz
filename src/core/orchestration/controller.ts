@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import { createEvent, appendEvent } from '../events/index.js';
@@ -48,6 +49,11 @@ import {
   type CodexRunnerOptions,
   type CodexRunnerResult,
 } from '../codex/runner.js';
+import {
+  RUNNER_OPTIONS_FILE_ENV,
+  RUNNER_OPTIONS_FILENAME,
+  writeRunnerOptionsFile,
+} from '../codex/runner-options.js';
 
 export interface ControllerCallbacks {
   onStateChange?: (session: SessionMetadata) => void;
@@ -246,7 +252,21 @@ async function startCodexRunner(
     const resultPath = `${codexDir}/${CODEX_RESULT_FILE}`;
     const runnerOutPath = `${codexDir}/runner.out`;
     const runnerErrPath = `${codexDir}/runner.err`;
-    const envJson = shellEscape(JSON.stringify(runnerOptions));
+    const remoteRunnerOptionsPath = posix.join(codexDir, RUNNER_OPTIONS_FILENAME);
+    const stagingDir = mkdtempSync(join(tmpdir(), 'hydraz-runner-options-'));
+    try {
+      const localRunnerOptionsPath = writeRunnerOptionsFile(stagingDir, runnerOptions);
+      await scpToContainer(
+        workspaceName,
+        localRunnerOptionsPath,
+        remoteRunnerOptionsPath,
+        (label, elapsedMs) => {
+          emit(repoRoot, session.id, callbacks, 'workspace.heartbeat', `${label}... (${Math.round(elapsedMs / 1000)}s)`);
+        },
+      );
+    } finally {
+      rmSync(stagingDir, { recursive: true, force: true });
+    }
     const launchRunnerCommand = [
       ...(playwrightRuntime === undefined
         ? []
@@ -255,7 +275,7 @@ async function startCodexRunner(
             `PLAYWRIGHT_BROWSERS_PATH=${shellEscape(playwrightRuntime.browsersPath)}`,
           ]),
       ...(codexHome === undefined ? [] : [`CODEX_HOME=${shellEscape(codexHome)}`]),
-      `HYDRAZ_CODEX_RUNNER_OPTIONS=${envJson}`,
+      `${RUNNER_OPTIONS_FILE_ENV}=${shellEscape(remoteRunnerOptionsPath)}`,
       `nohup node ${shellEscape(CONTAINER_RUNNER_SCRIPT)}`,
       `> ${shellEscape(runnerOutPath)}`,
       `2> ${shellEscape(runnerErrPath)}`,
@@ -264,9 +284,21 @@ async function startCodexRunner(
     ].join(' ');
     const command = [
       `mkdir -p ${shellEscape(codexDir)}`,
+      `chmod 700 ${shellEscape(codexDir)}`,
+      `chmod 600 ${shellEscape(remoteRunnerOptionsPath)}`,
       `(${launchRunnerCommand})`,
     ].join(' && ');
-    const pidText = sshExec(workspaceName, command).trim();
+    let pidText: string;
+    try {
+      pidText = sshExec(workspaceName, command).trim();
+    } catch (error) {
+      try {
+        sshExec(workspaceName, `rm -f ${shellEscape(remoteRunnerOptionsPath)}`);
+      } catch {
+        // Best-effort cleanup when the workspace is no longer reachable.
+      }
+      throw error;
+    }
     const pid = Number.parseInt(pidText, 10);
     if (!Number.isFinite(pid)) {
       throw new Error(`Codex runner did not return a pid: ${pidText}`);
@@ -291,15 +323,24 @@ async function startCodexRunner(
   const runnerOptions = buildRunnerOptions(repoRoot, session, workspace, codexDir, options);
   debugCodexRuntime(runnerOptions, join(codexDir, CODEX_INVOCATION_FILE));
   const runnerScript = join(getDistRoot(), 'core', 'codex', 'runner.js');
-  const child = spawn(process.execPath, [runnerScript], {
-    cwd: workspace.directory,
-    detached: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      HYDRAZ_CODEX_RUNNER_OPTIONS: JSON.stringify(runnerOptions),
-    },
-  });
+  const runnerOptionsPath = writeRunnerOptionsFile(codexDir, runnerOptions);
+  const runnerEnvironment: NodeJS.ProcessEnv = {
+    ...process.env,
+    [RUNNER_OPTIONS_FILE_ENV]: runnerOptionsPath,
+  };
+  delete runnerEnvironment.HYDRAZ_CODEX_RUNNER_OPTIONS;
+  let child;
+  try {
+    child = spawn(process.execPath, [runnerScript], {
+      cwd: workspace.directory,
+      detached: true,
+      stdio: 'ignore',
+      env: runnerEnvironment,
+    });
+  } catch (error) {
+    rmSync(runnerOptionsPath, { force: true });
+    throw error;
+  }
   child.unref();
 
   return {

@@ -4,6 +4,7 @@ import {
   resolveRepoDataPaths,
   getSessionDir as resolveSessionDir,
 } from '../repo/paths.js';
+import { redactSecrets } from '../display/sanitize.js';
 import type { ExecutionTarget } from '../config/schema.js';
 import {
   type SessionMetadata,
@@ -123,12 +124,13 @@ export function transitionState(
 
   session.state = newState;
   session.updatedAt = new Date().toISOString();
+  const safeMessage = message === undefined ? undefined : redactSecrets(message);
 
-  if (newState === 'blocked' && message) {
-    session.blockerMessage = message;
+  if (newState === 'blocked' && safeMessage) {
+    session.blockerMessage = safeMessage;
   }
-  if (newState === 'failed' && message) {
-    session.failureMessage = message;
+  if (newState === 'failed' && safeMessage) {
+    session.failureMessage = safeMessage;
   }
 
   saveSession(repoRoot, session);

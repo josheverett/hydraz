@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import * as sea from 'node:sea';
 import { shellEscape } from '../shell.js';
 import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
+import { redactSecrets } from '../display/sanitize.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import type { CodexContainerImportPlan } from '../codex/container-import.js';
@@ -239,13 +240,33 @@ export function buildSshCommand(workspaceName: string, command: string): { cmd: 
 export function sshExec(workspaceName: string, command: string): string {
   debugExec('ssh', [`${workspaceName}.devpod`, command]);
   const start = Date.now();
-  const output = execFileSync('ssh', [`${workspaceName}.devpod`, command], {
-    ...EXEC_OPTIONS,
-    encoding: 'utf-8',
-  });
-  debugOutput('ssh stdout', output);
-  debugTiming('sshExec', Date.now() - start);
-  return output;
+  try {
+    const output = execFileSync('ssh', [`${workspaceName}.devpod`, command], {
+      ...EXEC_OPTIONS,
+      encoding: 'utf-8',
+    });
+    debugOutput('ssh stdout', output);
+    debugTiming('sshExec', Date.now() - start);
+    return output;
+  } catch (error) {
+    debugTiming('sshExec (failed)', Date.now() - start);
+    const stderr = getSubprocessStderr(error);
+    if (!stderr) {
+      throw new Error('SSH command failed.');
+    }
+    const safeDetail = redactSecrets(stderr.trim()).slice(0, 2_000);
+    throw new Error(
+      safeDetail ? `SSH command failed: ${safeDetail}` : 'SSH command failed.',
+    );
+  }
+}
+
+function getSubprocessStderr(error: unknown): string {
+  if (!error || typeof error !== 'object' || !('stderr' in error)) return '';
+  const stderr = (error as { stderr?: unknown }).stderr;
+  if (typeof stderr === 'string') return stderr;
+  if (Buffer.isBuffer(stderr)) return stderr.toString('utf8');
+  return '';
 }
 
 export interface SshStreamOptions {

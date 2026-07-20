@@ -401,6 +401,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence
 const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
   runnerOptions: process.env.HYDRAZ_CODEX_RUNNER_OPTIONS ?? null,
+  runnerOptionsFile: process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE ?? null,
   codexHome: process.env.CODEX_HOME ?? '',
   ghToken: process.env.GH_TOKEN ?? '',
   githubToken: process.env.GITHUB_TOKEN ?? '',
@@ -411,6 +412,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
 `);
 
     const previousRunnerOptions = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
+    const previousRunnerOptionsFile = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE;
     const previousCodexHome = process.env.CODEX_HOME;
     const previousGhToken = process.env.GH_TOKEN;
     const previousGithubToken = process.env.GITHUB_TOKEN;
@@ -420,6 +422,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
     const runnerOptions = JSON.stringify({ config: { github: { token: 'github_pat_runner_test' } } });
     const inheritedPath = `/home/codex/.hydraz/bin:${dirname(process.execPath)}:/usr/bin`;
     process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = runnerOptions;
+    process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE = '/tmp/runner-options.json';
     process.env.CODEX_HOME = '/home/codex/.codex';
     process.env.GH_TOKEN = 'github_pat_gh_test';
     process.env.GITHUB_TOKEN = 'github_pat_github_test';
@@ -434,9 +437,17 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
       });
 
       expect(process.env.HYDRAZ_CODEX_RUNNER_OPTIONS).toBe(runnerOptions);
+      expect(process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE).toBe(
+        '/tmp/runner-options.json',
+      );
     } finally {
       if (previousRunnerOptions === undefined) delete process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
       else process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = previousRunnerOptions;
+      if (previousRunnerOptionsFile === undefined) {
+        delete process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE;
+      } else {
+        process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE = previousRunnerOptionsFile;
+      }
       if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
       else process.env.CODEX_HOME = previousCodexHome;
       if (previousGhToken === undefined) delete process.env.GH_TOKEN;
@@ -453,6 +464,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
 
     expect(JSON.parse(readFileSync(envFile, 'utf8'))).toEqual({
       runnerOptions: null,
+      runnerOptionsFile: null,
       codexHome: expectedCodexHome,
       ghToken: 'github_pat_gh_test',
       githubToken: 'github_pat_github_test',
