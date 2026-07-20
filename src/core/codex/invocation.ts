@@ -44,14 +44,19 @@ export function createCodexInvocationRecorder(options: {
   attemptId: string;
   codexDir: string;
   mode: 'exec' | 'resume';
-  command: { cmd: string; args: string[] };
+  command: { cmd: string; args: string[]; stdin: string };
   prompt: string;
   requested: CodexRuntimeConfig;
   threadId?: string;
 }): CodexInvocationRecorder {
   const promptArgumentIndex = options.command.args.length - 1;
-  if (options.command.args[promptArgumentIndex] !== options.prompt) {
-    throw new Error('Refusing to persist Codex invocation evidence: prompt is not the final argument.');
+  if (
+    options.command.args[promptArgumentIndex] !== '-'
+    || options.command.stdin !== options.prompt
+  ) {
+    throw new Error(
+      'Refusing to persist Codex invocation evidence: prompt is not isolated on stdin.',
+    );
   }
 
   const path = join(options.codexDir, CODEX_INVOCATION_FILE);

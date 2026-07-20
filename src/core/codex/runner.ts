@@ -153,13 +153,17 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   const exitCode = await new Promise<number | null>((resolve) => {
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: codexEnv,
     });
     let finished = false;
 
     child.once('spawn', () => {
       invocation.markSpawned();
+      child.stdin?.end(command.stdin);
+    });
+    child.stdin?.on('error', () => {
+      // The child can close stdin while exiting; process close/error owns status.
     });
 
     child.once('error', (error) => {

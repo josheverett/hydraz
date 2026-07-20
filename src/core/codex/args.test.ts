@@ -48,8 +48,9 @@ describe('buildCodexExecCommand', () => {
         'web_search_mode="live"',
         '-o',
         '/tmp/final.md',
-        'Do the work',
+        '-',
       ],
+      stdin: 'Do the work',
     });
   });
 
@@ -152,8 +153,9 @@ describe('buildCodexResumeCommand', () => {
         '/tmp/final.md',
         'resume',
         '0199a213-81c0-7800-8aa1-bbab2a035a53',
-        'Continue from there',
+        '-',
       ],
+      stdin: 'Continue from there',
     });
   });
 });
