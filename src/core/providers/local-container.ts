@@ -20,6 +20,9 @@ import {
   configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { prepareContainerAuthEnv } from './container-auth.js';
@@ -123,21 +126,18 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     try {
       const authEnv = prepareContainerAuthEnv(params.config, gitIdentity);
-      const commonArgs = [
-        devpodSource,
-        workspaceName,
-        devpodProvider,
-        currentBranch,
-        params.onHeartbeat,
-        authEnv,
-      ] as const;
-      if (this.type === 'cloud') {
-        await devpodUp(...commonArgs, {
-          INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME,
-        });
-      } else {
-        await devpodUp(...commonArgs);
-      }
+      await devpodUp(devpodSource, workspaceName, {
+        provider: devpodProvider,
+        branch: currentBranch,
+        onHeartbeat: params.onHeartbeat,
+        env: authEnv,
+        providerOptions: this.type === 'cloud'
+          ? { INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME }
+          : undefined,
+        processEnv: this.type === 'local-container'
+          ? { COMPOSE_PROJECT_NAME: composeProjectName(workspaceName) }
+          : undefined,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
@@ -151,7 +151,14 @@ export class LocalContainerProvider implements WorkspaceProvider {
     }
     debug(`createWorkspace: codex available — ${codexCheck.version}`);
 
-    const containerRepoPath = `/workspaces/${workspaceName}`;
+    let containerRepoPath: string;
+    try {
+      containerRepoPath = getContainerRepoPath(workspaceName);
+    } catch (err) {
+      devpodDelete(workspaceName);
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to resolve container repository root: ${message}`);
+    }
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);
 
     if (params.skipClone) {
@@ -211,6 +218,10 @@ export class LocalContainerProvider implements WorkspaceProvider {
       debug('destroyWorkspace: deleted');
     } catch {
       debug('destroyWorkspace: workspace already gone');
+    }
+
+    if (workspace.type === 'local-container') {
+      removeComposeProjectVolumes(composeProjectName(workspaceName));
     }
   }
 }

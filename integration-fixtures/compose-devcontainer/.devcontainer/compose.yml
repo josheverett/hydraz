@@ -1,0 +1,23 @@
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/base:debian@sha256:1a00517e89d3075f8c9dc8d9911404de0ff8991a4d71c62068573e9b016a89da
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/fixture-app:cached
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: redis:7.4-bookworm@sha256:a8f08480e1f88f2647fed492d1178c06abb0d0c1fbf02c682a61e2f483fb3954
+    command: redis-server --appendonly yes
+    volumes:
+      - fixture-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  fixture-data:

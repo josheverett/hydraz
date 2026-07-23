@@ -39,6 +39,9 @@ vi.mock('./devpod.js', () => ({
   configureGitIdentityInContainer: vi.fn(),
   copyWorktreeIncludesInContainer: vi.fn(),
   scpFilesToContainer: vi.fn(),
+  getContainerRepoPath: vi.fn(() => '/workspaces/hydraz-default'),
+  composeProjectName: vi.fn((workspaceName: string) => workspaceName.toLowerCase()),
+  removeComposeProjectVolumes: vi.fn(),
   setupContainerGitSsh: vi.fn(),
   sshExec: vi.fn(),
 }));
@@ -55,6 +58,9 @@ import {
   configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
   sshExec,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
@@ -70,6 +76,9 @@ const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockConfigureGitIdentity = vi.mocked(configureGitIdentityInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const mockScpFiles = vi.mocked(scpFilesToContainer);
+const mockGetContainerRepoPath = vi.mocked(getContainerRepoPath);
+const mockComposeProjectName = vi.mocked(composeProjectName);
+const mockRemoveComposeProjectVolumes = vi.mocked(removeComposeProjectVolumes);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
@@ -110,6 +119,8 @@ beforeEach(() => {
   });
   mockVerifyCodex.mockReturnValue({ available: true, version: 'codex-cli 0.142.5' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
+  mockGetContainerRepoPath.mockReturnValue('/workspaces/hydraz-default');
+  mockComposeProjectName.mockImplementation((workspaceName) => workspaceName.toLowerCase());
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
   mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
   mockGetGitHubIdentity.mockResolvedValue({
@@ -159,11 +170,27 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
-        'docker',
-        'feature/devcontainer',
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        expect.objectContaining({
+          provider: 'docker',
+          branch: 'feature/devcontainer',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
+    });
+
+    it('pins a deterministic Compose project name only in the DevPod process environment', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      const workspaceName = `hydraz-${session.id}`;
+      expect(mockComposeProjectName).toHaveBeenCalledWith(workspaceName);
+      expect(mockDevpodUp.mock.calls[0]?.[2]?.processEnv).toEqual({
+        COMPOSE_PROJECT_NAME: workspaceName,
+      });
     });
 
     it('launches devpod with an explicit branch override when provided', async () => {
@@ -176,10 +203,12 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
-        'docker',
-        'staging',
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        expect.objectContaining({
+          provider: 'docker',
+          branch: 'staging',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
     });
 
@@ -195,6 +224,34 @@ describe('LocalContainerProvider', () => {
         expect.stringContaining('/workspaces/'),
         session.branchName,
         session.id,
+      );
+    });
+
+    it('uses the repository root discovered inside the container for worktree setup and includes', async () => {
+      mockGetContainerRepoPath.mockReturnValue('/workspaces/fixture-app');
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      expect(mockCreateWorktreeInContainer).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/workspaces/fixture-app',
+        session.branchName,
+        session.id,
+      );
+      expect(mockScpFiles).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        session.repoRoot,
+        '/workspaces/fixture-app',
+        ['agent/.env'],
+      );
+      expect(mockCopyIncludes).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/workspaces/fixture-app',
+        '/tmp/hydraz-worktrees/session-id',
+        ['agent/.env'],
       );
     });
 
@@ -224,7 +281,7 @@ describe('LocalContainerProvider', () => {
       await provider.createWorkspace({ session, config });
 
       expect(mockGetGitHubIdentity).toHaveBeenCalledWith('github_pat_test');
-      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      const envArg = mockDevpodUp.mock.calls[0]?.[2]?.env;
       expect(envArg).toMatchObject({
         GIT_AUTHOR_NAME: 'josheverett',
         GIT_AUTHOR_EMAIL: '151150+josheverett@users.noreply.github.com',
@@ -417,10 +474,11 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         '/fake/repo',
         expect.stringContaining('hydraz-'),
-        'docker',
-        undefined,
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        expect.objectContaining({
+          provider: 'docker',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
     });
 
@@ -449,13 +507,28 @@ describe('LocalContainerProvider', () => {
     });
 
     it('returns container repo path as directory when skipClone is true', async () => {
+      mockGetContainerRepoPath.mockReturnValue('/workspaces/fixture-app');
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
       const workspace = await provider.createWorkspace({ session, config, skipClone: true });
 
-      expect(workspace.directory).toBe(`/workspaces/hydraz-${session.id}`);
+      expect(workspace.directory).toBe('/workspaces/fixture-app');
+    });
+
+    it('deletes the DevPod workspace when repository-root discovery fails', async () => {
+      mockGetContainerRepoPath.mockImplementation(() => {
+        throw new Error('git could not find a repository');
+      });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(
+        'Failed to resolve container repository root: git could not find a repository',
+      );
+      expect(mockDevpodDelete).toHaveBeenCalledWith(`hydraz-${session.id}`);
     });
 
     it('passes container auth env to devpodUp', async () => {
@@ -465,7 +538,7 @@ describe('LocalContainerProvider', () => {
 
       await provider.createWorkspace({ session, config });
 
-      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      const envArg = mockDevpodUp.mock.calls[0]?.[2]?.env;
       expect(envArg).toBeDefined();
       expect(envArg!['GH_TOKEN']).toBe('github_pat_test');
     });
@@ -478,7 +551,7 @@ describe('LocalContainerProvider', () => {
 
       await provider.createWorkspace({ session, config, onHeartbeat: heartbeatCb });
 
-      const passedCb = mockDevpodUp.mock.calls[0]?.[4];
+      const passedCb = mockDevpodUp.mock.calls[0]?.[2]?.onHeartbeat;
       expect(passedCb).toBeDefined();
       passedCb?.('DevPod provisioning', 15000);
       expect(heartbeatCb).toHaveBeenCalledWith('DevPod provisioning', 15000);
@@ -500,6 +573,24 @@ describe('LocalContainerProvider', () => {
       provider.destroyWorkspace('/fake/repo', fakeWorkspace);
 
       expect(mockDevpodDelete).toHaveBeenCalledWith('hydraz-session-123');
+    });
+
+    it('removes Compose volumes for a local-container workspace after deletion', () => {
+      const provider = new LocalContainerProvider();
+
+      provider.destroyWorkspace('/fake/repo', fakeWorkspace);
+
+      expect(mockComposeProjectName).toHaveBeenCalledWith('hydraz-session-123');
+      expect(mockRemoveComposeProjectVolumes).toHaveBeenCalledWith('hydraz-session-123');
+    });
+
+    it('does not invoke local Docker volume cleanup for a cloud workspace', () => {
+      const provider = new LocalContainerProvider();
+      const cloudWorkspace = { ...fakeWorkspace, type: 'cloud' as const };
+
+      provider.destroyWorkspace('/fake/repo', cloudWorkspace);
+
+      expect(mockRemoveComposeProjectVolumes).not.toHaveBeenCalled();
     });
 
     it('does not throw if devpod delete fails', () => {
@@ -534,10 +625,13 @@ describe('CloudProvider', () => {
 
       await provider.createWorkspace({ session, config });
 
-      const providerArg = mockDevpodUp.mock.calls[0]?.[2];
-      const branchArg = mockDevpodUp.mock.calls[0]?.[3];
+      const options = mockDevpodUp.mock.calls[0]?.[2];
+      const providerArg = options?.provider;
+      const branchArg = options?.branch;
+      const processEnvArg = options?.processEnv;
       expect(providerArg).toBeUndefined();
       expect(branchArg).toBeUndefined();
+      expect(processEnvArg).toBeUndefined();
     });
 
     it('passes a maximum runtime only for cloud workspaces', async () => {
@@ -548,8 +642,8 @@ describe('CloudProvider', () => {
       await new LocalContainerProvider().createWorkspace({ session: localSession, config });
       await new CloudProvider().createWorkspace({ session: cloudSession, config });
 
-      expect(mockDevpodUp.mock.calls[0]?.[6]).toBeUndefined();
-      expect(mockDevpodUp.mock.calls[1]?.[6]).toEqual({
+      expect(mockDevpodUp.mock.calls[0]?.[2]?.providerOptions).toBeUndefined();
+      expect(mockDevpodUp.mock.calls[1]?.[2]?.providerOptions).toEqual({
         INACTIVITY_TIMEOUT: '8h',
       });
     });

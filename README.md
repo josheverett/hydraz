@@ -28,6 +28,8 @@ hydraz resume <session> "Continue from the previous blocker"
 
 `hydraz run` defaults to cloud mode. Use `--local` or `--container` when you want a different target.
 
+Container mode supports Compose-based devcontainers with a custom `workspaceFolder`. Hydraz pins a unique Compose project name for each local-container session and removes that project's named volumes during workspace cleanup.
+
 ## Commands
 
 ```bash

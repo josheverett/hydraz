@@ -13,10 +13,18 @@ vi.mock('../providers/devpod.js', () => ({
   devpodStatus: vi.fn(() => 'NotFound' as const),
   devpodDelete: vi.fn(),
   devpodList: vi.fn(() => []),
+  composeProjectName: vi.fn((workspaceName: string) => workspaceName.toLowerCase()),
+  removeComposeProjectVolumes: vi.fn(),
 }));
 
 import { listSessions } from '../sessions/index.js';
-import { devpodStatus, devpodDelete, devpodList } from '../providers/devpod.js';
+import {
+  composeProjectName,
+  devpodStatus,
+  devpodDelete,
+  devpodList,
+  removeComposeProjectVolumes,
+} from '../providers/devpod.js';
 import {
   findOrphanedWorkspaces,
   findUnknownOrphanedWorkspaces,
@@ -28,6 +36,8 @@ const mockListSessions = vi.mocked(listSessions);
 const mockDevpodStatus = vi.mocked(devpodStatus);
 const mockDevpodDelete = vi.mocked(devpodDelete);
 const mockDevpodList = vi.mocked(devpodList);
+const mockComposeProjectName = vi.mocked(composeProjectName);
+const mockRemoveComposeProjectVolumes = vi.mocked(removeComposeProjectVolumes);
 
 function makeSession(overrides: {
   id?: string;
@@ -194,6 +204,13 @@ describe('destroyOrphanedWorkspace', () => {
     destroyOrphanedWorkspace('hydraz-sess-001');
 
     expect(mockDevpodDelete).toHaveBeenCalledWith('hydraz-sess-001', true);
+  });
+
+  it('removes Compose volumes for the orphaned workspace project', () => {
+    destroyOrphanedWorkspace('hydraz-sess-001');
+
+    expect(mockComposeProjectName).toHaveBeenCalledWith('hydraz-sess-001');
+    expect(mockRemoveComposeProjectVolumes).toHaveBeenCalledWith('hydraz-sess-001');
   });
 
   it('propagates errors from devpodDelete', () => {
