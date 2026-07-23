@@ -1,18 +1,19 @@
 import { describe, it, expect } from 'vitest';
+import { basename, join } from 'node:path';
 import { detectRepo, hasGitRemote, parseGitHubRemoteUrl, getCurrentBranch } from './detect.js';
 
 describe('detectRepo', () => {
   it('detects the current repo from the repo root', () => {
     const result = detectRepo();
     expect(result).not.toBeNull();
-    expect(result!.name).toBe('hydraz');
-    expect(result!.root).toContain('hydraz');
+    expect(result!.name).toBe(basename(process.cwd()));
+    expect(result!.root).toBe(process.cwd());
   });
 
   it('detects the repo from a subdirectory', () => {
-    const result = detectRepo(process.cwd() + '/src');
+    const result = detectRepo(join(process.cwd(), 'src'));
     expect(result).not.toBeNull();
-    expect(result!.name).toBe('hydraz');
+    expect(result!.root).toBe(process.cwd());
   });
 
   it('returns null for the filesystem root', () => {
@@ -22,7 +23,7 @@ describe('detectRepo', () => {
 
   it('returns the directory name as the repo name', () => {
     const result = detectRepo();
-    expect(result!.name).toBe('hydraz');
+    expect(result!.name).toBe(basename(result!.root));
   });
 });
 

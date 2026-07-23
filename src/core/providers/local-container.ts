@@ -20,6 +20,9 @@ import {
   configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { prepareContainerAuthEnv } from './container-auth.js';
@@ -136,7 +139,9 @@ export class LocalContainerProvider implements WorkspaceProvider {
           INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME,
         });
       } else {
-        await devpodUp(...commonArgs);
+        await devpodUp(...commonArgs, undefined, {
+          COMPOSE_PROJECT_NAME: composeProjectName(workspaceName),
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -151,7 +156,14 @@ export class LocalContainerProvider implements WorkspaceProvider {
     }
     debug(`createWorkspace: codex available — ${codexCheck.version}`);
 
-    const containerRepoPath = `/workspaces/${workspaceName}`;
+    let containerRepoPath: string;
+    try {
+      containerRepoPath = getContainerRepoPath(workspaceName);
+    } catch (err) {
+      devpodDelete(workspaceName);
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to resolve container repository root: ${message}`);
+    }
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);
 
     if (params.skipClone) {
@@ -211,6 +223,10 @@ export class LocalContainerProvider implements WorkspaceProvider {
       debug('destroyWorkspace: deleted');
     } catch {
       debug('destroyWorkspace: workspace already gone');
+    }
+
+    if (workspace.type === 'local-container') {
+      removeComposeProjectVolumes(composeProjectName(workspaceName));
     }
   }
 }

@@ -1,5 +1,11 @@
 import { listSessions, isTerminalState, type SessionState } from '../sessions/index.js';
-import { devpodStatus, devpodDelete, devpodList } from '../providers/devpod.js';
+import {
+  composeProjectName,
+  devpodStatus,
+  devpodDelete,
+  devpodList,
+  removeComposeProjectVolumes,
+} from '../providers/devpod.js';
 import { isContainerExecutionTarget } from '../providers/provider.js';
 
 export interface OrphanedWorkspace {
@@ -91,4 +97,5 @@ export function findAllOrphanedWorkspaces(repoRoot: string): AllOrphanedWorkspac
 
 export function destroyOrphanedWorkspace(workspaceName: string): void {
   devpodDelete(workspaceName, true);
+  removeComposeProjectVolumes(composeProjectName(workspaceName));
 }

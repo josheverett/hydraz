@@ -39,6 +39,9 @@ vi.mock('./devpod.js', () => ({
   configureGitIdentityInContainer: vi.fn(),
   copyWorktreeIncludesInContainer: vi.fn(),
   scpFilesToContainer: vi.fn(),
+  getContainerRepoPath: vi.fn(() => '/workspaces/hydraz-default'),
+  composeProjectName: vi.fn((workspaceName: string) => workspaceName.toLowerCase()),
+  removeComposeProjectVolumes: vi.fn(),
   setupContainerGitSsh: vi.fn(),
   sshExec: vi.fn(),
 }));
@@ -55,6 +58,9 @@ import {
   configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
   sshExec,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
@@ -70,6 +76,9 @@ const mockCreateWorktreeInContainer = vi.mocked(createWorktreeInContainer);
 const mockConfigureGitIdentity = vi.mocked(configureGitIdentityInContainer);
 const mockCopyIncludes = vi.mocked(copyWorktreeIncludesInContainer);
 const mockScpFiles = vi.mocked(scpFilesToContainer);
+const mockGetContainerRepoPath = vi.mocked(getContainerRepoPath);
+const mockComposeProjectName = vi.mocked(composeProjectName);
+const mockRemoveComposeProjectVolumes = vi.mocked(removeComposeProjectVolumes);
 const _mockSshExec = vi.mocked(sshExec);
 const mockHasGitRemote = vi.mocked(hasGitRemote);
 const mockGetGitHubRepo = vi.mocked(getGitHubRepo);
@@ -110,6 +119,8 @@ beforeEach(() => {
   });
   mockVerifyCodex.mockReturnValue({ available: true, version: 'codex-cli 0.142.5' });
   mockCreateWorktreeInContainer.mockReturnValue('/tmp/hydraz-worktrees/session-id');
+  mockGetContainerRepoPath.mockReturnValue('/workspaces/hydraz-default');
+  mockComposeProjectName.mockImplementation((workspaceName) => workspaceName.toLowerCase());
   mockListCopyableIncludes.mockReturnValue(['agent/.env']);
   mockGetCurrentBranch.mockReturnValue('feature/devcontainer');
   mockGetGitHubIdentity.mockResolvedValue({
@@ -163,7 +174,23 @@ describe('LocalContainerProvider', () => {
         'feature/devcontainer',
         undefined,
         expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        undefined,
+        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
       );
+    });
+
+    it('pins a deterministic Compose project name only in the DevPod process environment', async () => {
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      const workspaceName = `hydraz-${session.id}`;
+      expect(mockComposeProjectName).toHaveBeenCalledWith(workspaceName);
+      expect(mockDevpodUp.mock.calls[0]?.[7]).toEqual({
+        COMPOSE_PROJECT_NAME: workspaceName,
+      });
     });
 
     it('launches devpod with an explicit branch override when provided', async () => {
@@ -180,6 +207,8 @@ describe('LocalContainerProvider', () => {
         'staging',
         undefined,
         expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        undefined,
+        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
       );
     });
 
@@ -195,6 +224,34 @@ describe('LocalContainerProvider', () => {
         expect.stringContaining('/workspaces/'),
         session.branchName,
         session.id,
+      );
+    });
+
+    it('uses the repository root discovered inside the container for worktree setup and includes', async () => {
+      mockGetContainerRepoPath.mockReturnValue('/workspaces/fixture-app');
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await provider.createWorkspace({ session, config });
+
+      expect(mockCreateWorktreeInContainer).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/workspaces/fixture-app',
+        session.branchName,
+        session.id,
+      );
+      expect(mockScpFiles).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        session.repoRoot,
+        '/workspaces/fixture-app',
+        ['agent/.env'],
+      );
+      expect(mockCopyIncludes).toHaveBeenCalledWith(
+        expect.stringContaining(session.id),
+        '/workspaces/fixture-app',
+        '/tmp/hydraz-worktrees/session-id',
+        ['agent/.env'],
       );
     });
 
@@ -421,6 +478,8 @@ describe('LocalContainerProvider', () => {
         undefined,
         undefined,
         expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+        undefined,
+        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
       );
     });
 
@@ -449,13 +508,28 @@ describe('LocalContainerProvider', () => {
     });
 
     it('returns container repo path as directory when skipClone is true', async () => {
+      mockGetContainerRepoPath.mockReturnValue('/workspaces/fixture-app');
       const provider = new LocalContainerProvider();
       const session = makeSession();
       const config = makeConfig();
 
       const workspace = await provider.createWorkspace({ session, config, skipClone: true });
 
-      expect(workspace.directory).toBe(`/workspaces/hydraz-${session.id}`);
+      expect(workspace.directory).toBe('/workspaces/fixture-app');
+    });
+
+    it('deletes the DevPod workspace when repository-root discovery fails', async () => {
+      mockGetContainerRepoPath.mockImplementation(() => {
+        throw new Error('git could not find a repository');
+      });
+      const provider = new LocalContainerProvider();
+      const session = makeSession();
+      const config = makeConfig();
+
+      await expect(provider.createWorkspace({ session, config })).rejects.toThrow(
+        'Failed to resolve container repository root: git could not find a repository',
+      );
+      expect(mockDevpodDelete).toHaveBeenCalledWith(`hydraz-${session.id}`);
     });
 
     it('passes container auth env to devpodUp', async () => {
@@ -502,6 +576,24 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodDelete).toHaveBeenCalledWith('hydraz-session-123');
     });
 
+    it('removes Compose volumes for a local-container workspace after deletion', () => {
+      const provider = new LocalContainerProvider();
+
+      provider.destroyWorkspace('/fake/repo', fakeWorkspace);
+
+      expect(mockComposeProjectName).toHaveBeenCalledWith('hydraz-session-123');
+      expect(mockRemoveComposeProjectVolumes).toHaveBeenCalledWith('hydraz-session-123');
+    });
+
+    it('does not invoke local Docker volume cleanup for a cloud workspace', () => {
+      const provider = new LocalContainerProvider();
+      const cloudWorkspace = { ...fakeWorkspace, type: 'cloud' as const };
+
+      provider.destroyWorkspace('/fake/repo', cloudWorkspace);
+
+      expect(mockRemoveComposeProjectVolumes).not.toHaveBeenCalled();
+    });
+
     it('does not throw if devpod delete fails', () => {
       mockDevpodDelete.mockImplementation(() => { throw new Error('delete failed'); });
       const provider = new LocalContainerProvider();
@@ -536,8 +628,10 @@ describe('CloudProvider', () => {
 
       const providerArg = mockDevpodUp.mock.calls[0]?.[2];
       const branchArg = mockDevpodUp.mock.calls[0]?.[3];
+      const processEnvArg = mockDevpodUp.mock.calls[0]?.[7];
       expect(providerArg).toBeUndefined();
       expect(branchArg).toBeUndefined();
+      expect(processEnvArg).toBeUndefined();
     });
 
     it('passes a maximum runtime only for cloud workspaces', async () => {

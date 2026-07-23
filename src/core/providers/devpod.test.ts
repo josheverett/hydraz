@@ -29,6 +29,9 @@ import {
   devpodDelete,
   devpodList,
   getContainerHome,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
 } from './devpod.js';
 import { setVerbose } from '../debug.js';
 
@@ -360,6 +363,47 @@ describe('sshExec', () => {
     expect(output).toContain('HYDRAZ_CODEX_RUNNER_OPTIONS=[OMITTED]');
     expect(output).not.toContain('TOP_SECRET_GOAL');
     expect(output).not.toContain('github_pat_devpod_secret');
+  });
+});
+
+describe('getContainerRepoPath', () => {
+  it('resolves and trims the repository root through the DevPod SSH host', () => {
+    mockExecFileSync.mockReturnValue('/workspaces/fixture-app\n' as never);
+
+    expect(getContainerRepoPath('hydraz-session')).toBe('/workspaces/fixture-app');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'ssh',
+      ['hydraz-session.devpod', 'git rev-parse --show-toplevel'],
+      expect.any(Object),
+    );
+  });
+
+  it('rejects empty repository-root output', () => {
+    mockExecFileSync.mockReturnValue('  \n' as never);
+
+    expect(() => getContainerRepoPath('hydraz-session')).toThrow(
+      'Failed to resolve repository root inside container',
+    );
+  });
+
+  it('includes the SSH failure when repository-root discovery fails', () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error('connection refused');
+    });
+
+    expect(() => getContainerRepoPath('hydraz-session')).toThrow(
+      'Failed to resolve repository root inside container: connection refused',
+    );
+  });
+});
+
+describe('composeProjectName', () => {
+  it('lowercases a workspace name and strips characters Compose does not accept', () => {
+    expect(composeProjectName('Hydraz-ABC.123/Feature')).toBe('hydraz-abc123feature');
+  });
+
+  it.each(['...', '_invalid', '-invalid'])('rejects an invalid derived name from %s', (workspaceName) => {
+    expect(() => composeProjectName(workspaceName)).toThrow('Invalid Compose project name');
   });
 });
 
@@ -1100,6 +1144,59 @@ describe('devpodUp', () => {
     expect(capturedContents).toContain('OPENAI_API_KEY=sk-test');
   });
 
+  it('passes process-only env to DevPod without writing it to the workspace env file', async () => {
+    let capturedContents = '';
+    mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
+      const flagIdx = (args as string[]).indexOf('--workspace-env-file');
+      if (flagIdx >= 0) {
+        capturedContents = readFileSync((args as string[])[flagIdx + 1]!, 'utf-8');
+      }
+      return fakeSpawnPromise({ stdout: '', exitCode: 0 });
+    });
+
+    await devpodUp(
+      'git@github.com:org/repo.git',
+      'hydraz-abc',
+      undefined,
+      undefined,
+      undefined,
+      { GH_TOKEN: 'github_pat_test' },
+      undefined,
+      { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+    );
+
+    const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as { env?: Record<string, string> };
+    expect(opts.env?.COMPOSE_PROJECT_NAME).toBe('hydraz-abc');
+    expect(capturedContents).toContain('GH_TOKEN=github_pat_test');
+    expect(capturedContents).not.toContain('COMPOSE_PROJECT_NAME');
+  });
+
+  it('lets the process-only env override an ambient host value', async () => {
+    const previousProjectName = process.env.COMPOSE_PROJECT_NAME;
+    process.env.COMPOSE_PROJECT_NAME = 'evil';
+    try {
+      await devpodUp(
+        'git@github.com:org/repo.git',
+        'hydraz-abc',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+      );
+
+      const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as { env?: Record<string, string> };
+      expect(opts.env?.COMPOSE_PROJECT_NAME).toBe('hydraz-abc');
+    } finally {
+      if (previousProjectName === undefined) {
+        delete process.env.COMPOSE_PROJECT_NAME;
+      } else {
+        process.env.COMPOSE_PROJECT_NAME = previousProjectName;
+      }
+    }
+  });
+
   it('writes GIT_CONFIG_COUNT as an unquoted integer string', async () => {
     let capturedContents = '';
     mockSpawnWithHeartbeat.mockImplementationOnce((_cmd, args) => {
@@ -1210,6 +1307,61 @@ describe('devpodDelete', () => {
     devpodDelete('hydraz-abc123');
     const args = mockExecFileSync.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--force');
+  });
+});
+
+describe('removeComposeProjectVolumes', () => {
+  it('removes only volumes labeled for the exact Compose project', () => {
+    mockExecFileSync
+      .mockReturnValueOnce('hydraz_data\nhydraz_cache\n' as never)
+      .mockReturnValueOnce('' as never);
+
+    removeComposeProjectVolumes('hydraz-session-123');
+
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      1,
+      'docker',
+      [
+        'volume',
+        'ls',
+        '-q',
+        '--filter',
+        'label=com.docker.compose.project=hydraz-session-123',
+      ],
+      expect.objectContaining({ encoding: 'utf-8' }),
+    );
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      2,
+      'docker',
+      ['volume', 'rm', 'hydraz_data', 'hydraz_cache'],
+      expect.any(Object),
+    );
+  });
+
+  it('does not invoke docker volume rm when the project has no labeled volumes', () => {
+    mockExecFileSync.mockReturnValueOnce('\n' as never);
+
+    removeComposeProjectVolumes('hydraz-session-123');
+
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('swallows failures while listing project volumes', () => {
+    mockExecFileSync.mockImplementationOnce(() => {
+      throw new Error('Docker is unavailable');
+    });
+
+    expect(() => removeComposeProjectVolumes('hydraz-session-123')).not.toThrow();
+  });
+
+  it('swallows failures while removing project volumes', () => {
+    mockExecFileSync
+      .mockReturnValueOnce('hydraz_data\n' as never)
+      .mockImplementationOnce(() => {
+        throw new Error('volume is busy');
+      });
+
+    expect(() => removeComposeProjectVolumes('hydraz-session-123')).not.toThrow();
   });
 });
 

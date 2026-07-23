@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import * as sea from 'node:sea';
 import { shellEscape } from '../shell.js';
-import { isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
+import { debug, isVerbose, debugExec, debugOutput, debugTiming } from '../debug.js';
 import { spawnWithHeartbeat } from './spawn-heartbeat.js';
 import type { GitHubGitIdentity } from '../github/api.js';
 import type { CodexContainerImportPlan } from '../codex/container-import.js';
@@ -26,6 +26,14 @@ export interface DevPodCheckResult {
   available: boolean;
   version?: string;
   error?: string;
+}
+
+export function composeProjectName(workspaceName: string): string {
+  const projectName = workspaceName.toLowerCase().replace(/[^-_a-z0-9]/g, '');
+  if (!projectName || !/^[a-z0-9]/.test(projectName)) {
+    throw new Error(`Invalid Compose project name derived from workspace: ${workspaceName}`);
+  }
+  return projectName;
 }
 
 const EXEC_OPTIONS: ExecFileSyncOptions = { stdio: 'pipe', timeout: 120_000 };
@@ -132,6 +140,7 @@ export async function devpodUp(
   onHeartbeat?: (label: string, elapsedMs: number) => void,
   env?: Record<string, string>,
   providerOptions?: Record<string, string>,
+  processEnv?: Record<string, string>,
 ): Promise<void> {
   const devpodSource = branch ? `${source}@${branch}` : source;
   const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
@@ -155,7 +164,9 @@ export async function devpodUp(
   }
   debugExec('devpod', args);
   const start = Date.now();
-  const spawnEnv = env ? { ...process.env, ...env } : undefined;
+  const spawnEnv = env || processEnv
+    ? { ...process.env, ...env, ...processEnv }
+    : undefined;
   try {
     await spawnWithHeartbeat('devpod', args, { timeout: 900_000, env: spawnEnv }, {
       label: 'DevPod provisioning',
@@ -179,6 +190,27 @@ export function devpodDelete(workspaceName: string, force?: boolean): void {
   const start = Date.now();
   execFileSync('devpod', args, EXEC_OPTIONS);
   debugTiming('devpod delete', Date.now() - start);
+}
+
+export function removeComposeProjectVolumes(projectName: string): void {
+  try {
+    const filter = `label=com.docker.compose.project=${projectName}`;
+    const listArgs = ['volume', 'ls', '-q', '--filter', filter];
+    debugExec('docker', listArgs);
+    const output = execFileSync('docker', listArgs, {
+      ...EXEC_OPTIONS,
+      encoding: 'utf-8',
+    });
+    const volumeIds = output.trim().split(/\s+/).filter(Boolean);
+    if (volumeIds.length === 0) return;
+
+    const removeArgs = ['volume', 'rm', ...volumeIds];
+    debugExec('docker', removeArgs);
+    execFileSync('docker', removeArgs, EXEC_OPTIONS);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    debug(`removeComposeProjectVolumes: cleanup failed for ${projectName}: ${message}`);
+  }
 }
 
 export interface DevPodListEntry {
@@ -246,6 +278,19 @@ export function sshExec(workspaceName: string, command: string): string {
   debugOutput('ssh stdout', output);
   debugTiming('sshExec', Date.now() - start);
   return output;
+}
+
+export function getContainerRepoPath(workspaceName: string): string {
+  try {
+    const repoPath = sshExec(workspaceName, 'git rev-parse --show-toplevel').trim();
+    if (!repoPath || !posix.isAbsolute(repoPath)) {
+      throw new Error(`git returned an invalid repository root: ${repoPath || '(empty output)'}`);
+    }
+    return repoPath;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to resolve repository root inside container: ${message}`);
+  }
 }
 
 export interface SshStreamOptions {

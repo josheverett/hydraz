@@ -1,0 +1,33 @@
+name: DevPod Integration
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  devpod-compose:
+    name: DevPod Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install DevPod v0.6.15
+        run: |
+          curl -fL https://github.com/loft-sh/devpod/releases/download/v0.6.15/devpod-linux-amd64 -o "$RUNNER_TEMP/devpod"
+          sudo install -m 0755 "$RUNNER_TEMP/devpod" /usr/local/bin/devpod
+          devpod version
+          devpod provider add docker
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run DevPod Compose integration test
+        run: pnpm vitest run src/core/providers/devpod.integration.test.ts
+        env:
+          HYDRAZ_DEVPOD_INTEGRATION: "1"
