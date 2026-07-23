@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ExecFileSyncOptions } from 'node:child_process';
+import { execFileSync, spawn, spawnSync, type ExecFileSyncOptions } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -247,12 +247,14 @@ export function devpodStatus(workspaceName: string): 'Running' | 'Stopped' | 'No
   debugExec('devpod', ['status', workspaceName]);
   const start = Date.now();
   try {
-    const output = execFileSync('devpod', ['status', workspaceName], {
+    const result = spawnSync('devpod', ['status', workspaceName], {
       ...EXEC_OPTIONS,
       encoding: 'utf-8',
     });
-    debugOutput('devpod status stdout', output);
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    debugOutput('devpod status output', output);
     debugTiming('devpod status', Date.now() - start);
+    if (result.error || result.status !== 0) return 'NotFound';
     if (output.includes('Running')) return 'Running';
     return 'Stopped';
   } catch {

@@ -28,6 +28,7 @@ import {
   devpodUp,
   devpodDelete,
   devpodList,
+  devpodStatus,
   getContainerHome,
   getContainerRepoPath,
   composeProjectName,
@@ -38,6 +39,7 @@ import { setVerbose } from '../debug.js';
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
   spawn: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
 vi.mock('./spawn-heartbeat.js', () => ({
@@ -52,9 +54,10 @@ vi.mock('./tar-ssh-transfer.js', async (importOriginal) => {
   };
 });
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 const mockExecFileSync = vi.mocked(execFileSync);
 const mockSpawn = vi.mocked(spawn);
+const mockSpawnSync = vi.mocked(spawnSync);
 const { execFileSync: realExecFileSync } = await vi.importActual<typeof import('node:child_process')>(
   'node:child_process',
 );
@@ -1437,5 +1440,43 @@ describe('devpodList', () => {
     const result = devpodList();
 
     expect(result).toEqual([{ name: 'hydraz-abc', status: 'Unknown' }]);
+  });
+});
+
+describe('devpodStatus', () => {
+  it('reads a running status emitted on stderr by DevPod', () => {
+    mockExecFileSync.mockReturnValue('' as never);
+    mockSpawnSync.mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: "Workspace 'hydraz-abc' is 'Running'\n",
+    } as never);
+
+    expect(devpodStatus('hydraz-abc')).toBe('Running');
+    expect(mockSpawnSync).toHaveBeenCalledWith(
+      'devpod',
+      ['status', 'hydraz-abc'],
+      expect.objectContaining({ encoding: 'utf-8' }),
+    );
+  });
+
+  it('returns stopped when DevPod reports a stopped workspace', () => {
+    mockSpawnSync.mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: "Workspace 'hydraz-abc' is 'Stopped'\n",
+    } as never);
+
+    expect(devpodStatus('hydraz-abc')).toBe('Stopped');
+  });
+
+  it('returns not found when DevPod status exits unsuccessfully', () => {
+    mockSpawnSync.mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'workspace not found\n',
+    } as never);
+
+    expect(devpodStatus('hydraz-abc')).toBe('NotFound');
   });
 });
