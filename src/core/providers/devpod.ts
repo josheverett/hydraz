@@ -28,6 +28,15 @@ export interface DevPodCheckResult {
   error?: string;
 }
 
+export interface DevPodUpOptions {
+  provider?: string;
+  branch?: string;
+  onHeartbeat?: (label: string, elapsedMs: number) => void;
+  env?: Record<string, string>;
+  providerOptions?: Record<string, string>;
+  processEnv?: Record<string, string>;
+}
+
 export function composeProjectName(workspaceName: string): string {
   const projectName = workspaceName.toLowerCase().replace(/[^-_a-z0-9]/g, '');
   if (!projectName || !/^[a-z0-9]/.test(projectName)) {
@@ -135,13 +144,9 @@ export function checkDevcontainerPlatform(repoDir: string, hostArch?: string): D
 export async function devpodUp(
   source: string,
   workspaceName: string,
-  provider?: string,
-  branch?: string,
-  onHeartbeat?: (label: string, elapsedMs: number) => void,
-  env?: Record<string, string>,
-  providerOptions?: Record<string, string>,
-  processEnv?: Record<string, string>,
+  options: DevPodUpOptions = {},
 ): Promise<void> {
+  const { provider, branch, onHeartbeat, env, providerOptions, processEnv } = options;
   const devpodSource = branch ? `${source}@${branch}` : source;
   const args = ['up', devpodSource, '--ide', 'none', '--id', workspaceName, '--git-clone-strategy', 'shallow'];
   if (provider) {

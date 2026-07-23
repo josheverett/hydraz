@@ -49,12 +49,10 @@ describe.skipIf(process.env.HYDRAZ_DEVPOD_INTEGRATION !== '1')(
         await devpodUp(
           repoDir,
           workspaceName,
-          'docker',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          { COMPOSE_PROJECT_NAME: projectName },
+          {
+            provider: 'docker',
+            processEnv: { COMPOSE_PROJECT_NAME: projectName },
+          },
         );
 
         expect(getContainerRepoPath(workspaceName)).toBe('/workspaces/fixture-app');

@@ -1010,6 +1010,29 @@ describe('scpFilesToContainer', () => {
 });
 
 describe('devpodUp', () => {
+  it('keeps workspace and process configuration distinct through named options', async () => {
+    const heartbeatCb = vi.fn();
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', {
+      provider: 'docker',
+      branch: 'feature/devcontainer',
+      onHeartbeat: heartbeatCb,
+      env: { GH_TOKEN: 'github_pat_test' },
+      providerOptions: { INACTIVITY_TIMEOUT: '24h' },
+      processEnv: { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+    });
+
+    const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
+    const spawnOptions = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as { env?: Record<string, string> };
+    const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
+    expect(args[1]).toBe('git@github.com:org/repo.git@feature/devcontainer');
+    expect(args).toContain('docker');
+    expect(args).toContain('INACTIVITY_TIMEOUT=24h');
+    expect(args).toContain('--workspace-env-file');
+    expect(spawnOptions.env?.COMPOSE_PROJECT_NAME).toBe('hydraz-abc');
+    heartbeatConfig?.onHeartbeat('test', 1000);
+    expect(heartbeatCb).toHaveBeenCalledWith('test', 1000);
+  });
+
   it('uses a 900 second timeout for first-time devcontainer builds', async () => {
     await devpodUp('git@github.com:org/repo.git', 'hydraz-abc');
     const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as Record<string, unknown>;
@@ -1040,7 +1063,7 @@ describe('devpodUp', () => {
   });
 
   it('includes --provider flag when provider is specified', async () => {
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { provider: 'docker' });
     expect(mockSpawnWithHeartbeat).toHaveBeenCalledWith(
       'devpod',
       ['up', 'git@github.com:org/repo.git', '--ide', 'none', '--id', 'hydraz-abc', '--git-clone-strategy', 'shallow', '--provider', 'docker'],
@@ -1059,11 +1082,7 @@ describe('devpodUp', () => {
     await devpodUp(
       'git@github.com:org/repo.git',
       'hydraz-abc',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { INACTIVITY_TIMEOUT: '24h' },
+      { providerOptions: { INACTIVITY_TIMEOUT: '24h' } },
     );
 
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
@@ -1072,13 +1091,16 @@ describe('devpodUp', () => {
   });
 
   it('appends branch to source URL with @ syntax when branch is specified', async () => {
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker', 'feature/devcontainer');
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', {
+      provider: 'docker',
+      branch: 'feature/devcontainer',
+    });
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args[1]).toBe('git@github.com:org/repo.git@feature/devcontainer');
   });
 
   it('uses bare source URL when branch is not specified', async () => {
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', 'docker');
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { provider: 'docker' });
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args[1]).toBe('git@github.com:org/repo.git');
   });
@@ -1104,7 +1126,7 @@ describe('devpodUp', () => {
 
   it('threads onHeartbeat callback when provided', async () => {
     const heartbeatCb = vi.fn();
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, heartbeatCb);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { onHeartbeat: heartbeatCb });
     const heartbeatConfig = mockSpawnWithHeartbeat.mock.calls[0]?.[3];
     heartbeatConfig?.onHeartbeat('test', 1000);
     expect(heartbeatCb).toHaveBeenCalledWith('test', 1000);
@@ -1118,7 +1140,7 @@ describe('devpodUp', () => {
 
   it('passes env to spawnWithHeartbeat when provided', async () => {
     const env = { GH_TOKEN: 'github_pat_test', CUSTOM_VAR: 'value' };
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env });
     const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as Record<string, unknown>;
     expect(opts.env).toBeDefined();
     expect((opts.env as Record<string, string>)['GH_TOKEN']).toBe('github_pat_test');
@@ -1127,7 +1149,7 @@ describe('devpodUp', () => {
 
   it('passes --workspace-env-file flag when env is provided', async () => {
     const env = { GH_TOKEN: 'github_pat_test' };
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env });
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).toContain('--workspace-env-file');
   });
@@ -1142,7 +1164,7 @@ describe('devpodUp', () => {
       return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test', OPENAI_API_KEY: 'sk-test' };
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env });
     expect(capturedContents).toContain('GH_TOKEN=github_pat_test');
     expect(capturedContents).toContain('OPENAI_API_KEY=sk-test');
   });
@@ -1160,12 +1182,10 @@ describe('devpodUp', () => {
     await devpodUp(
       'git@github.com:org/repo.git',
       'hydraz-abc',
-      undefined,
-      undefined,
-      undefined,
-      { GH_TOKEN: 'github_pat_test' },
-      undefined,
-      { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+      {
+        env: { GH_TOKEN: 'github_pat_test' },
+        processEnv: { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+      },
     );
 
     const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as { env?: Record<string, string> };
@@ -1181,12 +1201,7 @@ describe('devpodUp', () => {
       await devpodUp(
         'git@github.com:org/repo.git',
         'hydraz-abc',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { COMPOSE_PROJECT_NAME: 'hydraz-abc' },
+        { processEnv: { COMPOSE_PROJECT_NAME: 'hydraz-abc' } },
       );
 
       const opts = mockSpawnWithHeartbeat.mock.calls[0]?.[2] as { env?: Record<string, string> };
@@ -1213,10 +1228,7 @@ describe('devpodUp', () => {
     await devpodUp(
       'git@github.com:org/repo.git',
       'hydraz-abc',
-      undefined,
-      undefined,
-      undefined,
-      { GIT_CONFIG_COUNT: '3' },
+      { env: { GIT_CONFIG_COUNT: '3' } },
     );
 
     expect(capturedContents).toContain('GIT_CONFIG_COUNT=3');
@@ -1231,7 +1243,7 @@ describe('devpodUp', () => {
       return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test' };
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env });
     const { statSync } = await import('node:fs');
     // File should already be cleaned up, so we verify via spy instead
     // The implementation must use mode 0o600 — verified structurally below
@@ -1246,7 +1258,7 @@ describe('devpodUp', () => {
       return fakeSpawnPromise({ stdout: '', exitCode: 0 });
     });
     const env = { GH_TOKEN: 'github_pat_test' };
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env);
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env });
     expect(capturedPath).toBeTruthy();
     expect(existsSync(capturedPath)).toBe(false);
   });
@@ -1259,7 +1271,7 @@ describe('devpodUp', () => {
       return Object.assign(Promise.reject(new Error('devpod up failed')), { _child: {} as ChildProcess }) as SpawnHeartbeatPromise;
     });
     const env = { GH_TOKEN: 'github_pat_test' };
-    await expect(devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, env)).rejects.toThrow();
+    await expect(devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env })).rejects.toThrow();
     expect(capturedPath).toBeTruthy();
     expect(existsSync(capturedPath)).toBe(false);
   });
@@ -1271,7 +1283,7 @@ describe('devpodUp', () => {
   });
 
   it('does not pass --workspace-env-file when env is empty', async () => {
-    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', undefined, undefined, undefined, {});
+    await devpodUp('git@github.com:org/repo.git', 'hydraz-abc', { env: {} });
     const args = mockSpawnWithHeartbeat.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--workspace-env-file');
   });

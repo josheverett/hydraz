@@ -170,12 +170,12 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
-        'docker',
-        'feature/devcontainer',
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
-        undefined,
-        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        expect.objectContaining({
+          provider: 'docker',
+          branch: 'feature/devcontainer',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
     });
 
@@ -188,7 +188,7 @@ describe('LocalContainerProvider', () => {
 
       const workspaceName = `hydraz-${session.id}`;
       expect(mockComposeProjectName).toHaveBeenCalledWith(workspaceName);
-      expect(mockDevpodUp.mock.calls[0]?.[7]).toEqual({
+      expect(mockDevpodUp.mock.calls[0]?.[2]?.processEnv).toEqual({
         COMPOSE_PROJECT_NAME: workspaceName,
       });
     });
@@ -203,12 +203,12 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         'git@github.com:octocat/hello-world.git',
         expect.stringContaining('hydraz-'),
-        'docker',
-        'staging',
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
-        undefined,
-        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        expect.objectContaining({
+          provider: 'docker',
+          branch: 'staging',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
     });
 
@@ -281,7 +281,7 @@ describe('LocalContainerProvider', () => {
       await provider.createWorkspace({ session, config });
 
       expect(mockGetGitHubIdentity).toHaveBeenCalledWith('github_pat_test');
-      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      const envArg = mockDevpodUp.mock.calls[0]?.[2]?.env;
       expect(envArg).toMatchObject({
         GIT_AUTHOR_NAME: 'josheverett',
         GIT_AUTHOR_EMAIL: '151150+josheverett@users.noreply.github.com',
@@ -474,12 +474,11 @@ describe('LocalContainerProvider', () => {
       expect(mockDevpodUp).toHaveBeenCalledWith(
         '/fake/repo',
         expect.stringContaining('hydraz-'),
-        'docker',
-        undefined,
-        undefined,
-        expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
-        undefined,
-        expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        expect.objectContaining({
+          provider: 'docker',
+          env: expect.objectContaining({ GH_TOKEN: 'github_pat_test' }),
+          processEnv: expect.objectContaining({ COMPOSE_PROJECT_NAME: expect.stringContaining('hydraz-') }),
+        }),
       );
     });
 
@@ -539,7 +538,7 @@ describe('LocalContainerProvider', () => {
 
       await provider.createWorkspace({ session, config });
 
-      const envArg = mockDevpodUp.mock.calls[0]?.[5] as Record<string, string> | undefined;
+      const envArg = mockDevpodUp.mock.calls[0]?.[2]?.env;
       expect(envArg).toBeDefined();
       expect(envArg!['GH_TOKEN']).toBe('github_pat_test');
     });
@@ -552,7 +551,7 @@ describe('LocalContainerProvider', () => {
 
       await provider.createWorkspace({ session, config, onHeartbeat: heartbeatCb });
 
-      const passedCb = mockDevpodUp.mock.calls[0]?.[4];
+      const passedCb = mockDevpodUp.mock.calls[0]?.[2]?.onHeartbeat;
       expect(passedCb).toBeDefined();
       passedCb?.('DevPod provisioning', 15000);
       expect(heartbeatCb).toHaveBeenCalledWith('DevPod provisioning', 15000);
@@ -626,9 +625,10 @@ describe('CloudProvider', () => {
 
       await provider.createWorkspace({ session, config });
 
-      const providerArg = mockDevpodUp.mock.calls[0]?.[2];
-      const branchArg = mockDevpodUp.mock.calls[0]?.[3];
-      const processEnvArg = mockDevpodUp.mock.calls[0]?.[7];
+      const options = mockDevpodUp.mock.calls[0]?.[2];
+      const providerArg = options?.provider;
+      const branchArg = options?.branch;
+      const processEnvArg = options?.processEnv;
       expect(providerArg).toBeUndefined();
       expect(branchArg).toBeUndefined();
       expect(processEnvArg).toBeUndefined();
@@ -642,8 +642,8 @@ describe('CloudProvider', () => {
       await new LocalContainerProvider().createWorkspace({ session: localSession, config });
       await new CloudProvider().createWorkspace({ session: cloudSession, config });
 
-      expect(mockDevpodUp.mock.calls[0]?.[6]).toBeUndefined();
-      expect(mockDevpodUp.mock.calls[1]?.[6]).toEqual({
+      expect(mockDevpodUp.mock.calls[0]?.[2]?.providerOptions).toBeUndefined();
+      expect(mockDevpodUp.mock.calls[1]?.[2]?.providerOptions).toEqual({
         INACTIVITY_TIMEOUT: '8h',
       });
     });

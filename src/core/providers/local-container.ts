@@ -126,23 +126,18 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     try {
       const authEnv = prepareContainerAuthEnv(params.config, gitIdentity);
-      const commonArgs = [
-        devpodSource,
-        workspaceName,
-        devpodProvider,
-        currentBranch,
-        params.onHeartbeat,
-        authEnv,
-      ] as const;
-      if (this.type === 'cloud') {
-        await devpodUp(...commonArgs, {
-          INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME,
-        });
-      } else {
-        await devpodUp(...commonArgs, undefined, {
-          COMPOSE_PROJECT_NAME: composeProjectName(workspaceName),
-        });
-      }
+      await devpodUp(devpodSource, workspaceName, {
+        provider: devpodProvider,
+        branch: currentBranch,
+        onHeartbeat: params.onHeartbeat,
+        env: authEnv,
+        providerOptions: this.type === 'cloud'
+          ? { INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME }
+          : undefined,
+        processEnv: this.type === 'local-container'
+          ? { COMPOSE_PROJECT_NAME: composeProjectName(workspaceName) }
+          : undefined,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
