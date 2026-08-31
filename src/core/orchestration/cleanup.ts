@@ -1,6 +1,13 @@
 import { listSessions, isTerminalState, type SessionState } from '../sessions/index.js';
-import { devpodStatus, devpodDelete, devpodList } from '../providers/devpod.js';
+import {
+  composeProjectName,
+  devpodStatus,
+  devpodDelete,
+  devpodList,
+  removeComposeProjectVolumes,
+} from '../providers/devpod.js';
 import { isContainerExecutionTarget } from '../providers/provider.js';
+import type { ExecutionTarget } from '../config/schema.js';
 
 export interface OrphanedWorkspace {
   sessionId: string;
@@ -8,6 +15,7 @@ export interface OrphanedWorkspace {
   workspaceName: string;
   sessionState: SessionState;
   branchName: string;
+  executionTarget: ExecutionTarget;
   devpodStatus: 'Running' | 'Stopped';
 }
 
@@ -43,6 +51,7 @@ export function findOrphanedWorkspaces(repoRoot: string): OrphanedWorkspace[] {
         workspaceName,
         sessionState: session.state,
         branchName: session.branchName,
+        executionTarget: session.executionTarget,
         devpodStatus: status,
       });
     }
@@ -89,6 +98,13 @@ export function findAllOrphanedWorkspaces(repoRoot: string): AllOrphanedWorkspac
   };
 }
 
-export function destroyOrphanedWorkspace(workspaceName: string): void {
+export function destroyOrphanedWorkspace(workspaceName: string, executionTarget?: ExecutionTarget): void {
   devpodDelete(workspaceName, true);
+
+  // Volume removal is scoped to this machine's Docker daemon and selects by exact Compose
+  // label, so skip it for a workspace known to have run in the cloud. An orphan with no
+  // surviving session has no recorded target; attempt cleanup, which matches nothing unless
+  // the workspace really was local.
+  if (executionTarget === 'cloud') return;
+  removeComposeProjectVolumes(composeProjectName(workspaceName));
 }

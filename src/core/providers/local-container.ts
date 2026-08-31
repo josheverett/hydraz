@@ -20,6 +20,9 @@ import {
   configureGitIdentityInContainer,
   copyWorktreeIncludesInContainer,
   scpFilesToContainer,
+  getContainerRepoPath,
+  composeProjectName,
+  removeComposeProjectVolumes,
 } from './devpod.js';
 import { listCopyableWorktreeIncludes } from './worktree-include.js';
 import { prepareContainerAuthEnv } from './container-auth.js';
@@ -123,21 +126,18 @@ export class LocalContainerProvider implements WorkspaceProvider {
 
     try {
       const authEnv = prepareContainerAuthEnv(params.config, gitIdentity);
-      const commonArgs = [
-        devpodSource,
-        workspaceName,
-        devpodProvider,
-        currentBranch,
-        params.onHeartbeat,
-        authEnv,
-      ] as const;
-      if (this.type === 'cloud') {
-        await devpodUp(...commonArgs, {
-          INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME,
-        });
-      } else {
-        await devpodUp(...commonArgs);
-      }
+      await devpodUp(devpodSource, workspaceName, {
+        provider: devpodProvider,
+        branch: currentBranch,
+        onHeartbeat: params.onHeartbeat,
+        env: authEnv,
+        providerOptions: this.type === 'cloud'
+          ? { INACTIVITY_TIMEOUT: params.maxRuntime ?? session.maxRuntime ?? DEFAULT_CLOUD_MAX_RUNTIME }
+          : undefined,
+        processEnv: this.type === 'local-container'
+          ? { COMPOSE_PROJECT_NAME: composeProjectName(workspaceName) }
+          : undefined,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to launch DevPod workspace: ${message}`);
@@ -146,12 +146,19 @@ export class LocalContainerProvider implements WorkspaceProvider {
     debug('createWorkspace: verifying Codex CLI in container');
     const codexCheck = verifyCodexInContainer(workspaceName);
     if (!codexCheck.available) {
-      devpodDelete(workspaceName);
+      this.destroyContainerResources(workspaceName, this.type);
       throw new Error(codexCheck.error ?? 'Codex CLI is not available inside the container');
     }
     debug(`createWorkspace: codex available — ${codexCheck.version}`);
 
-    const containerRepoPath = `/workspaces/${workspaceName}`;
+    let containerRepoPath: string;
+    try {
+      containerRepoPath = getContainerRepoPath(workspaceName);
+    } catch (err) {
+      this.destroyContainerResources(workspaceName, this.type);
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to resolve container repository root: ${message}`);
+    }
     debug(`createWorkspace: containerRepoPath=${containerRepoPath}`);
 
     if (params.skipClone) {
@@ -186,7 +193,7 @@ export class LocalContainerProvider implements WorkspaceProvider {
       }
       copyWorktreeIncludesInContainer(workspaceName, containerRepoPath, worktreePath, safeIncludes);
     } catch (err) {
-      devpodDelete(workspaceName);
+      this.destroyContainerResources(workspaceName, this.type);
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to set up worktree in container: ${message}`);
     }
@@ -203,14 +210,27 @@ export class LocalContainerProvider implements WorkspaceProvider {
   }
 
   destroyWorkspace(_repoRoot: string, workspace: WorkspaceInfo): void {
-    const workspaceName = `hydraz-${workspace.sessionId}`;
-    debug(`destroyWorkspace: deleting ${workspaceName}`);
+    debug(`destroyWorkspace: deleting hydraz-${workspace.sessionId}`);
+    this.destroyContainerResources(`hydraz-${workspace.sessionId}`, workspace.type);
+  }
 
+  /**
+   * Releases everything a workspace owns: the DevPod workspace itself and, for a local
+   * container, the Compose volumes it created. Compose identity is a local-daemon concern —
+   * a cloud workspace is destroyed with its host, so nothing on this machine is left to
+   * reclaim. Used by every teardown path, including the aborts in createWorkspace, so a
+   * provisioning failure after devpod up cannot strand named volumes.
+   */
+  private destroyContainerResources(workspaceName: string, target: ExecutionTarget): void {
     try {
       devpodDelete(workspaceName);
-      debug('destroyWorkspace: deleted');
+      debug(`destroyContainerResources: deleted ${workspaceName}`);
     } catch {
-      debug('destroyWorkspace: workspace already gone');
+      debug(`destroyContainerResources: ${workspaceName} already gone`);
+    }
+
+    if (target === 'local-container') {
+      removeComposeProjectVolumes(composeProjectName(workspaceName));
     }
   }
 }

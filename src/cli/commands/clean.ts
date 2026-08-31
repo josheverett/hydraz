@@ -66,15 +66,15 @@ export function registerCleanCommand(program: Command): void {
         }
       }
 
-      const allWorkspaceNames = [
-        ...known.map(o => o.workspaceName),
-        ...unknown.map(o => o.workspaceName),
+      const allWorkspaces = [
+        ...known.map(o => ({ name: o.workspaceName, executionTarget: o.executionTarget })),
+        ...unknown.map(o => ({ name: o.workspaceName, executionTarget: undefined })),
       ];
 
       let destroyed = 0;
-      for (const name of allWorkspaceNames) {
+      for (const { name, executionTarget } of allWorkspaces) {
         try {
-          destroyOrphanedWorkspace(name);
+          destroyOrphanedWorkspace(name, executionTarget);
           console.log(`  ✓ Destroyed ${name}`);
           destroyed++;
         } catch (err) {

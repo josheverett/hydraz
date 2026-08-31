@@ -1,0 +1,7 @@
+{
+  "name": "Hydraz Compose integration fixture",
+  "dockerComposeFile": ["compose.yml"],
+  "service": "app",
+  "runServices": ["app", "db"],
+  "workspaceFolder": "/workspaces/fixture-app"
+}
