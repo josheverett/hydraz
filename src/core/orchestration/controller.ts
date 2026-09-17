@@ -404,6 +404,7 @@ function buildRunnerOptions(
     branchName: session.branchName,
     baseBranch: options.baseBranch ?? session.baseBranch,
     goal: session.task,
+    taskSource: session.taskSource,
     workingDirectory: workspace.directory,
     codexDir,
     ...(codexHome === undefined ? {} : { codexHome }),

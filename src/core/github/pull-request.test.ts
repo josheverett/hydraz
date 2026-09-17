@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSession } from '../sessions/schema.js';
+import { createSession, type GoalInputSource } from '../sessions/schema.js';
 import { buildPullRequestContent } from './pull-request.js';
 
 function makeSession() {
@@ -34,27 +34,50 @@ describe('buildPullRequestContent', () => {
     expect(content.body).toContain('Switch container delivery to GitHub HTTPS auth');
   });
 
-  it('bounds file-backed goals in fallback pull request bodies', () => {
-    const task = `TOP_SECRET_PULL_REQUEST_GOAL${'x'.repeat(256 * 1024)}`;
-    const session = createSession({
-      name: 'large-goal',
-      repoRoot: '/tmp/repo',
-      branchName: 'hydraz/large-goal',
-      executionTarget: 'cloud',
-      task,
+  it.each([
+    {
+      kind: 'file',
+      task: 'TOP_SECRET_FILE_GOAL',
       taskSource: {
         kind: 'file',
         label: '/home/test-user/private/goal.md',
-        byteLength: Buffer.byteLength(task, 'utf8'),
-        sha256: 'public-sha',
-      },
+        byteLength: 20,
+        sha256: 'file-sha',
+      } as GoalInputSource,
+      expectedSummary: 'file-backed goal',
+      privateLabel: '/home/test-user/private',
+    },
+    {
+      kind: 'stdin',
+      task: 'TOP_SECRET_STDIN_GOAL',
+      taskSource: {
+        kind: 'stdin',
+        byteLength: 21,
+        sha256: 'stdin-sha',
+      } as GoalInputSource,
+      expectedSummary: 'stdin goal',
+      privateLabel: undefined,
+    },
+  ])('summarizes short $kind goals in fallback pull request bodies', ({
+    task,
+    taskSource,
+    expectedSummary,
+    privateLabel,
+  }) => {
+    const session = createSession({
+      name: 'private-goal',
+      repoRoot: '/tmp/repo',
+      branchName: 'hydraz/private-goal',
+      executionTarget: 'cloud',
+      task,
+      taskSource,
     });
 
     const content = buildPullRequestContent(session, null);
 
-    expect(content.body).toContain('file-backed goal');
-    expect(content.body).not.toContain('TOP_SECRET_PULL_REQUEST_GOAL');
-    expect(content.body).not.toContain('/home/test-user/private');
+    expect(content.body).toContain(expectedSummary);
+    expect(content.body).not.toContain(task);
+    if (privateLabel) expect(content.body).not.toContain(privateLabel);
     expect(content.body.length).toBeLessThan(1_000);
   });
 });

@@ -259,6 +259,42 @@ describe('Codex controller', () => {
     expect(vi.mocked(sshExec).mock.calls.some((call) => call[1].includes('nohup node'))).toBe(true);
   });
 
+  it.each([
+    {
+      kind: 'file',
+      taskSource: {
+        kind: 'file' as const,
+        label: '/home/test-user/private/goal.md',
+        byteLength: 23,
+        sha256: 'file-sha',
+      },
+    },
+    {
+      kind: 'stdin',
+      taskSource: {
+        kind: 'stdin' as const,
+        byteLength: 23,
+        sha256: 'stdin-sha',
+      },
+    },
+  ])('passes $kind goal provenance into detached runner options', async ({ kind, taskSource }) => {
+    const session = createNewSession({
+      name: `${kind}-goal`,
+      repoRoot,
+      branchName: `hydraz/${kind}-goal`,
+      executionTarget: 'cloud',
+      task: 'confidential short goal',
+      taskSource,
+    });
+
+    await startSession(session.id, repoRoot);
+
+    expect(getRunnerOptionsFromLaunchCommand(session.id)).toMatchObject({
+      goal: 'confidential short goal',
+      taskSource,
+    });
+  });
+
   it.each(['local-container', 'cloud'] as const)(
     'stages portable inputs after hydrazincludes and launches Linux Codex with a stable home for %s',
     async (executionTarget) => {

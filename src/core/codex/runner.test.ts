@@ -634,4 +634,43 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       }),
     }));
   });
+
+  it.each([
+    {
+      kind: 'file',
+      taskSource: {
+        kind: 'file' as const,
+        label: '/home/test-user/private/goal.md',
+        byteLength: 23,
+        sha256: 'file-sha',
+      },
+    },
+    {
+      kind: 'stdin',
+      taskSource: {
+        kind: 'stdin' as const,
+        byteLength: 23,
+        sha256: 'stdin-sha',
+      },
+    },
+  ])('passes $kind goal provenance into delivery', async ({ taskSource }) => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
+`);
+    const options = {
+      ...makeOptions(root, codex),
+      taskSource,
+      delivery: {
+        enabled: true,
+        createPullRequest: true,
+        keepWorkspace: true,
+      },
+    };
+
+    await executeCodexRunner(options);
+
+    expect(vi.mocked(finalizeCodexDelivery).mock.calls.at(-1)?.[0].session.taskSource)
+      .toEqual(taskSource);
+  });
 });

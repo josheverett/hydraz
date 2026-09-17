@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { HydrazConfig } from '../config/schema.js';
+import type { GoalInputSource } from '../sessions/schema.js';
 import { readRepoPromptContent } from './repo-config.js';
 import { buildCodexExecCommand, buildCodexResumeCommand, buildGoalPrompt } from './args.js';
 import { parseCodexJsonLine } from './events.js';
@@ -42,6 +43,7 @@ export interface CodexRunnerOptions {
   branchName?: string;
   baseBranch?: string;
   goal: string;
+  taskSource?: GoalInputSource;
   workingDirectory: string;
   codexDir: string;
   codexHome?: string;
@@ -269,6 +271,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         baseBranch: options.baseBranch,
         executionTarget: options.config.executionTarget,
         task: options.goal,
+        taskSource: options.taskSource,
         state: 'delivering',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
