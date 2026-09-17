@@ -44,7 +44,7 @@ describe('buildPullRequestContent', () => {
       task,
       taskSource: {
         kind: 'file',
-        label: '/Users/josh/private/goal.md',
+        label: '/home/test-user/private/goal.md',
         byteLength: Buffer.byteLength(task, 'utf8'),
         sha256: 'public-sha',
       },
@@ -54,7 +54,7 @@ describe('buildPullRequestContent', () => {
 
     expect(content.body).toContain('file-backed goal');
     expect(content.body).not.toContain('TOP_SECRET_PULL_REQUEST_GOAL');
-    expect(content.body).not.toContain('/Users/josh/private');
+    expect(content.body).not.toContain('/home/test-user/private');
     expect(content.body.length).toBeLessThan(1_000);
   });
 });

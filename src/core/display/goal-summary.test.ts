@@ -28,12 +28,12 @@ describe('formatGoalSummary', () => {
 
     const summary = formatGoalSummary(task, {
       kind: 'file',
-      label: '/Users/josh/My Specs/goal.md',
+      label: '/home/test-user/My Specs/goal.md',
       byteLength: Buffer.byteLength(task, 'utf8'),
       sha256: sha256(task),
     });
 
-    expect(summary).toContain('file /Users/josh/My Specs/goal.md');
+    expect(summary).toContain('file /home/test-user/My Specs/goal.md');
     expect(summary).toContain('20 bytes');
     expect(summary).not.toContain(task);
   });
@@ -57,13 +57,13 @@ describe('formatGoalSummary', () => {
 
     const summary = formatGoalSummary(task, {
       kind: 'file',
-      label: '/Users/josh/private/goal.md',
+      label: '/home/test-user/private/goal.md',
       byteLength: Buffer.byteLength(task, 'utf8'),
       sha256: sha256(task),
     }, 'public');
 
     expect(summary).toContain('file-backed goal');
-    expect(summary).not.toContain('/Users/josh');
+    expect(summary).not.toContain('/home/test-user');
     expect(summary).not.toContain(task);
   });
 
