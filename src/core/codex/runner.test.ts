@@ -166,12 +166,17 @@ process.exit(9);
     const argvFile = join(root, 'argv.json');
     const codex = makeFakeCodex(root, `
 const fs = require('node:fs');
-fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify({
+  args: process.argv.slice(2),
+  stdin: fs.readFileSync(0, 'utf8'),
+}));
 `);
 
     await executeCodexRunner(makeOptions(root, codex));
 
-    const args = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+    const { args } = JSON.parse(readFileSync(argvFile, 'utf-8')) as {
+      args: string[];
+    };
     expect(args).toContain('gpt-5.6-sol');
     expect(args).toContain('model_reasoning_effort="ultra"');
     expect(args).toContain('features.fast_mode=true');
@@ -183,11 +188,14 @@ fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(
     const argvFile = join(root, 'argv.json');
     const codex = makeFakeCodex(root, `
 const fs = require('node:fs');
-fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify({
+  args: process.argv.slice(2),
+  stdin: fs.readFileSync(0, 'utf8'),
+}));
 console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence' }));
 `);
     const options = makeOptions(root, codex);
-    options.goal = 'PROMPT_SECRET_7c493f';
+    options.goal = `PROMPT_SECRET_7c493f${'x'.repeat(256 * 1024)}`;
     options.config.github.token = 'github_pat_evidence_secret';
 
     const result = await executeCodexRunner(options);
@@ -216,12 +224,15 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence
       threadId: string;
       exitCode: number;
     };
-    const spawnedArgs = JSON.parse(readFileSync(argvFile, 'utf-8')) as string[];
+    const spawned = JSON.parse(readFileSync(argvFile, 'utf-8')) as {
+      args: string[];
+      stdin: string;
+    };
 
     expect(evidence.version).toBe(1);
     expect(evidence.mode).toBe('exec');
     expect(evidence.command).toBe(codex);
-    expect(evidence.args).toEqual(spawnedArgs.slice(0, -1));
+    expect(evidence.args).toEqual(spawned.args.slice(0, -1));
     expect(evidence.promptOmitted).toBe(true);
     expect(evidence.requested).toEqual({
       model: 'gpt-5.6-sol',
@@ -239,7 +250,9 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence
     expect(evidence.threadId).toBe('thread-evidence');
     expect(evidence.exitCode).toBe(0);
     expect(result.invocationEvidence).toEqual(evidence);
-    expect(spawnedArgs.at(-1)).toContain('PROMPT_SECRET_7c493f');
+    expect(spawned.args.at(-1)).toBe('-');
+    expect(spawned.args.join(' ')).not.toContain('PROMPT_SECRET_7c493f');
+    expect(spawned.stdin).toContain('PROMPT_SECRET_7c493f');
     expect(serialized).not.toContain('PROMPT_SECRET_7c493f');
     expect(serialized).not.toContain('github_pat_evidence_secret');
     expect(serialized).not.toContain('HYDRAZ_CODEX_RUNNER_OPTIONS');
@@ -401,6 +414,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-evidence
 const fs = require('node:fs');
 fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
   runnerOptions: process.env.HYDRAZ_CODEX_RUNNER_OPTIONS ?? null,
+  runnerOptionsFile: process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE ?? null,
   codexHome: process.env.CODEX_HOME ?? '',
   ghToken: process.env.GH_TOKEN ?? '',
   githubToken: process.env.GITHUB_TOKEN ?? '',
@@ -411,6 +425,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
 `);
 
     const previousRunnerOptions = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
+    const previousRunnerOptionsFile = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE;
     const previousCodexHome = process.env.CODEX_HOME;
     const previousGhToken = process.env.GH_TOKEN;
     const previousGithubToken = process.env.GITHUB_TOKEN;
@@ -420,6 +435,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
     const runnerOptions = JSON.stringify({ config: { github: { token: 'github_pat_runner_test' } } });
     const inheritedPath = `/home/codex/.hydraz/bin:${dirname(process.execPath)}:/usr/bin`;
     process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = runnerOptions;
+    process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE = '/tmp/runner-options.json';
     process.env.CODEX_HOME = '/home/codex/.codex';
     process.env.GH_TOKEN = 'github_pat_gh_test';
     process.env.GITHUB_TOKEN = 'github_pat_github_test';
@@ -434,9 +450,17 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
       });
 
       expect(process.env.HYDRAZ_CODEX_RUNNER_OPTIONS).toBe(runnerOptions);
+      expect(process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE).toBe(
+        '/tmp/runner-options.json',
+      );
     } finally {
       if (previousRunnerOptions === undefined) delete process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
       else process.env.HYDRAZ_CODEX_RUNNER_OPTIONS = previousRunnerOptions;
+      if (previousRunnerOptionsFile === undefined) {
+        delete process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE;
+      } else {
+        process.env.HYDRAZ_CODEX_RUNNER_OPTIONS_FILE = previousRunnerOptionsFile;
+      }
       if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
       else process.env.CODEX_HOME = previousCodexHome;
       if (previousGhToken === undefined) delete process.env.GH_TOKEN;
@@ -453,6 +477,7 @@ fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify({
 
     expect(JSON.parse(readFileSync(envFile, 'utf8'))).toEqual({
       runnerOptions: null,
+      runnerOptionsFile: null,
       codexHome: expectedCodexHome,
       ghToken: 'github_pat_gh_test',
       githubToken: 'github_pat_github_test',
@@ -526,7 +551,10 @@ if (outputIndex >= 0) {
     const argvFile = join(root, 'argv.json');
     const codex = makeFakeCodex(root, `
 const fs = require('node:fs');
-fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));
+fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify({
+  args: process.argv.slice(2),
+  stdin: fs.readFileSync(0, 'utf8'),
+}));
 const outputIndex = process.argv.indexOf('-o');
 if (outputIndex >= 0) fs.writeFileSync(process.argv[outputIndex + 1], 'resumed');
 console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
@@ -539,7 +567,11 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       resumePrompt: 'Keep going',
     });
 
-    expect(JSON.parse(readFileSync(argvFile, 'utf-8'))).toEqual([
+    const spawned = JSON.parse(readFileSync(argvFile, 'utf-8')) as {
+      args: string[];
+      stdin: string;
+    };
+    expect(spawned.args).toEqual([
       'exec',
       '--json',
       '--sandbox',
@@ -556,8 +588,9 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       join(root, 'codex', CODEX_FINAL_FILE),
       'resume',
       'thread-1',
-      'Keep going',
+      '-',
     ]);
+    expect(spawned.stdin).toBe('Keep going');
     const serialized = readFileSync(join(root, 'codex', 'invocation.json'), 'utf-8');
     const evidence = JSON.parse(serialized) as {
       mode: string;
@@ -565,9 +598,7 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
       threadId: string;
     };
     expect(evidence.mode).toBe('resume');
-    expect(evidence.args).toEqual(
-      (JSON.parse(readFileSync(argvFile, 'utf-8')) as string[]).slice(0, -1),
-    );
+    expect(evidence.args).toEqual(spawned.args.slice(0, -1));
     expect(evidence.threadId).toBe('thread-1');
     expect(result.invocationEvidence).toEqual(evidence);
     expect(serialized).not.toContain('Keep going');
@@ -602,5 +633,44 @@ console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
         baseBranch: 'staging',
       }),
     }));
+  });
+
+  it.each([
+    {
+      kind: 'file',
+      taskSource: {
+        kind: 'file' as const,
+        label: '/home/test-user/private/goal.md',
+        byteLength: 23,
+        sha256: 'file-sha',
+      },
+    },
+    {
+      kind: 'stdin',
+      taskSource: {
+        kind: 'stdin' as const,
+        byteLength: 23,
+        sha256: 'stdin-sha',
+      },
+    },
+  ])('passes $kind goal provenance into delivery', async ({ taskSource }) => {
+    const root = makeTempRoot();
+    const codex = makeFakeCodex(root, `
+console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }));
+`);
+    const options = {
+      ...makeOptions(root, codex),
+      taskSource,
+      delivery: {
+        enabled: true,
+        createPullRequest: true,
+        keepWorkspace: true,
+      },
+    };
+
+    await executeCodexRunner(options);
+
+    expect(vi.mocked(finalizeCodexDelivery).mock.calls.at(-1)?.[0].session.taskSource)
+      .toEqual(taskSource);
   });
 });

@@ -5,6 +5,7 @@ import { detectRepo } from '../../core/repo/detect.js';
 import { getActiveSessions, findSessionByName, type SessionMetadata } from '../../core/sessions/index.js';
 import { readEvents, formatEvent } from '../../core/events/index.js';
 import { shellEscape } from '../../core/shell.js';
+import { formatGoalSummary } from '../../core/display/goal-summary.js';
 import {
   formatStoppedWorkspaceNotice,
   getSessionWorkspaceHealth,
@@ -62,7 +63,7 @@ export function renderAttachView(session: SessionMetadata, repoRoot: string): vo
   console.log(`  Branch:     ${session.branchName}`);
   console.log(`  State:      ${session.state}`);
   console.log(`  Target:     ${session.executionTarget}`);
-  console.log(`  Goal:       ${session.task}`);
+  console.log(`  Goal:       ${formatGoalSummary(session.task, session.taskSource)}`);
   if (session.codex?.threadId) {
     console.log(`  Codex:      ${session.codex.threadId}`);
   }

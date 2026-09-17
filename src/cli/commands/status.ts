@@ -7,6 +7,7 @@ import {
   type SessionMetadata,
 } from '../../core/sessions/index.js';
 import { refreshSessionStatus } from '../../core/orchestration/index.js';
+import { formatGoalSummary } from '../../core/display/goal-summary.js';
 import {
   formatStoppedWorkspaceNotice,
   getSessionWorkspaceHealth,
@@ -69,7 +70,7 @@ function renderStatus(
   if (session.maxRuntime) {
     console.log(`  Max runtime: ${session.maxRuntime}`);
   }
-  console.log(`  Goal:       ${truncate(session.task, 80)}`);
+  console.log(`  Goal:       ${formatGoalSummary(session.task, session.taskSource)}`);
   console.log(`  Created:    ${session.createdAt}`);
   console.log(`  Updated:    ${session.updatedAt}`);
   if (session.codex?.threadId) {
@@ -110,9 +111,4 @@ function renderStatus(
     console.log(`  Warning:    ${formatStoppedWorkspaceNotice(workspaceHealth, session)}`);
   }
   console.log();
-}
-
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 3) + '...';
 }

@@ -28,6 +28,11 @@ export type ArtifactFile = (typeof ARTIFACT_FILES)[number];
 
 export const DEFAULT_CLOUD_MAX_RUNTIME = '24h';
 
+export type GoalInputSource =
+  | { kind: 'inline'; byteLength: number; sha256: string }
+  | { kind: 'file'; label: string; byteLength: number; sha256: string }
+  | { kind: 'stdin'; byteLength: number; sha256: string };
+
 export interface SessionMetadata {
   id: string;
   name: string;
@@ -37,6 +42,7 @@ export interface SessionMetadata {
   executionTarget: ExecutionTarget;
   maxRuntime?: string;
   task: string;
+  taskSource?: GoalInputSource;
   state: SessionState;
   createdAt: string;
   updatedAt: string;
@@ -77,6 +83,7 @@ export function createSession(params: {
   executionTarget: ExecutionTarget;
   maxRuntime?: string;
   task: string;
+  taskSource?: GoalInputSource;
 }): SessionMetadata {
   const now = new Date().toISOString();
   return {
@@ -88,6 +95,7 @@ export function createSession(params: {
     executionTarget: params.executionTarget,
     maxRuntime: params.maxRuntime,
     task: params.task,
+    taskSource: params.taskSource,
     state: 'created',
     createdAt: now,
     updatedAt: now,

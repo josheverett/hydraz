@@ -21,6 +21,8 @@ pnpm install
 pnpm build
 
 hydraz run "Implement the migration and keep tests green"
+hydraz run --goal-file "$HOME/implementation-plan.md"
+hydraz run --goal-file - < "$HOME/implementation-plan.md"
 hydraz status
 hydraz logs <session>
 hydraz resume <session> "Continue from the previous blocker"
@@ -32,6 +34,7 @@ hydraz resume <session> "Continue from the previous blocker"
 
 ```bash
 hydraz run "<goal>"        # start a detached Codex goal, cloud by default
+hydraz run --goal-file <path>
 hydraz status [session]    # refresh and show session state
 hydraz attach [session]    # show session details and stream remote Codex events
 hydraz logs <session>      # print Codex JSONL events
@@ -52,6 +55,7 @@ hydraz config              # configure Codex/GitHub defaults
 | `--session <name>` | Session name |
 | `--branch <name>` | Branch name |
 | `--base <branch>` | Base branch for workspace creation and PR delivery |
+| `--goal-file <path>` | Read the goal from a local UTF-8 file; use `-` for stdin |
 | `--model <model>` | Pass a model override to Codex |
 | `--reasoning-effort <effort>` | Override Codex reasoning effort |
 | `--speed <speed>` | `fast` or `standard` |
@@ -68,6 +72,8 @@ hydraz config              # configure Codex/GitHub defaults
 | `--verbose` | Enable diagnostic output with known token/API-key values redacted |
 
 Use `--base <branch>` when the session should branch from and open its PR against a branch other than the repository default, for example `hydraz run --base staging "Update the demo"`.
+
+Provide exactly one goal source: either the positional goal or `--goal-file`. Goal files are read on the host and do not need to be committed or available inside the target repository. File/stdin contents and oversized inline goals are summarized in terminal output by source, byte count, and SHA-256 rather than printed. Hydraz transfers runner options through a mode-`0600` one-shot file and deletes it when the runner starts, avoiding command-line size limits and secret-bearing process arguments.
 
 Cloud runs pass the maximum runtime to DevPod as the workspace inactivity timeout. DevPod measures its own control-plane activity rather than Codex CPU, process, network, or repository activity, so Hydraz treats this value as a hard runtime lease for detached work. Override the `24h` default when a goal needs a different bound, for example `hydraz run --max-runtime 36h "Run the reliability evaluation"`.
 

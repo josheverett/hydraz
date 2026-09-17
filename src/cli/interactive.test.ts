@@ -22,6 +22,14 @@ describe('interactive menu switch cases', () => {
     expect(reviewCase).not.toContain('will be fully wired');
     expect(reviewCase).not.toContain('not yet implemented');
   });
+
+  it('routes stored goal output through the bounded summary formatter', () => {
+    expect(source).toContain(
+      'formatGoalSummary(session.task, session.taskSource)',
+    );
+    expect(source).not.toContain('Goal:       ${session.task}');
+    expect(source).not.toContain('  ${session.task}');
+  });
 });
 
 function extractCase(source: string, caseLabel: string): string {

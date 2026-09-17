@@ -218,6 +218,24 @@ describe('transitionState', () => {
     expect(updated.state).toBe('created');
   });
 
+  it('redacts secrets before persisting a failure message', () => {
+    const session = makeSession();
+    transitionState(repoRoot, session.id, 'starting');
+
+    transitionState(
+      repoRoot,
+      session.id,
+      'failed',
+      'remote failed with github_pat_persisted_failure_secret',
+    );
+
+    const stored = loadSession(repoRoot, session.id);
+    expect(stored.failureMessage).toContain('[REDACTED]');
+    expect(stored.failureMessage).not.toContain(
+      'github_pat_persisted_failure_secret',
+    );
+  });
+
   it('rejects transition from completed to created', () => {
     const session = makeSession();
     transitionState(repoRoot, session.id, 'starting');

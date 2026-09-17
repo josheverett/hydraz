@@ -81,4 +81,38 @@ describe('attach command', () => {
     expect(spawn).not.toHaveBeenCalled();
     expect(log.mock.calls.flat().join('\n')).toContain('devpod up hydraz-session-1');
   });
+
+  it('does not print large file-backed goal content', () => {
+    const task = `TOP_SECRET_ATTACH_GOAL${'x'.repeat(256 * 1024)}`;
+    const session: SessionMetadata = {
+      id: 'session-1',
+      name: 'demo',
+      repoRoot: '/repo',
+      branchName: 'hydraz/demo',
+      executionTarget: 'cloud',
+      task,
+      taskSource: {
+        kind: 'file',
+        label: '/tmp/private attach goal.md',
+        byteLength: Buffer.byteLength(task, 'utf8'),
+        sha256: 'attach-sha',
+      },
+      state: 'syncing',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      codex: { eventsPath: '/tmp/events.jsonl' },
+    };
+    vi.mocked(getSessionWorkspaceHealth).mockReturnValue({
+      workspaceName: 'hydraz-session-1',
+      status: 'Stopped',
+    });
+    vi.mocked(formatStoppedWorkspaceNotice).mockReturnValue('stopped');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    renderAttachView(session, '/repo');
+
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain('file /tmp/private attach goal.md');
+    expect(output).not.toContain('TOP_SECRET_ATTACH_GOAL');
+  });
 });

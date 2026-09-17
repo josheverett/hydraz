@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { HydrazConfig } from '../config/schema.js';
+import type { GoalInputSource } from '../sessions/schema.js';
 import { readRepoPromptContent } from './repo-config.js';
 import { buildCodexExecCommand, buildCodexResumeCommand, buildGoalPrompt } from './args.js';
 import { parseCodexJsonLine } from './events.js';
@@ -22,6 +23,10 @@ import {
   createCodexInvocationRecorder,
   type CodexInvocationEvidence,
 } from './invocation.js';
+import {
+  loadRunnerOptionsFile,
+  RUNNER_OPTIONS_FILE_ENV,
+} from './runner-options.js';
 
 export { CODEX_INVOCATION_FILE } from './invocation.js';
 
@@ -38,6 +43,7 @@ export interface CodexRunnerOptions {
   branchName?: string;
   baseBranch?: string;
   goal: string;
+  taskSource?: GoalInputSource;
   workingDirectory: string;
   codexDir: string;
   codexHome?: string;
@@ -134,6 +140,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   let threadId: string | undefined = options.resumeThreadId;
   const codexEnv = { ...process.env };
   delete codexEnv.HYDRAZ_CODEX_RUNNER_OPTIONS;
+  delete codexEnv[RUNNER_OPTIONS_FILE_ENV];
   if (options.codexHome !== undefined) {
     codexEnv.CODEX_HOME = options.codexHome;
   }
@@ -148,13 +155,17 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
   const exitCode = await new Promise<number | null>((resolve) => {
     const child = spawn(command.cmd, command.args, {
       cwd: options.workingDirectory,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: codexEnv,
     });
     let finished = false;
 
     child.once('spawn', () => {
       invocation.markSpawned();
+      child.stdin?.end(command.stdin);
+    });
+    child.stdin?.on('error', () => {
+      // The child can close stdin while exiting; process close/error owns status.
     });
 
     child.once('error', (error) => {
@@ -260,6 +271,7 @@ export async function executeCodexRunner(options: CodexRunnerOptions): Promise<C
         baseBranch: options.baseBranch,
         executionTarget: options.config.executionTarget,
         task: options.goal,
+        taskSource: options.taskSource,
         state: 'delivering',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -294,15 +306,8 @@ const NOOP_PROVIDER: WorkspaceProvider = {
 };
 
 export async function runMain(): Promise<void> {
-  const json = process.env.HYDRAZ_CODEX_RUNNER_OPTIONS;
-  if (!json) {
-    process.stderr.write('Missing HYDRAZ_CODEX_RUNNER_OPTIONS\n');
-    process.exit(1);
-    return;
-  }
-
   try {
-    const result = await executeCodexRunner(JSON.parse(json) as CodexRunnerOptions);
+    const result = await executeCodexRunner(loadRunnerOptionsFile());
     process.exit(result.success ? 0 : 1);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

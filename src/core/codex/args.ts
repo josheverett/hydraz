@@ -22,6 +22,7 @@ export interface CodexResumeCommandOptions extends CodexExecCommandOptions {
 export interface BuiltCommand {
   cmd: string;
   args: string[];
+  stdin: string;
 }
 
 export function buildGoalPrompt(goal: string, repoPromptContent?: string | null): string {
@@ -73,13 +74,15 @@ function baseArgs(options: CodexExecCommandOptions): string[] {
 export function buildCodexExecCommand(options: CodexExecCommandOptions): BuiltCommand {
   return {
     cmd: options.codexCommand ?? 'codex',
-    args: ['exec', ...baseArgs(options), options.prompt],
+    args: ['exec', ...baseArgs(options), '-'],
+    stdin: options.prompt,
   };
 }
 
 export function buildCodexResumeCommand(options: CodexResumeCommandOptions): BuiltCommand {
   return {
     cmd: options.codexCommand ?? 'codex',
-    args: ['exec', ...baseArgs(options), 'resume', options.threadId, options.prompt],
+    args: ['exec', ...baseArgs(options), 'resume', options.threadId, '-'],
+    stdin: options.prompt,
   };
 }

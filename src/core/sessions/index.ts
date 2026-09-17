@@ -2,6 +2,7 @@ export {
   type SessionMetadata,
   type SessionState,
   type ArtifactFile,
+  type GoalInputSource,
   ACTIVE_STATES,
   TERMINAL_STATES,
   RESUMABLE_STATES,
