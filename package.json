@@ -1,6 +1,6 @@
 {
   "name": "hydraz",
-  "version": "4.3.0",
+  "version": "4.3.1",
   "description": "A Codex cloud harness for detached long-running coding goals",
   "type": "module",
   "packageManager": "pnpm@10.1.0",
@@ -19,6 +19,7 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration:containers": "HYDRAZ_INTEGRATION=1 vitest run src/core/providers/local-container.integration.test.ts --testTimeout 1800000",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "build:sea": "bash scripts/build-sea.sh",

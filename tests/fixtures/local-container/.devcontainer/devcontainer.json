@@ -1,0 +1,6 @@
+{
+  "name": "hydraz-local-container-integration",
+  "build": {
+    "dockerfile": "Dockerfile"
+  }
+}
