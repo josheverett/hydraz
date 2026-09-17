@@ -4,6 +4,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    exclude: ['dist/**', 'node_modules/**', '.hydraz/**'],
+    exclude: [
+      'dist/**',
+      'node_modules/**',
+      '.hydraz/**',
+      ...(process.env.HYDRAZ_INTEGRATION === '1' ? [] : ['**/*.integration.test.ts']),
+    ],
   },
 });

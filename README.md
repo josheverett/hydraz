@@ -238,6 +238,17 @@ pnpm typecheck
 pnpm build
 ```
 
+Run the opt-in concurrent local-container integration test with:
+
+```bash
+pnpm test:integration:containers
+```
+
+It requires DevPod on `PATH` and a running Docker daemon. The test creates two
+real local containers, verifies isolation and independent teardown, and removes
+both workspaces. Its first run may need to pull and build the fixture image; it
+is excluded from the default test suite and CI.
+
 The repo uses pnpm with a 7-day minimum package age cooldown (`minimumReleaseAge: 10080`).
 
 ## License

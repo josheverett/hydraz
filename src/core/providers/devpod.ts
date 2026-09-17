@@ -213,17 +213,17 @@ export function devpodList(): DevPodListEntry[] {
 }
 
 export function devpodStatus(workspaceName: string): 'Running' | 'Stopped' | 'NotFound' {
-  debugExec('devpod', ['status', workspaceName]);
+  const args = ['status', workspaceName, '--output', 'json'];
+  debugExec('devpod', args);
   const start = Date.now();
   try {
-    const output = execFileSync('devpod', ['status', workspaceName], {
+    const output = execFileSync('devpod', args, {
       ...EXEC_OPTIONS,
       encoding: 'utf-8',
     });
     debugOutput('devpod status stdout', output);
     debugTiming('devpod status', Date.now() - start);
-    if (output.includes('Running')) return 'Running';
-    return 'Stopped';
+    return JSON.parse(output).state === 'Running' ? 'Running' : 'Stopped';
   } catch {
     debugTiming('devpod status (failed)', Date.now() - start);
     return 'NotFound';

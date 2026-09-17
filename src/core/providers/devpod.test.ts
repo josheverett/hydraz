@@ -28,6 +28,7 @@ import {
   devpodUp,
   devpodDelete,
   devpodList,
+  devpodStatus,
   getContainerHome,
 } from './devpod.js';
 import { setVerbose } from '../debug.js';
@@ -1318,5 +1319,18 @@ describe('devpodList', () => {
     const result = devpodList();
 
     expect(result).toEqual([{ name: 'hydraz-abc', status: 'Unknown' }]);
+  });
+});
+
+describe('devpodStatus', () => {
+  it('requests JSON output and returns its running state', () => {
+    mockExecFileSync.mockReturnValue('{"state":"Running"}' as never);
+
+    expect(devpodStatus('hydraz-abc123')).toBe('Running');
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      'devpod',
+      ['status', 'hydraz-abc123', '--output', 'json'],
+      expect.objectContaining({ encoding: 'utf-8' }),
+    );
   });
 });
