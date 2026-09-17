@@ -95,7 +95,9 @@ export function registerRunCommand(program: Command): void {
 
       const config = loadConfig();
       const resolvedGoal = resolvedGoalInput.content;
-      const sessionName = options.session ?? generateSessionName(resolvedGoal);
+      const sessionName = options.session ?? generateSessionName(
+        resolvedGoalInput.source.kind === 'inline' ? resolvedGoal : '',
+      );
 
       if (options.session && !isValidSessionName(sessionName)) {
         console.error(`Invalid session name: "${sessionName}". Use 2-64 chars: lowercase letters, numbers, hyphens.`);

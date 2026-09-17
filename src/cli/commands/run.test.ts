@@ -232,6 +232,75 @@ describe('run command', () => {
 
   it.each([
     {
+      kind: 'file',
+      goalFile: '/tmp/private-goal.md',
+      source: {
+        kind: 'file' as const,
+        label: '/tmp/private-goal.md',
+        byteLength: 20,
+        sha256: 'file-sha',
+      },
+    },
+    {
+      kind: 'stdin',
+      goalFile: '-',
+      source: {
+        kind: 'stdin' as const,
+        byteLength: 21,
+        sha256: 'stdin-sha',
+      },
+    },
+  ])('uses an opaque default name for $kind goals', async ({ goalFile, source }) => {
+    const content = `TOP_SECRET_${source.kind.toUpperCase()}_GOAL`;
+    vi.mocked(resolveGoalInput).mockReturnValueOnce({ content, source });
+
+    await makeProgram().parseAsync(['node', 'hydraz', 'run', '--goal-file', goalFile]);
+
+    const params = vi.mocked(createNewSession).mock.calls[0]![0];
+    expect(params.name).toMatch(/^session-[a-z0-9]{4}$/);
+    expect(params.branchName).toBe(`hydraz/${params.name}`);
+    expect(params.name).not.toContain('top-secret');
+  });
+
+  it('preserves content-derived default names for inline goals', async () => {
+    await makeProgram().parseAsync(['node', 'hydraz', 'run', 'Keep inline recognizable']);
+
+    const params = vi.mocked(createNewSession).mock.calls[0]![0];
+    expect(params.name).toMatch(/^keep-inline-recognizable-[a-z0-9]{4}$/);
+    expect(params.branchName).toBe(`hydraz/${params.name}`);
+  });
+
+  it('preserves explicit session and branch names for file goals', async () => {
+    vi.mocked(resolveGoalInput).mockReturnValueOnce({
+      content: 'TOP_SECRET_FILE_GOAL',
+      source: {
+        kind: 'file',
+        label: '/tmp/private-goal.md',
+        byteLength: 20,
+        sha256: 'file-sha',
+      },
+    });
+
+    await makeProgram().parseAsync([
+      'node',
+      'hydraz',
+      'run',
+      '--goal-file',
+      '/tmp/private-goal.md',
+      '--session',
+      'explicit-session',
+      '--branch',
+      'explicit/branch',
+    ]);
+
+    expect(createNewSession).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'explicit-session',
+      branchName: 'explicit/branch',
+    }));
+  });
+
+  it.each([
+    {
       label: 'neither input',
       argv: ['--session', 'demo'],
     },
